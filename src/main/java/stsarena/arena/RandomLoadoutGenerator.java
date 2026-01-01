@@ -38,11 +38,12 @@ public class RandomLoadoutGenerator {
         public final boolean hasPrismaticShard;
         public final int maxHp;
         public final int currentHp;
+        public final int ascensionLevel;  // 0-20
 
         public GeneratedLoadout(String id, String name, long createdAt,
                                 AbstractPlayer.PlayerClass playerClass, List<AbstractCard> deck,
                                 List<AbstractRelic> relics, boolean hasPrismaticShard,
-                                int maxHp, int currentHp) {
+                                int maxHp, int currentHp, int ascensionLevel) {
             this.id = id;
             this.name = name;
             this.createdAt = createdAt;
@@ -52,6 +53,7 @@ public class RandomLoadoutGenerator {
             this.hasPrismaticShard = hasPrismaticShard;
             this.maxHp = maxHp;
             this.currentHp = currentHp;
+            this.ascensionLevel = ascensionLevel;
         }
     }
 
@@ -92,10 +94,13 @@ public class RandomLoadoutGenerator {
         int maxHp = baseMaxHp + random.nextInt(20);
         int currentHp = (int) (maxHp * (0.7 + random.nextDouble() * 0.3)); // 70-100% HP
 
-        STSArena.logger.info("Generated loadout '" + name + "': " + deck.size() + " cards, " +
-                            relics.size() + " relics, " + currentHp + "/" + maxHp + " HP");
+        // Random ascension level (0-20)
+        int ascensionLevel = random.nextInt(21);
 
-        return new GeneratedLoadout(id, name, createdAt, playerClass, deck, relics, hasPrismaticShard, maxHp, currentHp);
+        STSArena.logger.info("Generated loadout '" + name + "': " + deck.size() + " cards, " +
+                            relics.size() + " relics, " + currentHp + "/" + maxHp + " HP, A" + ascensionLevel);
+
+        return new GeneratedLoadout(id, name, createdAt, playerClass, deck, relics, hasPrismaticShard, maxHp, currentHp, ascensionLevel);
     }
 
     /**
@@ -349,7 +354,7 @@ public class RandomLoadoutGenerator {
             STSArena.logger.error("Failed to deserialize relics", e);
         }
 
-        STSArena.logger.info("Reconstructed loadout: " + deck.size() + " cards, " + relics.size() + " relics");
+        STSArena.logger.info("Reconstructed loadout: " + deck.size() + " cards, " + relics.size() + " relics, A" + record.ascensionLevel);
 
         return new GeneratedLoadout(
             record.uuid,
@@ -360,7 +365,8 @@ public class RandomLoadoutGenerator {
             relics,
             hasPrismaticShard,
             record.maxHp,
-            record.currentHp
+            record.currentHp,
+            record.ascensionLevel
         );
     }
 }

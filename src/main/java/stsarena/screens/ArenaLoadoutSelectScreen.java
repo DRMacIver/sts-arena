@@ -101,7 +101,7 @@ public class ArenaLoadoutSelectScreen {
                 items.add(new ListItem("--- Saved Loadouts ---", false, true, null));
 
                 for (ArenaRepository.LoadoutRecord loadout : loadouts) {
-                    String label = loadout.name + " (" + loadout.characterClass + ")";
+                    String label = loadout.name + " (" + loadout.characterClass + ", A" + loadout.ascensionLevel + ")";
                     items.add(new ListItem(label, false, false, loadout));
                 }
             }

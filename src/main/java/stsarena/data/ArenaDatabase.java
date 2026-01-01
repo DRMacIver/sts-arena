@@ -15,7 +15,7 @@ import java.sql.*;
 public class ArenaDatabase {
 
     private static final String DB_NAME = "arena.db";
-    private static final int SCHEMA_VERSION = 2;
+    private static final int SCHEMA_VERSION = 3;
     private static final Logger logger = LogManager.getLogger(ArenaDatabase.class.getName());
 
     private static ArenaDatabase instance;
@@ -143,9 +143,18 @@ public class ArenaDatabase {
                 "    current_hp INTEGER NOT NULL," +
                 "    deck_json TEXT NOT NULL," +
                 "    relics_json TEXT NOT NULL," +
-                "    created_at INTEGER NOT NULL" +
+                "    created_at INTEGER NOT NULL," +
+                "    ascension_level INTEGER NOT NULL DEFAULT 0" +
                 ")"
             );
+
+            // Add ascension_level column if it doesn't exist (migration)
+            try {
+                stmt.execute("ALTER TABLE loadouts ADD COLUMN ascension_level INTEGER NOT NULL DEFAULT 0");
+                logger.info("Added ascension_level column to loadouts table");
+            } catch (SQLException e) {
+                // Column already exists, ignore
+            }
 
             // Arena runs table - records of arena fights with outcomes
             stmt.execute(

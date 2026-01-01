@@ -11,10 +11,13 @@ import com.megacrit.cardcrawl.screens.mainMenu.MenuCancelButton;
 import stsarena.STSArena;
 import stsarena.arena.ArenaRunner;
 import stsarena.arena.RandomLoadoutGenerator;
+import stsarena.data.ArenaDatabase;
 import stsarena.data.ArenaRepository;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Screen for selecting which encounter to fight in arena mode.
@@ -38,6 +41,9 @@ public class ArenaEncounterSelectScreen {
     // List items (headers and encounters)
     private List<ListItem> items;
     private Hitbox[] hitboxes;
+
+    // Encounter outcomes for current loadout (encounter ID -> "VICTORY" or "DEFEAT")
+    private Map<String, String> encounterOutcomes = new HashMap<>();
 
     private static class ListItem {
         String text;
@@ -122,6 +128,19 @@ public class ArenaEncounterSelectScreen {
         this.cancelButton.show("Back");
         this.scrollY = 0.0f;
         this.targetScrollY = 0.0f;
+
+        // Load encounter outcomes for the selected loadout
+        encounterOutcomes.clear();
+        if (ArenaLoadoutSelectScreen.selectedSavedLoadout != null) {
+            try {
+                ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+                encounterOutcomes = repo.getEncounterOutcomesForLoadout(
+                    ArenaLoadoutSelectScreen.selectedSavedLoadout.dbId);
+                STSArena.logger.info("Loaded " + encounterOutcomes.size() + " encounter outcomes for loadout");
+            } catch (Exception e) {
+                STSArena.logger.error("Failed to load encounter outcomes", e);
+            }
+        }
     }
 
     public void close() {
@@ -229,7 +248,7 @@ public class ArenaEncounterSelectScreen {
                 if (item.isHeader) {
                     renderHeader(sb, item.text, buttonY);
                 } else {
-                    renderOption(sb, item.text, buttonY, hitboxes[i], item.isRandom);
+                    renderOption(sb, item.text, buttonY, hitboxes[i], item.isRandom, item.encounterId);
                 }
             }
         }
@@ -244,7 +263,11 @@ public class ArenaEncounterSelectScreen {
             CENTER_X, y - BUTTON_HEIGHT / 2.0f, Settings.GOLD_COLOR);
     }
 
-    private void renderOption(SpriteBatch sb, String text, float y, Hitbox hb, boolean isRandom) {
+    private void renderOption(SpriteBatch sb, String text, float y, Hitbox hb, boolean isRandom, String encounterId) {
+        // Check outcome for this encounter
+        String outcome = encounterId != null ? encounterOutcomes.get(encounterId) : null;
+        boolean hasOutcome = outcome != null;
+
         // Background for button
         Color bgColor;
         if (hb.hovered) {
@@ -260,17 +283,25 @@ public class ArenaEncounterSelectScreen {
             BUTTON_WIDTH,
             BUTTON_HEIGHT);
 
-        // Text
+        // Text color based on outcome
         Color textColor;
         if (isRandom) {
             textColor = Settings.GREEN_TEXT_COLOR;
+        } else if ("VICTORY".equals(outcome)) {
+            textColor = Settings.GREEN_TEXT_COLOR;
+        } else if ("DEFEAT".equals(outcome)) {
+            textColor = Settings.RED_TEXT_COLOR;
         } else if (hb.hovered) {
             textColor = Settings.GOLD_COLOR;
         } else {
             textColor = Settings.CREAM_COLOR;
         }
 
-        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+        // Use bold font (tipHeaderFont) for encounters with outcomes
+        com.badlogic.gdx.graphics.g2d.BitmapFont font = hasOutcome ?
+            FontHelper.tipHeaderFont : FontHelper.cardDescFont_N;
+
+        FontHelper.renderFontCentered(sb, font,
             text,
             CENTER_X, y - BUTTON_HEIGHT / 2.0f, textColor);
     }

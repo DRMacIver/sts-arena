@@ -12,7 +12,9 @@ import stsarena.arena.RandomLoadoutGenerator;
 import java.lang.reflect.Type;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Repository for saving and loading arena data from the database.
@@ -35,8 +37,8 @@ public class ArenaRepository {
     public long saveLoadout(RandomLoadoutGenerator.GeneratedLoadout loadout) {
         logger.info("saveLoadout called for: " + loadout.name + " (id=" + loadout.id + ")");
 
-        String sql = "INSERT INTO loadouts (uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, created_at) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO loadouts (uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, created_at, ascension_level) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         Connection conn = database.getConnection();
         if (conn == null) {
@@ -53,6 +55,7 @@ public class ArenaRepository {
             stmt.setString(6, serializeDeck(loadout.deck));
             stmt.setString(7, serializeRelics(loadout.relics));
             stmt.setLong(8, loadout.createdAt);
+            stmt.setInt(9, loadout.ascensionLevel);
 
             logger.info("saveLoadout: Executing insert...");
             int rows = stmt.executeUpdate();
@@ -300,7 +303,7 @@ public class ArenaRepository {
      * Get saved loadouts for selection.
      */
     public List<LoadoutRecord> getLoadouts(int limit) {
-        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, created_at " +
+        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, created_at, ascension_level " +
                      "FROM loadouts ORDER BY created_at DESC LIMIT ?";
 
         List<LoadoutRecord> results = new ArrayList<>();
@@ -320,6 +323,7 @@ public class ArenaRepository {
                     record.deckJson = rs.getString("deck_json");
                     record.relicsJson = rs.getString("relics_json");
                     record.createdAt = rs.getLong("created_at");
+                    record.ascensionLevel = rs.getInt("ascension_level");
                     results.add(record);
                 }
             }
@@ -343,5 +347,38 @@ public class ArenaRepository {
         public String deckJson;
         public String relicsJson;
         public long createdAt;
+        public int ascensionLevel;
+    }
+
+    /**
+     * Get encounter outcomes for a specific loadout.
+     * Returns a map of encounter ID to outcome (VICTORY or DEFEAT).
+     * If an encounter was faced multiple times, returns the most recent outcome.
+     */
+    public Map<String, String> getEncounterOutcomesForLoadout(long loadoutId) {
+        String sql = "SELECT encounter_id, outcome FROM arena_runs " +
+                     "WHERE loadout_id = ? AND outcome IS NOT NULL " +
+                     "ORDER BY started_at DESC";
+
+        Map<String, String> results = new HashMap<>();
+
+        try (PreparedStatement stmt = database.getConnection().prepareStatement(sql)) {
+            stmt.setLong(1, loadoutId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    String encounterId = rs.getString("encounter_id");
+                    String outcome = rs.getString("outcome");
+                    // Only keep the first (most recent) outcome for each encounter
+                    if (!results.containsKey(encounterId)) {
+                        results.put(encounterId, outcome);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to get encounter outcomes", e);
+        }
+
+        return results;
     }
 }

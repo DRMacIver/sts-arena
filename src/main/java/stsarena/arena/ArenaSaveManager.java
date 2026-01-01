@@ -57,8 +57,8 @@ public class ArenaSaveManager {
         save.put("floor_num", 1);
         save.put("level_name", "Exordium");
         save.put("act_num", 1);
-        save.put("is_ascension_mode", false);
-        save.put("ascension_level", 0);
+        save.put("is_ascension_mode", loadout.ascensionLevel > 0);
+        save.put("ascension_level", loadout.ascensionLevel);
         save.put("is_daily", false);
         save.put("is_trial", false);
         save.put("is_endless_mode", false);
