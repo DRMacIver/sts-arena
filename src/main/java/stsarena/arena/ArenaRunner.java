@@ -6,6 +6,11 @@ import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.map.MapRoomNode;
 import com.megacrit.cardcrawl.rooms.MonsterRoom;
 import stsarena.STSArena;
+import stsarena.data.ArenaDatabase;
+import stsarena.data.ArenaRepository;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Handles starting arena fights with custom loadouts.
@@ -19,11 +24,21 @@ public class ArenaRunner {
     // Flag to indicate current run is an arena run (used to disable saving)
     private static boolean isArenaRun = false;
 
+    // Current run tracking
+    private static long currentLoadoutDbId = -1;
+    private static long currentRunDbId = -1;
+    private static RandomLoadoutGenerator.GeneratedLoadout currentLoadout;
+    private static String currentEncounter;
+
+    // Combat tracking
+    private static int combatStartHp = 0;
+    private static List<String> potionsUsedThisCombat = new ArrayList<>();
+
     /**
      * Start a random arena fight from the main menu.
      */
     public static void startRandomFight() {
-        STSArena.logger.info("Starting random arena fight");
+        STSArena.logger.info("=== ARENA: startRandomFight() called ===");
 
         // Generate random loadout and encounter
         RandomLoadoutGenerator.GeneratedLoadout loadout = RandomLoadoutGenerator.generate();
@@ -37,12 +52,45 @@ public class ArenaRunner {
      * Uses save file approach to properly initialize game state.
      */
     public static void startFight(RandomLoadoutGenerator.GeneratedLoadout loadout, String encounter) {
+        STSArena.logger.info("=== ARENA: startFight() called ===");
+        STSArena.logger.info("ARENA: Loadout: " + loadout.name + ", Encounter: " + encounter);
+
         pendingLoadout = loadout;
         pendingEncounter = encounter;
         arenaRunInProgress = true;
         isArenaRun = true;
 
+        // Store for later tracking
+        currentLoadout = loadout;
+        currentEncounter = encounter;
+        combatStartHp = loadout.currentHp;
+        potionsUsedThisCombat.clear();
+
         STSArena.logger.info("Starting arena: " + loadout.playerClass + " vs " + encounter);
+
+        // Save loadout to database
+        STSArena.logger.info("ARENA: About to save loadout to database...");
+        try {
+            STSArena.logger.info("ARENA: Getting database instance...");
+            ArenaDatabase db = ArenaDatabase.getInstance();
+            STSArena.logger.info("ARENA: Database instance: " + db);
+            ArenaRepository repo = new ArenaRepository(db);
+            STSArena.logger.info("ARENA: Calling saveLoadout...");
+            currentLoadoutDbId = repo.saveLoadout(loadout);
+            STSArena.logger.info("ARENA: saveLoadout returned: " + currentLoadoutDbId);
+            if (currentLoadoutDbId > 0) {
+                // Start tracking the run
+                STSArena.logger.info("ARENA: Calling startArenaRun...");
+                currentRunDbId = repo.startArenaRun(currentLoadoutDbId, encounter, loadout.currentHp);
+                STSArena.logger.info("ARENA: Arena run started with DB ID: " + currentRunDbId);
+            } else {
+                STSArena.logger.error("ARENA: saveLoadout failed, returned: " + currentLoadoutDbId);
+            }
+        } catch (Exception e) {
+            STSArena.logger.error("ARENA: Failed to save arena run to database: " + e.getMessage(), e);
+            e.printStackTrace();
+        }
+        STSArena.logger.info("ARENA: Database save section complete. currentRunDbId=" + currentRunDbId);
 
         // Create arena save file
         String savePath = ArenaSaveManager.createArenaSave(loadout, encounter);
@@ -201,5 +249,113 @@ public class ArenaRunner {
      */
     public static void clearArenaRun() {
         isArenaRun = false;
+        currentRunDbId = -1;
+        currentLoadoutDbId = -1;
+        currentLoadout = null;
+        currentEncounter = null;
+    }
+
+    /**
+     * Record a potion being used during combat.
+     */
+    public static void recordPotionUsed(String potionId) {
+        if (isArenaRun && potionId != null) {
+            potionsUsedThisCombat.add(potionId);
+            STSArena.logger.info("ARENA: Recorded potion used: " + potionId);
+        }
+    }
+
+    /**
+     * Complete the current arena run with victory.
+     */
+    public static void recordVictory() {
+        STSArena.logger.info("ARENA: recordVictory called - isArenaRun=" + isArenaRun + ", currentRunDbId=" + currentRunDbId);
+        if (!isArenaRun || currentRunDbId < 0) {
+            STSArena.logger.info("ARENA: recordVictory skipped - conditions not met");
+            return;
+        }
+
+        STSArena.logger.info("ARENA: Recording victory!");
+
+        ArenaRepository.ArenaRunOutcome outcome = new ArenaRepository.ArenaRunOutcome();
+        outcome.result = ArenaRepository.ArenaRunOutcome.RunResult.VICTORY;
+        outcome.endingHp = AbstractDungeon.player != null ? AbstractDungeon.player.currentHealth : 0;
+        outcome.potionsUsed = new ArrayList<>(potionsUsedThisCombat);
+        outcome.damageTaken = combatStartHp - outcome.endingHp;
+
+        // Try to get combat stats from the game
+        if (AbstractDungeon.actionManager != null) {
+            outcome.cardsPlayed = AbstractDungeon.actionManager.cardsPlayedThisCombat.size();
+            outcome.turnsTaken = AbstractDungeon.actionManager.turn;
+        }
+
+        // Calculate damage dealt (sum of monster max HP since they're all dead)
+        outcome.damageDealt = 0;
+        if (AbstractDungeon.getMonsters() != null) {
+            for (com.megacrit.cardcrawl.monsters.AbstractMonster m : AbstractDungeon.getMonsters().monsters) {
+                outcome.damageDealt += m.maxHealth;
+            }
+        }
+
+        try {
+            ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+            repo.completeArenaRun(currentRunDbId, outcome);
+            STSArena.logger.info("ARENA: Victory recorded - HP: " + outcome.endingHp + ", Potions used: " + outcome.potionsUsed.size());
+        } catch (Exception e) {
+            STSArena.logger.error("Failed to record victory", e);
+        }
+    }
+
+    /**
+     * Complete the current arena run with defeat.
+     */
+    public static void recordDefeat() {
+        if (!isArenaRun || currentRunDbId < 0) {
+            return;
+        }
+
+        STSArena.logger.info("ARENA: Recording defeat!");
+
+        ArenaRepository.ArenaRunOutcome outcome = new ArenaRepository.ArenaRunOutcome();
+        outcome.result = ArenaRepository.ArenaRunOutcome.RunResult.DEFEAT;
+        outcome.endingHp = 0;
+        outcome.potionsUsed = new ArrayList<>(potionsUsedThisCombat);
+        outcome.damageTaken = combatStartHp;
+
+        // Try to get combat stats
+        if (AbstractDungeon.actionManager != null) {
+            outcome.cardsPlayed = AbstractDungeon.actionManager.cardsPlayedThisCombat.size();
+            outcome.turnsTaken = AbstractDungeon.actionManager.turn;
+        }
+
+        // Estimate damage dealt (remaining monster HP shows what wasn't dealt)
+        outcome.damageDealt = 0;
+        if (AbstractDungeon.getMonsters() != null) {
+            for (com.megacrit.cardcrawl.monsters.AbstractMonster m : AbstractDungeon.getMonsters().monsters) {
+                outcome.damageDealt += (m.maxHealth - m.currentHealth);
+            }
+        }
+
+        try {
+            ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+            repo.completeArenaRun(currentRunDbId, outcome);
+            STSArena.logger.info("ARENA: Defeat recorded - Damage dealt: " + outcome.damageDealt);
+        } catch (Exception e) {
+            STSArena.logger.error("Failed to record defeat", e);
+        }
+    }
+
+    /**
+     * Get the current run's database ID.
+     */
+    public static long getCurrentRunDbId() {
+        return currentRunDbId;
+    }
+
+    /**
+     * Get the current loadout name for display.
+     */
+    public static String getCurrentLoadoutName() {
+        return currentLoadout != null ? currentLoadout.name : null;
     }
 }

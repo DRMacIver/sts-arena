@@ -25,6 +25,9 @@ public class RandomLoadoutGenerator {
      * Result of generating a random loadout.
      */
     public static class GeneratedLoadout {
+        public final String id;           // Unique identifier (UUID)
+        public final String name;         // Human-readable name
+        public final long createdAt;      // Timestamp when created
         public final AbstractPlayer.PlayerClass playerClass;
         public final List<AbstractCard> deck;
         public final List<AbstractRelic> relics;
@@ -32,9 +35,13 @@ public class RandomLoadoutGenerator {
         public final int maxHp;
         public final int currentHp;
 
-        public GeneratedLoadout(AbstractPlayer.PlayerClass playerClass, List<AbstractCard> deck,
+        public GeneratedLoadout(String id, String name, long createdAt,
+                                AbstractPlayer.PlayerClass playerClass, List<AbstractCard> deck,
                                 List<AbstractRelic> relics, boolean hasPrismaticShard,
                                 int maxHp, int currentHp) {
+            this.id = id;
+            this.name = name;
+            this.createdAt = createdAt;
             this.playerClass = playerClass;
             this.deck = deck;
             this.relics = relics;
@@ -61,6 +68,11 @@ public class RandomLoadoutGenerator {
     public static GeneratedLoadout generateForClass(AbstractPlayer.PlayerClass playerClass) {
         STSArena.logger.info("Generating random loadout for: " + playerClass);
 
+        // Generate unique ID and name
+        String id = UUID.randomUUID().toString();
+        long createdAt = System.currentTimeMillis();
+        String name = generateLoadoutName(createdAt);
+
         // Decide if we're using Prismatic Shard (allows any card color)
         boolean hasPrismaticShard = random.nextDouble() < LoadoutConfig.PRISMATIC_SHARD_CHANCE;
 
@@ -76,10 +88,40 @@ public class RandomLoadoutGenerator {
         int maxHp = baseMaxHp + random.nextInt(20);
         int currentHp = (int) (maxHp * (0.7 + random.nextDouble() * 0.3)); // 70-100% HP
 
-        STSArena.logger.info("Generated loadout: " + deck.size() + " cards, " +
+        STSArena.logger.info("Generated loadout '" + name + "': " + deck.size() + " cards, " +
                             relics.size() + " relics, " + currentHp + "/" + maxHp + " HP");
 
-        return new GeneratedLoadout(playerClass, deck, relics, hasPrismaticShard, maxHp, currentHp);
+        return new GeneratedLoadout(id, name, createdAt, playerClass, deck, relics, hasPrismaticShard, maxHp, currentHp);
+    }
+
+    /**
+     * Generate a human-readable name for a loadout.
+     * Format: "Random #N" where N is a sequence number from the database.
+     */
+    private static String generateLoadoutName(long timestamp) {
+        int nextNum = getNextLoadoutNumber();
+        return "Random #" + nextNum;
+    }
+
+    /**
+     * Get the next loadout number from the database.
+     */
+    private static int getNextLoadoutNumber() {
+        try {
+            java.sql.Connection conn = stsarena.data.ArenaDatabase.getInstance().getConnection();
+            if (conn != null) {
+                try (java.sql.Statement stmt = conn.createStatement();
+                     java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) + 1 as next_num FROM loadouts")) {
+                    if (rs.next()) {
+                        return rs.getInt("next_num");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            STSArena.logger.error("Failed to get next loadout number", e);
+        }
+        // Fallback to random number if database query fails
+        return random.nextInt(9999) + 1;
     }
 
     private static List<AbstractRelic> generateRelics(AbstractPlayer.PlayerClass playerClass,

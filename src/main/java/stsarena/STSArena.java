@@ -3,12 +3,17 @@ package stsarena;
 import basemod.BaseMod;
 import basemod.interfaces.PostDungeonInitializeSubscriber;
 import basemod.interfaces.PostInitializeSubscriber;
+import basemod.interfaces.PostRenderSubscriber;
 import basemod.interfaces.PostUpdateSubscriber;
+import basemod.interfaces.PreUpdateSubscriber;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.evacipated.cardcrawl.modthespire.lib.SpireInitializer;
+import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import stsarena.arena.ArenaRunner;
 import stsarena.data.ArenaDatabase;
+import stsarena.screens.ArenaHistoryScreen;
 
 /**
  * STS Arena - A Slay the Spire mod for playing isolated single fights as practice runs.
@@ -20,10 +25,13 @@ import stsarena.data.ArenaDatabase;
  * - Practice specific fights without playing through the full game
  */
 @SpireInitializer
-public class STSArena implements PostInitializeSubscriber, PostDungeonInitializeSubscriber, PostUpdateSubscriber {
+public class STSArena implements PostInitializeSubscriber, PostDungeonInitializeSubscriber, PreUpdateSubscriber, PostUpdateSubscriber, PostRenderSubscriber {
 
     public static final Logger logger = LogManager.getLogger(STSArena.class.getName());
     public static final String MOD_ID = "stsarena";
+
+    // Arena history screen
+    public static ArenaHistoryScreen historyScreen;
 
     // Flag to trigger fight start on next update (gives game time to initialize)
     private static boolean pendingFightStart = false;
@@ -52,6 +60,9 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         // Initialize the database
         ArenaDatabase.getInstance();
 
+        // Initialize the history screen
+        historyScreen = new ArenaHistoryScreen();
+
         // Arena Mode button is added via patches/MainMenuArenaPatch
     }
 
@@ -66,6 +77,20 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         if (ArenaRunner.isArenaRunInProgress()) {
             logger.info("ARENA: Setting pendingFightStart = true");
             pendingFightStart = true;
+        }
+    }
+
+    /**
+     * Called before the game updates. Used to handle our screens before main menu processes input.
+     */
+    @Override
+    public void receivePreUpdate() {
+        // Update history screen BEFORE main menu so we get input first
+        if (historyScreen != null && historyScreen.isOpen) {
+            historyScreen.update();
+            // Consume remaining input to block main menu
+            InputHelper.justClickedLeft = false;
+            InputHelper.justClickedRight = false;
         }
     }
 
@@ -85,6 +110,25 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
                 logger.info("ARENA: ArenaRunner not in progress, resetting pendingFightStart");
                 pendingFightStart = false;
             }
+        }
+    }
+
+    /**
+     * Called after rendering. Used to render our custom screens.
+     */
+    @Override
+    public void receivePostRender(SpriteBatch sb) {
+        if (historyScreen != null && historyScreen.isOpen) {
+            historyScreen.render(sb);
+        }
+    }
+
+    /**
+     * Open the arena history screen.
+     */
+    public static void openHistoryScreen() {
+        if (historyScreen != null) {
+            historyScreen.open();
         }
     }
 }

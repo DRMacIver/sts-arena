@@ -75,6 +75,12 @@ This uses the game's built-in transition system which handles:
 - Can be patched to skip saving for custom modes
 - Check with SpireReturn.Return(null) in Prefix to skip
 
+### Known Issue: Arena saves persist after fights
+The current DisableArenaSavePatch only blocks saves during the arena run setup.
+After the fight completes (win or lose), the game's normal save flow takes over
+and can leave a save file. This needs further investigation - possibly need to
+hook into combat end events to delete/clean up the arena save file.
+
 ## Screen State
 
 - AbstractDungeon.screen controls what screen is shown

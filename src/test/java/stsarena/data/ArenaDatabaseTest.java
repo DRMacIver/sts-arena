@@ -54,11 +54,11 @@ public class ArenaDatabaseTest {
             assertTrue("loadouts table should exist", rs.next());
         }
 
-        // Verify fight_history table exists
+        // Verify arena_runs table exists
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(
-                 "SELECT name FROM sqlite_master WHERE type='table' AND name='fight_history'")) {
-            assertTrue("fight_history table should exist", rs.next());
+                 "SELECT name FROM sqlite_master WHERE type='table' AND name='arena_runs'")) {
+            assertTrue("arena_runs table should exist", rs.next());
         }
 
         // Verify schema_version table exists
@@ -76,7 +76,7 @@ public class ArenaDatabaseTest {
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT version FROM schema_version")) {
             assertTrue("Schema version should be recorded", rs.next());
-            assertEquals("Schema version should be 1", 1, rs.getInt("version"));
+            assertEquals("Schema version should be 2", 2, rs.getInt("version"));
         }
     }
 
@@ -94,22 +94,23 @@ public class ArenaDatabaseTest {
             }
 
             assertTrue("Should have id column", columns.contains("id"));
+            assertTrue("Should have uuid column", columns.contains("uuid"));
             assertTrue("Should have name column", columns.contains("name"));
             assertTrue("Should have character_class column", columns.contains("character_class"));
             assertTrue("Should have deck_json column", columns.contains("deck_json"));
             assertTrue("Should have relics_json column", columns.contains("relics_json"));
-            assertTrue("Should have potions_json column", columns.contains("potions_json"));
             assertTrue("Should have max_hp column", columns.contains("max_hp"));
             assertTrue("Should have current_hp column", columns.contains("current_hp"));
+            assertTrue("Should have created_at column", columns.contains("created_at"));
         }
     }
 
     @Test
-    public void testFightHistoryTableColumns() throws Exception {
+    public void testArenaRunsTableColumns() throws Exception {
         Connection conn = db.getConnection();
 
         try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("PRAGMA table_info(fight_history)")) {
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(arena_runs)")) {
 
             java.util.Set<String> columns = new java.util.HashSet<>();
             while (rs.next()) {
@@ -117,12 +118,15 @@ public class ArenaDatabaseTest {
             }
 
             assertTrue("Should have id column", columns.contains("id"));
+            assertTrue("Should have loadout_id column", columns.contains("loadout_id"));
             assertTrue("Should have encounter_id column", columns.contains("encounter_id"));
-            assertTrue("Should have encounter_name column", columns.contains("encounter_name"));
-            assertTrue("Should have result column", columns.contains("result"));
+            assertTrue("Should have outcome column", columns.contains("outcome"));
+            assertTrue("Should have starting_hp column", columns.contains("starting_hp"));
+            assertTrue("Should have ending_hp column", columns.contains("ending_hp"));
             assertTrue("Should have turns_taken column", columns.contains("turns_taken"));
             assertTrue("Should have damage_dealt column", columns.contains("damage_dealt"));
             assertTrue("Should have damage_taken column", columns.contains("damage_taken"));
+            assertTrue("Should have potions_used_json column", columns.contains("potions_used_json"));
         }
     }
 
@@ -139,12 +143,12 @@ public class ArenaDatabaseTest {
                 indexes.add(rs.getString("name"));
             }
 
-            assertTrue("Should have encounter index",
-                indexes.contains("idx_fight_history_encounter"));
-            assertTrue("Should have character index",
-                indexes.contains("idx_fight_history_character"));
-            assertTrue("Should have fought_at index",
-                indexes.contains("idx_fight_history_fought_at"));
+            assertTrue("Should have arena_runs loadout index",
+                indexes.contains("idx_arena_runs_loadout"));
+            assertTrue("Should have arena_runs started_at index",
+                indexes.contains("idx_arena_runs_started_at"));
+            assertTrue("Should have loadouts uuid index",
+                indexes.contains("idx_loadouts_uuid"));
             assertTrue("Should have loadouts character index",
                 indexes.contains("idx_loadouts_character"));
         }
@@ -157,11 +161,10 @@ public class ArenaDatabaseTest {
         long now = System.currentTimeMillis();
         try (Statement stmt = conn.createStatement()) {
             int inserted = stmt.executeUpdate(
-                "INSERT INTO loadouts (name, character_class, max_hp, current_hp, " +
-                "deck_json, relics_json, potions_json, created_at, updated_at) " +
-                "VALUES ('Test Loadout', 'IRONCLAD', 80, 75, " +
-                "'[\"Strike\",\"Defend\"]', '[\"Burning Blood\"]', '[]', " +
-                now + ", " + now + ")"
+                "INSERT INTO loadouts (uuid, name, character_class, max_hp, current_hp, " +
+                "deck_json, relics_json, created_at) " +
+                "VALUES ('test-uuid-123', 'Test Loadout', 'IRONCLAD', 80, 75, " +
+                "'[\"Strike\",\"Defend\"]', '[\"Burning Blood\"]', " + now + ")"
             );
             assertEquals("Should insert one row", 1, inserted);
         }
@@ -171,23 +174,41 @@ public class ArenaDatabaseTest {
              ResultSet rs = stmt.executeQuery("SELECT * FROM loadouts WHERE name='Test Loadout'")) {
             assertTrue("Should find inserted loadout", rs.next());
             assertEquals("IRONCLAD", rs.getString("character_class"));
+            assertEquals("test-uuid-123", rs.getString("uuid"));
             assertEquals(80, rs.getInt("max_hp"));
             assertEquals(75, rs.getInt("current_hp"));
         }
     }
 
     @Test
-    public void testCanInsertFightRecord() throws Exception {
+    public void testCanInsertArenaRun() throws Exception {
         Connection conn = db.getConnection();
 
+        // First insert a loadout to reference
         long now = System.currentTimeMillis();
         try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate(
+                "INSERT INTO loadouts (uuid, name, character_class, max_hp, current_hp, " +
+                "deck_json, relics_json, created_at) " +
+                "VALUES ('run-test-uuid', 'Run Test Loadout', 'THE_SILENT', 70, 70, '[]', '[]', " + now + ")"
+            );
+        }
+
+        // Get the loadout id
+        long loadoutId;
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT id FROM loadouts WHERE uuid='run-test-uuid'")) {
+            assertTrue(rs.next());
+            loadoutId = rs.getLong("id");
+        }
+
+        // Insert arena run
+        try (Statement stmt = conn.createStatement()) {
             int inserted = stmt.executeUpdate(
-                "INSERT INTO fight_history (encounter_id, encounter_name, character_class, " +
-                "deck_json, relics_json, potions_json, result, turns_taken, " +
-                "damage_dealt, damage_taken, fought_at) " +
-                "VALUES ('3 Louse', 'Three Lice', 'THE_SILENT', " +
-                "'[]', '[]', '[]', 'WIN', 5, 42, 8, " + now + ")"
+                "INSERT INTO arena_runs (loadout_id, encounter_id, started_at, " +
+                "outcome, starting_hp, ending_hp, damage_dealt, damage_taken, turns_taken) " +
+                "VALUES (" + loadoutId + ", '3 Louse', " + now + ", " +
+                "'VICTORY', 70, 62, 42, 8, 5)"
             );
             assertEquals("Should insert one row", 1, inserted);
         }
@@ -195,11 +216,12 @@ public class ArenaDatabaseTest {
         // Verify the insert
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(
-                 "SELECT * FROM fight_history WHERE encounter_id='3 Louse'")) {
-            assertTrue("Should find inserted fight record", rs.next());
-            assertEquals("WIN", rs.getString("result"));
+                 "SELECT * FROM arena_runs WHERE encounter_id='3 Louse'")) {
+            assertTrue("Should find inserted arena run", rs.next());
+            assertEquals("VICTORY", rs.getString("outcome"));
             assertEquals(5, rs.getInt("turns_taken"));
             assertEquals(42, rs.getInt("damage_dealt"));
+            assertEquals(62, rs.getInt("ending_hp"));
         }
     }
 
@@ -214,18 +236,18 @@ public class ArenaDatabaseTest {
             // Insert into first db
             try (Statement stmt = db.getConnection().createStatement()) {
                 stmt.executeUpdate(
-                    "INSERT INTO loadouts (name, character_class, max_hp, current_hp, " +
-                    "deck_json, relics_json, potions_json, created_at, updated_at) " +
-                    "VALUES ('DB1 Loadout', 'IRONCLAD', 80, 80, '[]', '[]', '[]', 0, 0)"
+                    "INSERT INTO loadouts (uuid, name, character_class, max_hp, current_hp, " +
+                    "deck_json, relics_json, created_at) " +
+                    "VALUES ('db1-uuid', 'DB1 Loadout', 'IRONCLAD', 80, 80, '[]', '[]', 0)"
                 );
             }
 
             // Insert into second db
             try (Statement stmt = db2.getConnection().createStatement()) {
                 stmt.executeUpdate(
-                    "INSERT INTO loadouts (name, character_class, max_hp, current_hp, " +
-                    "deck_json, relics_json, potions_json, created_at, updated_at) " +
-                    "VALUES ('DB2 Loadout', 'DEFECT', 75, 75, '[]', '[]', '[]', 0, 0)"
+                    "INSERT INTO loadouts (uuid, name, character_class, max_hp, current_hp, " +
+                    "deck_json, relics_json, created_at) " +
+                    "VALUES ('db2-uuid', 'DB2 Loadout', 'DEFECT', 75, 75, '[]', '[]', 0)"
                 );
             }
 

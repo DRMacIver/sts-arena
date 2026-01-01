@@ -16,8 +16,9 @@ import com.megacrit.cardcrawl.screens.mainMenu.MenuButton;
 public class MainMenuArenaPatch {
 
     public static void Postfix(MainMenuScreen __instance) {
-        // Add our button at the end of the list, with index = size (so it appears after all existing buttons)
+        // Add our buttons at the end of the list
         int nextIndex = __instance.buttons.size();
         __instance.buttons.add(new MenuButton(ArenaMenuButton.ARENA_MODE, nextIndex));
+        __instance.buttons.add(new MenuButton(ArenaMenuButton.ARENA_HISTORY, nextIndex + 1));
     }
 }

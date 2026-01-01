@@ -15,7 +15,7 @@ import java.sql.*;
 public class ArenaDatabase {
 
     private static final String DB_NAME = "arena.db";
-    private static final int SCHEMA_VERSION = 1;
+    private static final int SCHEMA_VERSION = 2;
     private static final Logger logger = LogManager.getLogger(ArenaDatabase.class.getName());
 
     private static ArenaDatabase instance;
@@ -103,58 +103,87 @@ public class ArenaDatabase {
                 ")"
             );
 
+            // Check if we need to recreate tables by checking if uuid column exists
+            boolean needsRecreate = false;
+            try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(loadouts)")) {
+                boolean hasUuid = false;
+                while (rs.next()) {
+                    if ("uuid".equals(rs.getString("name"))) {
+                        hasUuid = true;
+                        break;
+                    }
+                }
+                // If table exists but doesn't have uuid, we need to recreate
+                needsRecreate = !hasUuid;
+            } catch (SQLException e) {
+                // Table might not exist yet, which is fine
+                logger.info("loadouts table doesn't exist yet, will create it");
+            }
+
+            if (needsRecreate) {
+                logger.info("Schema needs upgrade - dropping old tables");
+                stmt.execute("DROP TABLE IF EXISTS arena_runs");
+                stmt.execute("DROP TABLE IF EXISTS loadouts");
+                stmt.execute("DROP INDEX IF EXISTS idx_arena_runs_loadout");
+                stmt.execute("DROP INDEX IF EXISTS idx_arena_runs_started_at");
+                stmt.execute("DROP INDEX IF EXISTS idx_arena_runs_outcome");
+                stmt.execute("DROP INDEX IF EXISTS idx_loadouts_uuid");
+                stmt.execute("DROP INDEX IF EXISTS idx_loadouts_character");
+            }
+
             // Loadouts table - saved deck/relic/potion configurations
+            // uuid is the unique string identifier, id is for internal references
             stmt.execute(
                 "CREATE TABLE IF NOT EXISTS loadouts (" +
                 "    id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "    uuid TEXT NOT NULL UNIQUE," +
                 "    name TEXT NOT NULL," +
                 "    character_class TEXT NOT NULL," +
-                "    ascension_level INTEGER DEFAULT 0," +
                 "    max_hp INTEGER NOT NULL," +
                 "    current_hp INTEGER NOT NULL," +
-                "    gold INTEGER DEFAULT 0," +
                 "    deck_json TEXT NOT NULL," +
                 "    relics_json TEXT NOT NULL," +
-                "    potions_json TEXT NOT NULL," +
-                "    created_at INTEGER NOT NULL," +
-                "    updated_at INTEGER NOT NULL" +
+                "    created_at INTEGER NOT NULL" +
                 ")"
             );
 
-            // Fight history table - records of completed arena fights
+            // Arena runs table - records of arena fights with outcomes
             stmt.execute(
-                "CREATE TABLE IF NOT EXISTS fight_history (" +
+                "CREATE TABLE IF NOT EXISTS arena_runs (" +
                 "    id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "    loadout_id INTEGER," +
+                "    loadout_id INTEGER NOT NULL," +
                 "    encounter_id TEXT NOT NULL," +
-                "    encounter_name TEXT NOT NULL," +
-                "    character_class TEXT NOT NULL," +
-                "    ascension_level INTEGER DEFAULT 0," +
-                "    deck_json TEXT NOT NULL," +
-                "    relics_json TEXT NOT NULL," +
-                "    potions_json TEXT NOT NULL," +
-                "    result TEXT NOT NULL," +
-                "    turns_taken INTEGER," +
+                "    started_at INTEGER NOT NULL," +
+                "    ended_at INTEGER," +
+                "    outcome TEXT," +  // 'VICTORY', 'DEFEAT', 'ABANDONED', or NULL if in progress
+                "    starting_hp INTEGER NOT NULL," +
+                "    ending_hp INTEGER," +
+                "    potions_used_json TEXT," +  // JSON array of potion IDs used
                 "    damage_dealt INTEGER," +
                 "    damage_taken INTEGER," +
-                "    floor_num INTEGER," +
-                "    fought_at INTEGER NOT NULL," +
-                "    FOREIGN KEY (loadout_id) REFERENCES loadouts(id) ON DELETE SET NULL" +
+                "    turns_taken INTEGER," +
+                "    cards_played INTEGER," +
+                "    relics_triggered_json TEXT," +  // JSON array of relic IDs that had effects
+                "    FOREIGN KEY (loadout_id) REFERENCES loadouts(id) ON DELETE CASCADE" +
                 ")"
             );
 
             // Indexes for common queries
             stmt.execute(
-                "CREATE INDEX IF NOT EXISTS idx_fight_history_encounter " +
-                "ON fight_history(encounter_id)"
+                "CREATE INDEX IF NOT EXISTS idx_arena_runs_loadout " +
+                "ON arena_runs(loadout_id)"
             );
             stmt.execute(
-                "CREATE INDEX IF NOT EXISTS idx_fight_history_character " +
-                "ON fight_history(character_class)"
+                "CREATE INDEX IF NOT EXISTS idx_arena_runs_started_at " +
+                "ON arena_runs(started_at DESC)"
             );
             stmt.execute(
-                "CREATE INDEX IF NOT EXISTS idx_fight_history_fought_at " +
-                "ON fight_history(fought_at DESC)"
+                "CREATE INDEX IF NOT EXISTS idx_arena_runs_outcome " +
+                "ON arena_runs(outcome)"
+            );
+            stmt.execute(
+                "CREATE INDEX IF NOT EXISTS idx_loadouts_uuid " +
+                "ON loadouts(uuid)"
             );
             stmt.execute(
                 "CREATE INDEX IF NOT EXISTS idx_loadouts_character " +

@@ -101,7 +101,8 @@ public class ArenaSaveManager {
         List<Integer> relicCounters = new ArrayList<>();
         for (AbstractRelic relic : loadout.relics) {
             relics.add(relic.relicId);
-            relicCounters.add(0);
+            // Use -1 to indicate no counter should be displayed
+            relicCounters.add(-1);
         }
         save.put("relics", relics);
         save.put("relic_counters", relicCounters);
