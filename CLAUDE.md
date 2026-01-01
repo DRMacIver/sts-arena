@@ -32,7 +32,6 @@ sts-arena/
 │   │   └── FightRecord.java        # Historical fight records
 │   └── patches/                    # SpirePatch classes
 │       ├── ArenaMenuButton.java    # Menu button enum & handlers
-│       ├── ArenaDungeonPatch.java  # Hooks into dungeon init
 │       └── MainMenuArenaPatch.java # Adds button to main menu
 └── src/main/resources/
     ├── ModTheSpire.json            # Mod metadata for ModTheSpire

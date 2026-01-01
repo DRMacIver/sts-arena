@@ -1,10 +1,12 @@
 package stsarena;
 
 import basemod.BaseMod;
+import basemod.interfaces.PostDungeonInitializeSubscriber;
 import basemod.interfaces.PostInitializeSubscriber;
 import com.evacipated.cardcrawl.modthespire.lib.SpireInitializer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import stsarena.arena.ArenaRunner;
 import stsarena.data.ArenaDatabase;
 
 /**
@@ -17,7 +19,7 @@ import stsarena.data.ArenaDatabase;
  * - Practice specific fights without playing through the full game
  */
 @SpireInitializer
-public class STSArena implements PostInitializeSubscriber {
+public class STSArena implements PostInitializeSubscriber, PostDungeonInitializeSubscriber {
 
     public static final Logger logger = LogManager.getLogger(STSArena.class.getName());
     public static final String MOD_ID = "stsarena";
@@ -47,5 +49,17 @@ public class STSArena implements PostInitializeSubscriber {
         ArenaDatabase.getInstance();
 
         // Arena Mode button is added via patches/MainMenuArenaPatch
+    }
+
+    /**
+     * Called after a dungeon is initialized.
+     * This is where we apply our arena loadout and start the fight.
+     */
+    @Override
+    public void receivePostDungeonInitialize() {
+        if (ArenaRunner.hasPendingLoadout()) {
+            logger.info("Dungeon initialized, triggering arena setup");
+            ArenaRunner.onDungeonInitialized();
+        }
     }
 }
