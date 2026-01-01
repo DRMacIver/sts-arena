@@ -41,7 +41,6 @@ public class STSArena implements PostInitializeSubscriber {
     @Override
     public void receivePostInitialize() {
         logger.info("STS Arena post-initialize");
-        // TODO: Register arena mode button in main menu
-        // TODO: Set up configuration options
+        // Arena Mode button is added via patches/MainMenuArenaPatch
     }
 }
