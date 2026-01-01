@@ -5,6 +5,7 @@ import basemod.interfaces.PostInitializeSubscriber;
 import com.evacipated.cardcrawl.modthespire.lib.SpireInitializer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import stsarena.data.ArenaDatabase;
 
 /**
  * STS Arena - A Slay the Spire mod for playing isolated single fights as practice runs.
@@ -41,6 +42,10 @@ public class STSArena implements PostInitializeSubscriber {
     @Override
     public void receivePostInitialize() {
         logger.info("STS Arena post-initialize");
+
+        // Initialize the database
+        ArenaDatabase.getInstance();
+
         // Arena Mode button is added via patches/MainMenuArenaPatch
     }
 }

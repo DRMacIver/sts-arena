@@ -47,6 +47,13 @@
             <scope>system</scope>
             <systemPath>${project.basedir}/lib/BaseMod.jar</systemPath>
         </dependency>
+
+        <!-- SQLite JDBC driver for data persistence -->
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.42.0.0</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -70,6 +77,33 @@
                         <exclude>**/*.psd</exclude>
                     </excludes>
                 </configuration>
+            </plugin>
+            <!-- Shade plugin to bundle SQLite JDBC into the mod JAR -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <artifactSet>
+                                <includes>
+                                    <include>org.xerial:sqlite-jdbc</include>
+                                </includes>
+                            </artifactSet>
+                            <relocations>
+                                <relocation>
+                                    <pattern>org.sqlite</pattern>
+                                    <shadedPattern>stsarena.shaded.org.sqlite</shadedPattern>
+                                </relocation>
+                            </relocations>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <!-- Copy the built jar to the mods folder for testing -->
             <plugin>

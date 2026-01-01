@@ -9,6 +9,7 @@ STS Arena is a Slay the Spire mod that enables "arena" style gameplay - isolated
 - **Language**: Java 8 (required by ModTheSpire - do NOT use Java 9+)
 - **Build System**: Maven
 - **Mod Framework**: BaseMod (modding API) + ModTheSpire (mod loader)
+- **Database**: SQLite (bundled via maven-shade-plugin)
 - **Game**: Slay the Spire
 
 ## Project Structure
@@ -20,8 +21,15 @@ sts-arena/
 │   ├── desktop-1.0.jar             # Slay the Spire game jar
 │   ├── ModTheSpire.jar             # Mod loader
 │   └── BaseMod.jar                 # Modding API
-├── src/main/java/stsarena/         # Java source files
-│   └── STSArena.java               # Main mod entry point
+├── src/main/java/stsarena/
+│   ├── STSArena.java               # Main mod entry point
+│   ├── data/                       # Data layer
+│   │   ├── ArenaDatabase.java      # SQLite connection & schema
+│   │   ├── Loadout.java            # Saved deck/relic configurations
+│   │   └── FightRecord.java        # Historical fight records
+│   └── patches/                    # SpirePatch classes
+│       ├── ArenaMenuButton.java    # Menu button enum & handlers
+│       └── MainMenuArenaPatch.java # Adds button to main menu
 └── src/main/resources/
     ├── ModTheSpire.json            # Mod metadata for ModTheSpire
     └── stsarena/                   # Mod resources (images, localization)
@@ -118,6 +126,40 @@ UI-related:
 - Mod ID: `stsarena`
 - Class prefix: `Arena` (e.g., `ArenaScreen`, `ArenaConfig`)
 - Resource paths: `stsarena/images/`, `stsarena/localization/`
+
+## Data Layer
+
+SQLite database stored at `~/Library/Preferences/ModTheSpire/stsarena/arena.db` (macOS).
+
+### Tables
+
+**loadouts** - Saved deck/relic/potion configurations
+- `id`, `name`, `character_class`, `ascension_level`
+- `max_hp`, `current_hp`, `gold`
+- `deck_json`, `relics_json`, `potions_json` (JSON blobs)
+- `created_at`, `updated_at` (timestamps in millis)
+
+**fight_history** - Records of completed arena fights
+- `id`, `loadout_id` (nullable FK), `encounter_id`, `encounter_name`
+- `character_class`, `ascension_level`, `floor_num`
+- `deck_json`, `relics_json`, `potions_json` (snapshot at fight time)
+- `result` (WIN/LOSS), `turns_taken`, `damage_dealt`, `damage_taken`
+- `fought_at` (timestamp)
+
+### Usage
+
+```java
+// Save a loadout
+Loadout loadout = new Loadout();
+loadout.setName("My Heart Killer");
+loadout.setCharacterClass("IRONCLAD");
+loadout.setDeckJson(gson.toJson(cardIds));
+loadout.save();
+
+// Query fight history
+List<FightRecord> recent = FightRecord.findRecent(10);
+FightRecord.FightStats stats = FightRecord.getStatsForEncounter("TheHeart");
+```
 
 ## Coding Standards
 
