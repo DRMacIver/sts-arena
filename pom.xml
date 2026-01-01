@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>stsarena</groupId>
+    <artifactId>STSArena</artifactId>
+    <version>0.1.0</version>
+    <packaging>jar</packaging>
+
+    <name>STS Arena</name>
+    <description>A Slay the Spire mod for playing isolated single fights as practice runs</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <!-- Update this path to your Steam installation -->
+        <steamPath>${user.home}/Library/Application Support/Steam/steamapps</steamPath>
+    </properties>
+
+    <dependencies>
+        <!-- Slay the Spire base game -->
+        <dependency>
+            <groupId>com.megacrit.cardcrawl</groupId>
+            <artifactId>slaythespire</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/desktop-1.0.jar</systemPath>
+        </dependency>
+
+        <!-- ModTheSpire - the mod loader -->
+        <dependency>
+            <groupId>com.evacipated.cardcrawl</groupId>
+            <artifactId>ModTheSpire</artifactId>
+            <version>3.30.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/ModTheSpire.jar</systemPath>
+        </dependency>
+
+        <!-- BaseMod - the modding API -->
+        <dependency>
+            <groupId>basemod</groupId>
+            <artifactId>BaseMod</artifactId>
+            <version>5.0.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/BaseMod.jar</systemPath>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>STSArena</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <excludes>
+                        <exclude>**/*.psd</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            <!-- Copy the built jar to the mods folder for testing -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <configuration>
+                            <target>
+                                <copy file="target/STSArena.jar" todir="${steamPath}/common/SlayTheSpire/mods" overwrite="true" failonerror="false"/>
+                            </target>
+                        </configuration>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+            </resource>
+        </resources>
+    </build>
+</project>
