@@ -1,5 +1,7 @@
 package stsarena.arena;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.megacrit.cardcrawl.cards.AbstractCard;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
 import com.megacrit.cardcrawl.core.CardCrawlGame;
@@ -7,7 +9,9 @@ import com.megacrit.cardcrawl.helpers.CardLibrary;
 import com.megacrit.cardcrawl.helpers.RelicLibrary;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import stsarena.STSArena;
+import stsarena.data.ArenaRepository;
 
+import java.lang.reflect.Type;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -293,5 +297,70 @@ public class RandomLoadoutGenerator {
      */
     public static String getRandomEncounter() {
         return LoadoutConfig.ENCOUNTERS[random.nextInt(LoadoutConfig.ENCOUNTERS.length)];
+    }
+
+    private static final Gson gson = new Gson();
+
+    /**
+     * Reconstruct a GeneratedLoadout from a saved LoadoutRecord.
+     */
+    public static GeneratedLoadout fromSavedLoadout(ArenaRepository.LoadoutRecord record) {
+        STSArena.logger.info("Reconstructing loadout from saved record: " + record.name);
+
+        AbstractPlayer.PlayerClass playerClass = AbstractPlayer.PlayerClass.valueOf(record.characterClass);
+
+        // Deserialize deck
+        List<AbstractCard> deck = new ArrayList<>();
+        try {
+            Type cardListType = new TypeToken<List<ArenaRepository.CardData>>(){}.getType();
+            List<ArenaRepository.CardData> cardDataList = gson.fromJson(record.deckJson, cardListType);
+            for (ArenaRepository.CardData cardData : cardDataList) {
+                AbstractCard card = CardLibrary.getCard(cardData.id);
+                if (card != null) {
+                    AbstractCard copy = card.makeCopy();
+                    for (int i = 0; i < cardData.upgrades; i++) {
+                        if (copy.canUpgrade()) {
+                            copy.upgrade();
+                        }
+                    }
+                    deck.add(copy);
+                }
+            }
+        } catch (Exception e) {
+            STSArena.logger.error("Failed to deserialize deck", e);
+        }
+
+        // Deserialize relics
+        List<AbstractRelic> relics = new ArrayList<>();
+        boolean hasPrismaticShard = false;
+        try {
+            Type relicListType = new TypeToken<List<String>>(){}.getType();
+            List<String> relicIds = gson.fromJson(record.relicsJson, relicListType);
+            for (String relicId : relicIds) {
+                AbstractRelic relic = RelicLibrary.getRelic(relicId);
+                if (relic != null) {
+                    relics.add(relic.makeCopy());
+                    if ("PrismaticShard".equals(relicId)) {
+                        hasPrismaticShard = true;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            STSArena.logger.error("Failed to deserialize relics", e);
+        }
+
+        STSArena.logger.info("Reconstructed loadout: " + deck.size() + " cards, " + relics.size() + " relics");
+
+        return new GeneratedLoadout(
+            record.uuid,
+            record.name,
+            record.createdAt,
+            playerClass,
+            deck,
+            relics,
+            hasPrismaticShard,
+            record.maxHp,
+            record.currentHp
+        );
     }
 }

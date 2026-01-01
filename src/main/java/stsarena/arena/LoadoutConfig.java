@@ -155,11 +155,11 @@ public class LoadoutConfig {
     }
 
     /**
-     * Act 1 encounters that are known to work in Exordium.
+     * All encounters from the game, organized by act.
      * These are the internal encounter IDs used by the game.
      */
     public static final String[] ENCOUNTERS = {
-        // Act 1 normal encounters (using internal IDs)
+        // Act 1 normal encounters
         "Cultist",
         "Jaw Worm",
         "2 Louse",
@@ -177,6 +177,54 @@ public class LoadoutConfig {
         // Act 1 elites
         "Gremlin Nob",
         "Lagavulin",
-        "3 Sentries"
+        "3 Sentries",
+        // Act 1 bosses
+        "The Guardian",
+        "Hexaghost",
+        "Slime Boss",
+        // Act 2 normal encounters
+        "Chosen",
+        "Shell Parasite",
+        "Spheric Guardian",
+        "3 Byrds",
+        "2 Thieves",
+        "Chosen and Byrds",
+        "Sentry and Sphere",
+        "Snake Plant",
+        "Snecko",
+        "Centurion and Healer",
+        "Cultist and Chosen",
+        "3 Cultists",
+        "Shelled Parasite and Fungi",
+        // Act 2 elites
+        "Gremlin Leader",
+        "Slavers",
+        "Book of Stabbing",
+        // Act 2 bosses
+        "Automaton",
+        "Collector",
+        "Champ",
+        // Act 3 normal encounters
+        "3 Darklings",
+        "Orb Walker",
+        "3 Shapes",
+        "Spire Growth",
+        "Transient",
+        "4 Shapes",
+        "Maw",
+        "Jaw Worm Horde",
+        "Sphere and 2 Shapes",
+        "Writhing Mass",
+        // Act 3 elites
+        "Giant Head",
+        "Nemesis",
+        "Reptomancer",
+        // Act 3 bosses
+        "Awakened One",
+        "Time Eater",
+        "Donu and Deca",
+        // Act 4
+        "Shield and Spear",
+        "The Heart"
     };
 }

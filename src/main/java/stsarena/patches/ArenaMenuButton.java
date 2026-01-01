@@ -4,7 +4,6 @@ import com.evacipated.cardcrawl.modthespire.lib.SpireEnum;
 import com.evacipated.cardcrawl.modthespire.lib.SpirePatch;
 import com.megacrit.cardcrawl.screens.mainMenu.MenuButton;
 import stsarena.STSArena;
-import stsarena.arena.ArenaRunner;
 
 import java.lang.reflect.Field;
 
@@ -60,7 +59,7 @@ public class ArenaMenuButton {
         public static void Postfix(MenuButton __instance) {
             if (__instance.result == ARENA_MODE) {
                 STSArena.logger.info("Arena Mode button clicked!");
-                ArenaRunner.startRandomFight();
+                STSArena.openLoadoutSelectScreen();
             } else if (__instance.result == ARENA_HISTORY) {
                 STSArena.logger.info("Arena History button clicked!");
                 STSArena.openHistoryScreen();

@@ -133,13 +133,25 @@ public class ArenaRepository {
 
     /**
      * Get recent arena runs for display in statistics.
+     * Deletes incomplete runs (from crashes) and only returns completed runs.
      */
     public List<ArenaRunRecord> getRecentRuns(int limit) {
+        // First, delete any incomplete runs (outcome is NULL means crashed/abandoned)
+        try (Statement stmt = database.getConnection().createStatement()) {
+            int deleted = stmt.executeUpdate("DELETE FROM arena_runs WHERE outcome IS NULL");
+            if (deleted > 0) {
+                logger.info("Cleaned up " + deleted + " incomplete arena run(s)");
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to clean up incomplete runs", e);
+        }
+
         String sql = "SELECT r.id, r.started_at, r.ended_at, r.outcome, r.starting_hp, r.ending_hp, " +
                      "r.encounter_id, r.potions_used_json, r.damage_dealt, r.damage_taken, r.turns_taken, " +
                      "l.name as loadout_name, l.character_class " +
                      "FROM arena_runs r " +
                      "JOIN loadouts l ON r.loadout_id = l.id " +
+                     "WHERE r.outcome IS NOT NULL " +
                      "ORDER BY r.started_at DESC " +
                      "LIMIT ?";
 
@@ -282,5 +294,54 @@ public class ArenaRepository {
         public double getWinRate() {
             return totalRuns > 0 ? (double) wins / totalRuns : 0;
         }
+    }
+
+    /**
+     * Get saved loadouts for selection.
+     */
+    public List<LoadoutRecord> getLoadouts(int limit) {
+        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, created_at " +
+                     "FROM loadouts ORDER BY created_at DESC LIMIT ?";
+
+        List<LoadoutRecord> results = new ArrayList<>();
+
+        try (PreparedStatement stmt = database.getConnection().prepareStatement(sql)) {
+            stmt.setInt(1, limit);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    LoadoutRecord record = new LoadoutRecord();
+                    record.dbId = rs.getLong("id");
+                    record.uuid = rs.getString("uuid");
+                    record.name = rs.getString("name");
+                    record.characterClass = rs.getString("character_class");
+                    record.maxHp = rs.getInt("max_hp");
+                    record.currentHp = rs.getInt("current_hp");
+                    record.deckJson = rs.getString("deck_json");
+                    record.relicsJson = rs.getString("relics_json");
+                    record.createdAt = rs.getLong("created_at");
+                    results.add(record);
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to get loadouts", e);
+        }
+
+        return results;
+    }
+
+    /**
+     * Record of a saved loadout.
+     */
+    public static class LoadoutRecord {
+        public long dbId;
+        public String uuid;
+        public String name;
+        public String characterClass;
+        public int maxHp;
+        public int currentHp;
+        public String deckJson;
+        public String relicsJson;
+        public long createdAt;
     }
 }

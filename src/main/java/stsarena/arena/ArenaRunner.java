@@ -4,7 +4,9 @@ import com.megacrit.cardcrawl.core.CardCrawlGame;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.map.MapRoomNode;
+import com.megacrit.cardcrawl.rooms.AbstractRoom;
 import com.megacrit.cardcrawl.rooms.MonsterRoom;
+import com.megacrit.cardcrawl.screens.GameOverScreen;
 import stsarena.STSArena;
 import stsarena.data.ArenaDatabase;
 import stsarena.data.ArenaRepository;
@@ -33,6 +35,9 @@ public class ArenaRunner {
     // Combat tracking
     private static int combatStartHp = 0;
     private static List<String> potionsUsedThisCombat = new ArrayList<>();
+
+    // Flag to trigger return to main menu after arena fight ends
+    private static boolean pendingReturnToMainMenu = false;
 
     /**
      * Start a random arena fight from the main menu.
@@ -304,6 +309,10 @@ public class ArenaRunner {
         } catch (Exception e) {
             STSArena.logger.error("Failed to record victory", e);
         }
+
+        // Trigger return to main menu
+        pendingReturnToMainMenu = true;
+        STSArena.setReturnToArenaOnMainMenu();
     }
 
     /**
@@ -343,6 +352,9 @@ public class ArenaRunner {
         } catch (Exception e) {
             STSArena.logger.error("Failed to record defeat", e);
         }
+
+        // Set flag to return to arena selection when main menu is reached
+        STSArena.setReturnToArenaOnMainMenu();
     }
 
     /**
@@ -357,5 +369,98 @@ public class ArenaRunner {
      */
     public static String getCurrentLoadoutName() {
         return currentLoadout != null ? currentLoadout.name : null;
+    }
+
+    /**
+     * Check if we need to return to main menu after an arena fight.
+     * Called from STSArena's update loop.
+     */
+    public static void checkPendingReturnToMainMenu() {
+        if (!pendingReturnToMainMenu) {
+            return;
+        }
+
+        // Force return to main menu
+        STSArena.logger.info("ARENA: Forcing return to main menu");
+        pendingReturnToMainMenu = false;
+
+        try {
+            // Clear the arena run state
+            clearArenaRun();
+
+            // Use the game's death screen mechanism to return to main menu
+            // This properly handles all cleanup
+            AbstractDungeon.getCurrRoom().phase = AbstractRoom.RoomPhase.COMPLETE;
+
+            // Trigger return to main menu like abandoning a run
+            Settings.isTrial = false;
+            Settings.isDailyRun = false;
+            Settings.isEndless = false;
+
+            CardCrawlGame.startOver();
+        } catch (Exception e) {
+            STSArena.logger.error("ARENA: Error returning to main menu", e);
+        }
+    }
+
+    /**
+     * Start an arena fight with a saved loadout from the database.
+     */
+    public static void startFightWithSavedLoadout(ArenaRepository.LoadoutRecord savedLoadout, String encounter) {
+        STSArena.logger.info("=== ARENA: startFightWithSavedLoadout() called ===");
+        STSArena.logger.info("ARENA: Saved Loadout: " + savedLoadout.name + ", Encounter: " + encounter);
+
+        // Convert saved loadout to GeneratedLoadout
+        RandomLoadoutGenerator.GeneratedLoadout loadout = RandomLoadoutGenerator.fromSavedLoadout(savedLoadout);
+
+        // Use the existing dbId for the loadout instead of saving a new one
+        pendingLoadout = loadout;
+        pendingEncounter = encounter;
+        arenaRunInProgress = true;
+        isArenaRun = true;
+
+        currentLoadout = loadout;
+        currentEncounter = encounter;
+        combatStartHp = loadout.currentHp;
+        potionsUsedThisCombat.clear();
+        currentLoadoutDbId = savedLoadout.dbId;
+
+        STSArena.logger.info("Starting arena with saved loadout: " + loadout.playerClass + " vs " + encounter);
+
+        // Start tracking the run (use existing loadout ID)
+        try {
+            ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+            currentRunDbId = repo.startArenaRun(currentLoadoutDbId, encounter, loadout.currentHp);
+            STSArena.logger.info("ARENA: Arena run started with DB ID: " + currentRunDbId);
+        } catch (Exception e) {
+            STSArena.logger.error("ARENA: Failed to start arena run", e);
+        }
+
+        // Create arena save file
+        String savePath = ArenaSaveManager.createArenaSave(loadout, encounter);
+        if (savePath == null) {
+            STSArena.logger.error("Failed to create arena save file");
+            clearPendingState();
+            return;
+        }
+
+        // Set up the game to load the save
+        CardCrawlGame.loadingSave = true;
+        CardCrawlGame.chosenCharacter = loadout.playerClass;
+
+        Settings.isTrial = false;
+        Settings.isDailyRun = false;
+        Settings.isEndless = false;
+
+        if (CardCrawlGame.mainMenuScreen != null) {
+            CardCrawlGame.mainMenuScreen.isFadingOut = true;
+            CardCrawlGame.mainMenuScreen.fadedOut = true;
+            CardCrawlGame.mainMenuScreen.fadeOutMusic();
+        }
+        CardCrawlGame.music.fadeOutTempBGM();
+
+        CardCrawlGame.mode = CardCrawlGame.GameMode.CHAR_SELECT;
+
+        STSArena.logger.info("Arena save created, transitioning to load it");
     }
 }
