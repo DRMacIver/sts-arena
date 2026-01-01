@@ -2,6 +2,8 @@
 
 A Slay the Spire mod that adds an Arena mode for practicing fights with custom loadouts.
 
+Please note: This mod is mostly vibe-coded. I've done some manual testing and debugging of it, but I expect it to have a lot of further bugs. Reports very welcome.
+
 ## Features
 
 ### Arena Mode
