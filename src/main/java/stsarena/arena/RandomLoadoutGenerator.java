@@ -6,7 +6,9 @@ import com.megacrit.cardcrawl.cards.AbstractCard;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
 import com.megacrit.cardcrawl.core.CardCrawlGame;
 import com.megacrit.cardcrawl.helpers.CardLibrary;
+import com.megacrit.cardcrawl.helpers.PotionHelper;
 import com.megacrit.cardcrawl.helpers.RelicLibrary;
+import com.megacrit.cardcrawl.potions.AbstractPotion;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import stsarena.STSArena;
 import stsarena.data.ArenaRepository;
@@ -35,6 +37,7 @@ public class RandomLoadoutGenerator {
         public final AbstractPlayer.PlayerClass playerClass;
         public final List<AbstractCard> deck;
         public final List<AbstractRelic> relics;
+        public final List<AbstractPotion> potions;
         public final boolean hasPrismaticShard;
         public final int maxHp;
         public final int currentHp;
@@ -42,7 +45,8 @@ public class RandomLoadoutGenerator {
 
         public GeneratedLoadout(String id, String name, long createdAt,
                                 AbstractPlayer.PlayerClass playerClass, List<AbstractCard> deck,
-                                List<AbstractRelic> relics, boolean hasPrismaticShard,
+                                List<AbstractRelic> relics, List<AbstractPotion> potions,
+                                boolean hasPrismaticShard,
                                 int maxHp, int currentHp, int ascensionLevel) {
             this.id = id;
             this.name = name;
@@ -50,6 +54,7 @@ public class RandomLoadoutGenerator {
             this.playerClass = playerClass;
             this.deck = deck;
             this.relics = relics;
+            this.potions = potions != null ? potions : new ArrayList<>();
             this.hasPrismaticShard = hasPrismaticShard;
             this.maxHp = maxHp;
             this.currentHp = currentHp;
@@ -97,10 +102,13 @@ public class RandomLoadoutGenerator {
         // Random ascension level (0-20)
         int ascensionLevel = random.nextInt(21);
 
+        // Random loadouts start with no potions
+        List<AbstractPotion> potions = new ArrayList<>();
+
         STSArena.logger.info("Generated loadout '" + name + "': " + deck.size() + " cards, " +
                             relics.size() + " relics, " + currentHp + "/" + maxHp + " HP, A" + ascensionLevel);
 
-        return new GeneratedLoadout(id, name, createdAt, playerClass, deck, relics, hasPrismaticShard, maxHp, currentHp, ascensionLevel);
+        return new GeneratedLoadout(id, name, createdAt, playerClass, deck, relics, potions, hasPrismaticShard, maxHp, currentHp, ascensionLevel);
     }
 
     /**
@@ -354,7 +362,25 @@ public class RandomLoadoutGenerator {
             STSArena.logger.error("Failed to deserialize relics", e);
         }
 
-        STSArena.logger.info("Reconstructed loadout: " + deck.size() + " cards, " + relics.size() + " relics, A" + record.ascensionLevel);
+        // Deserialize potions
+        List<AbstractPotion> potions = new ArrayList<>();
+        try {
+            if (record.potionsJson != null && !record.potionsJson.isEmpty()) {
+                Type potionListType = new TypeToken<List<String>>(){}.getType();
+                List<String> potionIds = gson.fromJson(record.potionsJson, potionListType);
+                for (String potionId : potionIds) {
+                    AbstractPotion potion = PotionHelper.getPotion(potionId);
+                    if (potion != null) {
+                        potions.add(potion.makeCopy());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            STSArena.logger.error("Failed to deserialize potions", e);
+        }
+
+        STSArena.logger.info("Reconstructed loadout: " + deck.size() + " cards, " + relics.size() + " relics, " +
+            potions.size() + " potions, A" + record.ascensionLevel);
 
         return new GeneratedLoadout(
             record.uuid,
@@ -363,6 +389,7 @@ public class RandomLoadoutGenerator {
             playerClass,
             deck,
             relics,
+            potions,
             hasPrismaticShard,
             record.maxHp,
             record.currentHp,

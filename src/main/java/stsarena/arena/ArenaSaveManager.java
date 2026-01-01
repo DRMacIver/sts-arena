@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.megacrit.cardcrawl.cards.AbstractCard;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
+import com.megacrit.cardcrawl.potions.AbstractPotion;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import stsarena.STSArena;
 
@@ -107,10 +108,15 @@ public class ArenaSaveManager {
         save.put("relics", relics);
         save.put("relic_counters", relicCounters);
 
-        // Potions (empty)
+        // Potions - use loadout potions, fill remaining slots with empty
         List<String> potions = new ArrayList<>();
-        for (int i = 0; i < 3; i++) {
-            potions.add("Potion Slot");
+        int potionSlots = 3;
+        for (int i = 0; i < potionSlots; i++) {
+            if (i < loadout.potions.size()) {
+                potions.add(loadout.potions.get(i).ID);
+            } else {
+                potions.add("Potion Slot");
+            }
         }
         save.put("potions", potions);
 

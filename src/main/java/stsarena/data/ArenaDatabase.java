@@ -15,7 +15,7 @@ import java.sql.*;
 public class ArenaDatabase {
 
     private static final String DB_NAME = "arena.db";
-    private static final int SCHEMA_VERSION = 3;
+    private static final int SCHEMA_VERSION = 4;
     private static final Logger logger = LogManager.getLogger(ArenaDatabase.class.getName());
 
     private static ArenaDatabase instance;
@@ -152,6 +152,14 @@ public class ArenaDatabase {
             try {
                 stmt.execute("ALTER TABLE loadouts ADD COLUMN ascension_level INTEGER NOT NULL DEFAULT 0");
                 logger.info("Added ascension_level column to loadouts table");
+            } catch (SQLException e) {
+                // Column already exists, ignore
+            }
+
+            // Add potions_json column if it doesn't exist (migration)
+            try {
+                stmt.execute("ALTER TABLE loadouts ADD COLUMN potions_json TEXT");
+                logger.info("Added potions_json column to loadouts table");
             } catch (SQLException e) {
                 // Column already exists, ignore
             }

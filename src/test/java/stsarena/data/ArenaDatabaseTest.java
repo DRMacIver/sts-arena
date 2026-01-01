@@ -76,7 +76,7 @@ public class ArenaDatabaseTest {
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT version FROM schema_version")) {
             assertTrue("Schema version should be recorded", rs.next());
-            assertEquals("Schema version should be 3", 3, rs.getInt("version"));
+            assertEquals("Schema version should be 4", 4, rs.getInt("version"));
         }
     }
 

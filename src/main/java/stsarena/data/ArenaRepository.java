@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.megacrit.cardcrawl.cards.AbstractCard;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
+import com.megacrit.cardcrawl.potions.AbstractPotion;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -37,8 +38,8 @@ public class ArenaRepository {
     public long saveLoadout(RandomLoadoutGenerator.GeneratedLoadout loadout) {
         logger.info("saveLoadout called for: " + loadout.name + " (id=" + loadout.id + ")");
 
-        String sql = "INSERT INTO loadouts (uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, created_at, ascension_level) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO loadouts (uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, created_at, ascension_level) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         Connection conn = database.getConnection();
         if (conn == null) {
@@ -54,8 +55,9 @@ public class ArenaRepository {
             stmt.setInt(5, loadout.currentHp);
             stmt.setString(6, serializeDeck(loadout.deck));
             stmt.setString(7, serializeRelics(loadout.relics));
-            stmt.setLong(8, loadout.createdAt);
-            stmt.setInt(9, loadout.ascensionLevel);
+            stmt.setString(8, serializePotions(loadout.potions));
+            stmt.setLong(9, loadout.createdAt);
+            stmt.setInt(10, loadout.ascensionLevel);
 
             logger.info("saveLoadout: Executing insert...");
             int rows = stmt.executeUpdate();
@@ -237,6 +239,16 @@ public class ArenaRepository {
         return gson.toJson(relicIds);
     }
 
+    private String serializePotions(List<AbstractPotion> potions) {
+        List<String> potionIds = new ArrayList<>();
+        if (potions != null) {
+            for (AbstractPotion potion : potions) {
+                potionIds.add(potion.ID);
+            }
+        }
+        return gson.toJson(potionIds);
+    }
+
     /**
      * Simple card data for JSON serialization.
      */
@@ -305,7 +317,7 @@ public class ArenaRepository {
      * Get a specific loadout by database ID.
      */
     public LoadoutRecord getLoadoutById(long loadoutId) {
-        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, created_at, ascension_level " +
+        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, created_at, ascension_level " +
                      "FROM loadouts WHERE id = ?";
 
         try (PreparedStatement stmt = database.getConnection().prepareStatement(sql)) {
@@ -322,6 +334,7 @@ public class ArenaRepository {
                     record.currentHp = rs.getInt("current_hp");
                     record.deckJson = rs.getString("deck_json");
                     record.relicsJson = rs.getString("relics_json");
+                    record.potionsJson = rs.getString("potions_json");
                     record.createdAt = rs.getLong("created_at");
                     record.ascensionLevel = rs.getInt("ascension_level");
                     return record;
@@ -338,7 +351,7 @@ public class ArenaRepository {
      * Get saved loadouts for selection.
      */
     public List<LoadoutRecord> getLoadouts(int limit) {
-        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, created_at, ascension_level " +
+        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, created_at, ascension_level " +
                      "FROM loadouts ORDER BY created_at DESC LIMIT ?";
 
         List<LoadoutRecord> results = new ArrayList<>();
@@ -357,6 +370,7 @@ public class ArenaRepository {
                     record.currentHp = rs.getInt("current_hp");
                     record.deckJson = rs.getString("deck_json");
                     record.relicsJson = rs.getString("relics_json");
+                    record.potionsJson = rs.getString("potions_json");
                     record.createdAt = rs.getLong("created_at");
                     record.ascensionLevel = rs.getInt("ascension_level");
                     results.add(record);
@@ -381,6 +395,7 @@ public class ArenaRepository {
         public int currentHp;
         public String deckJson;
         public String relicsJson;
+        public String potionsJson;
         public long createdAt;
         public int ascensionLevel;
     }
