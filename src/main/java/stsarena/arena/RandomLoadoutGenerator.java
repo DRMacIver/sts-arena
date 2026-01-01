@@ -113,28 +113,24 @@ public class RandomLoadoutGenerator {
         // Gather available relics
         List<AbstractRelic> availableRelics = new ArrayList<>();
 
-        // Add common, uncommon, rare relics
-        for (String relicId : RelicLibrary.commonList) {
-            AbstractRelic relic = RelicLibrary.getRelic(relicId);
-            if (relic != null && canUseRelic(relic, playerClass)) {
+        // Add common, uncommon, rare relics from the library
+        for (AbstractRelic relic : RelicLibrary.commonList) {
+            if (canUseRelic(relic, playerClass)) {
                 availableRelics.add(relic);
             }
         }
-        for (String relicId : RelicLibrary.uncommonList) {
-            AbstractRelic relic = RelicLibrary.getRelic(relicId);
-            if (relic != null && canUseRelic(relic, playerClass)) {
+        for (AbstractRelic relic : RelicLibrary.uncommonList) {
+            if (canUseRelic(relic, playerClass)) {
                 availableRelics.add(relic);
             }
         }
-        for (String relicId : RelicLibrary.rareList) {
-            AbstractRelic relic = RelicLibrary.getRelic(relicId);
-            if (relic != null && canUseRelic(relic, playerClass)) {
+        for (AbstractRelic relic : RelicLibrary.rareList) {
+            if (canUseRelic(relic, playerClass)) {
                 availableRelics.add(relic);
             }
         }
-        for (String relicId : RelicLibrary.shopList) {
-            AbstractRelic relic = RelicLibrary.getRelic(relicId);
-            if (relic != null && canUseRelic(relic, playerClass)) {
+        for (AbstractRelic relic : RelicLibrary.shopList) {
+            if (canUseRelic(relic, playerClass)) {
                 availableRelics.add(relic);
             }
         }

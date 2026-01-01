@@ -1,18 +1,14 @@
 package stsarena.arena;
 
 import com.megacrit.cardcrawl.cards.AbstractCard;
-import com.megacrit.cardcrawl.cards.CardGroup;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
 import com.megacrit.cardcrawl.core.CardCrawlGame;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
-import com.megacrit.cardcrawl.dungeons.Exordium;
-import com.megacrit.cardcrawl.helpers.SeedHelper;
 import com.megacrit.cardcrawl.map.MapEdge;
 import com.megacrit.cardcrawl.map.MapRoomNode;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.rooms.MonsterRoom;
-import com.megacrit.cardcrawl.screens.CharSelectInfo;
 import stsarena.STSArena;
 
 import java.util.ArrayList;
@@ -53,7 +49,7 @@ public class ArenaRunner {
         CardCrawlGame.chosenCharacter = loadout.playerClass;
 
         // Generate a random seed for the run
-        Settings.seed = SeedHelper.generateUnofficalSeed();
+        Settings.seed = new java.util.Random().nextLong();
 
         // Use the standard game start mechanism
         // This will create the dungeon, player, etc.
