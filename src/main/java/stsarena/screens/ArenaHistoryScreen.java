@@ -26,17 +26,18 @@ public class ArenaHistoryScreen {
     private static final float STATS_Y = TITLE_Y - 80.0f * Settings.scale;
     private static final float HISTORY_START_Y = STATS_Y - 100.0f * Settings.scale;
     private static final float ROW_HEIGHT = 50.0f * Settings.scale;
-    private static final float TABLE_WIDTH = 1100.0f * Settings.scale;
+    private static final float TABLE_WIDTH = 1050.0f * Settings.scale;
     private static final float LEFT_X = (Settings.WIDTH - TABLE_WIDTH) / 2.0f;
-    private static final float REPLAY_BUTTON_WIDTH = 80.0f * Settings.scale;
-    private static final float REPLAY_BUTTON_HEIGHT = 30.0f * Settings.scale;
+    private static final float REPLAY_BUTTON_WIDTH = 85.0f * Settings.scale;
+    private static final float REPLAY_BUTTON_HEIGHT = 32.0f * Settings.scale;
+    private static final float BORDER_WIDTH = 2.0f * Settings.scale;
 
     private MenuCancelButton cancelButton;
     public boolean isOpen = false;
 
     private List<ArenaRepository.ArenaRunRecord> recentRuns;
     private ArenaRepository.ArenaStats stats;
-    private SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+    private SimpleDateFormat dateFormat = new SimpleDateFormat("MM-dd HH:mm");
 
     // Scrolling
     private float scrollY = 0.0f;
@@ -110,7 +111,7 @@ public class ArenaHistoryScreen {
 
         // Update replay hitboxes and check for clicks
         if (recentRuns != null && replayHitboxes != null) {
-            float replayX = LEFT_X + 1000.0f * Settings.scale + REPLAY_BUTTON_WIDTH / 2.0f;
+            float replayX = LEFT_X + 960.0f * Settings.scale + REPLAY_BUTTON_WIDTH / 2.0f;
             float y = HISTORY_START_Y - scrollY;
 
             for (int i = 0; i < recentRuns.size(); i++) {
@@ -118,7 +119,8 @@ public class ArenaHistoryScreen {
 
                 // Only update visible hitboxes
                 if (rowY > 0 && rowY < Settings.HEIGHT - 100.0f * Settings.scale) {
-                    replayHitboxes[i].move(replayX, rowY - ROW_HEIGHT / 2.0f + 10.0f * Settings.scale);
+                    // Center button vertically in the row
+                    replayHitboxes[i].move(replayX, rowY - 15.0f * Settings.scale);
                     replayHitboxes[i].update();
 
                     if (replayHitboxes[i].hovered && InputHelper.justClickedLeft) {
@@ -167,14 +169,14 @@ public class ArenaHistoryScreen {
                 Settings.WIDTH / 2.0f, STATS_Y, Settings.CREAM_COLOR);
         }
 
-        // Column headers - generous spacing for readability
+        // Column headers - adjusted spacing to fit replay button
         float headerY = HISTORY_START_Y + 30.0f * Settings.scale;
-        float col1 = LEFT_X;                           // Loadout name (e.g., "Random #1")
-        float col2 = LEFT_X + 200.0f * Settings.scale; // Encounter
-        float col3 = LEFT_X + 500.0f * Settings.scale; // Outcome
-        float col4 = LEFT_X + 700.0f * Settings.scale; // HP
-        float col5 = LEFT_X + 850.0f * Settings.scale; // Date
-        float col6 = LEFT_X + 1000.0f * Settings.scale; // Replay
+        float col1 = LEFT_X;                           // Loadout name
+        float col2 = LEFT_X + 180.0f * Settings.scale; // Encounter
+        float col3 = LEFT_X + 450.0f * Settings.scale; // Outcome
+        float col4 = LEFT_X + 600.0f * Settings.scale; // HP
+        float col5 = LEFT_X + 720.0f * Settings.scale; // Date
+        float col6 = LEFT_X + 960.0f * Settings.scale; // Replay
 
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             "Loadout", col1, headerY, Settings.GOLD_COLOR);
@@ -213,11 +215,11 @@ public class ArenaHistoryScreen {
     private void renderRunRow(SpriteBatch sb, ArenaRepository.ArenaRunRecord run, float y, Hitbox replayHb) {
         // Column positions - must match header positions
         float col1 = LEFT_X;
-        float col2 = LEFT_X + 200.0f * Settings.scale;
-        float col3 = LEFT_X + 500.0f * Settings.scale;
-        float col4 = LEFT_X + 700.0f * Settings.scale;
-        float col5 = LEFT_X + 850.0f * Settings.scale;
-        float col6 = LEFT_X + 1000.0f * Settings.scale;
+        float col2 = LEFT_X + 180.0f * Settings.scale;
+        float col3 = LEFT_X + 450.0f * Settings.scale;
+        float col4 = LEFT_X + 600.0f * Settings.scale;
+        float col5 = LEFT_X + 720.0f * Settings.scale;
+        float col6 = LEFT_X + 960.0f * Settings.scale;
 
         Color textColor = Settings.CREAM_COLOR;
 
@@ -254,16 +256,29 @@ public class ArenaHistoryScreen {
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             dateText, col5, y, textColor);
 
-        // Replay button
-        Color buttonBg = replayHb.hovered ? new Color(0.3f, 0.4f, 0.3f, 0.8f) : new Color(0.15f, 0.2f, 0.15f, 0.6f);
+        // Replay button - centered vertically in row
+        float buttonX = col6;
+        float buttonY = y - REPLAY_BUTTON_HEIGHT - 1.0f * Settings.scale;
+        float buttonCenterY = buttonY + REPLAY_BUTTON_HEIGHT / 2.0f;
+
+        // Button border (draw slightly larger rectangle first)
+        Color borderColor = replayHb.hovered ? Settings.GREEN_TEXT_COLOR : new Color(0.5f, 0.6f, 0.5f, 0.8f);
+        sb.setColor(borderColor);
+        sb.draw(com.megacrit.cardcrawl.helpers.ImageMaster.WHITE_SQUARE_IMG,
+            buttonX - BORDER_WIDTH, buttonY - BORDER_WIDTH,
+            REPLAY_BUTTON_WIDTH + BORDER_WIDTH * 2, REPLAY_BUTTON_HEIGHT + BORDER_WIDTH * 2);
+
+        // Button background
+        Color buttonBg = replayHb.hovered ? new Color(0.2f, 0.35f, 0.2f, 1.0f) : new Color(0.1f, 0.15f, 0.1f, 0.9f);
         sb.setColor(buttonBg);
         sb.draw(com.megacrit.cardcrawl.helpers.ImageMaster.WHITE_SQUARE_IMG,
-            col6, y - ROW_HEIGHT + 10.0f * Settings.scale,
+            buttonX, buttonY,
             REPLAY_BUTTON_WIDTH, REPLAY_BUTTON_HEIGHT);
 
+        // Button text
         Color buttonTextColor = replayHb.hovered ? Settings.GREEN_TEXT_COLOR : Settings.CREAM_COLOR;
         FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
             "Replay",
-            col6 + REPLAY_BUTTON_WIDTH / 2.0f, y - ROW_HEIGHT / 2.0f + 10.0f * Settings.scale, buttonTextColor);
+            buttonX + REPLAY_BUTTON_WIDTH / 2.0f, buttonCenterY, buttonTextColor);
     }
 }
