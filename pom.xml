@@ -95,12 +95,7 @@
                                     <include>org.xerial:sqlite-jdbc</include>
                                 </includes>
                             </artifactSet>
-                            <relocations>
-                                <relocation>
-                                    <pattern>org.sqlite</pattern>
-                                    <shadedPattern>stsarena.shaded.org.sqlite</shadedPattern>
-                                </relocation>
-                            </relocations>
+                            <!-- No relocation - SQLite uses native libs that can't be relocated -->
                         </configuration>
                     </execution>
                 </executions>

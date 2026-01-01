@@ -6,7 +6,8 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "WebFetch(domain:github.com)",
-      "Bash(mvn package:*)"
+      "Bash(mvn package:*)",
+      "Bash(./jre/bin/java:*)"
     ]
   }
 }
