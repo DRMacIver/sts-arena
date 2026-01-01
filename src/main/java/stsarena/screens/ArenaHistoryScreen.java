@@ -4,10 +4,12 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.helpers.FontHelper;
+import com.megacrit.cardcrawl.helpers.Hitbox;
 import com.megacrit.cardcrawl.helpers.MathHelper;
 import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import com.megacrit.cardcrawl.screens.mainMenu.MenuCancelButton;
 import stsarena.STSArena;
+import stsarena.arena.ArenaRunner;
 import stsarena.data.ArenaDatabase;
 import stsarena.data.ArenaRepository;
 
@@ -24,8 +26,10 @@ public class ArenaHistoryScreen {
     private static final float STATS_Y = TITLE_Y - 80.0f * Settings.scale;
     private static final float HISTORY_START_Y = STATS_Y - 100.0f * Settings.scale;
     private static final float ROW_HEIGHT = 50.0f * Settings.scale;
-    private static final float TABLE_WIDTH = 1000.0f * Settings.scale;
+    private static final float TABLE_WIDTH = 1100.0f * Settings.scale;
     private static final float LEFT_X = (Settings.WIDTH - TABLE_WIDTH) / 2.0f;
+    private static final float REPLAY_BUTTON_WIDTH = 80.0f * Settings.scale;
+    private static final float REPLAY_BUTTON_HEIGHT = 30.0f * Settings.scale;
 
     private MenuCancelButton cancelButton;
     public boolean isOpen = false;
@@ -37,6 +41,9 @@ public class ArenaHistoryScreen {
     // Scrolling
     private float scrollY = 0.0f;
     private float targetScrollY = 0.0f;
+
+    // Replay button hitboxes (one per row)
+    private Hitbox[] replayHitboxes;
 
     public ArenaHistoryScreen() {
         this.cancelButton = new MenuCancelButton();
@@ -53,10 +60,17 @@ public class ArenaHistoryScreen {
             this.recentRuns = repo.getRecentRuns(50);
             this.stats = repo.getStats();
             STSArena.logger.info("Loaded " + recentRuns.size() + " arena runs");
+
+            // Create hitboxes for replay buttons
+            replayHitboxes = new Hitbox[recentRuns.size()];
+            for (int i = 0; i < recentRuns.size(); i++) {
+                replayHitboxes[i] = new Hitbox(REPLAY_BUTTON_WIDTH, REPLAY_BUTTON_HEIGHT);
+            }
         } catch (Exception e) {
             STSArena.logger.error("Failed to load arena history", e);
             this.recentRuns = null;
             this.stats = null;
+            this.replayHitboxes = new Hitbox[0];
         }
 
         this.scrollY = 0.0f;
@@ -93,6 +107,43 @@ public class ArenaHistoryScreen {
         if (targetScrollY > maxScroll) targetScrollY = maxScroll;
 
         scrollY = MathHelper.scrollSnapLerpSpeed(scrollY, targetScrollY);
+
+        // Update replay hitboxes and check for clicks
+        if (recentRuns != null && replayHitboxes != null) {
+            float replayX = LEFT_X + 1000.0f * Settings.scale + REPLAY_BUTTON_WIDTH / 2.0f;
+            float y = HISTORY_START_Y - scrollY;
+
+            for (int i = 0; i < recentRuns.size(); i++) {
+                float rowY = y - i * ROW_HEIGHT;
+
+                // Only update visible hitboxes
+                if (rowY > 0 && rowY < Settings.HEIGHT - 100.0f * Settings.scale) {
+                    replayHitboxes[i].move(replayX, rowY - ROW_HEIGHT / 2.0f + 10.0f * Settings.scale);
+                    replayHitboxes[i].update();
+
+                    if (replayHitboxes[i].hovered && InputHelper.justClickedLeft) {
+                        replayRun(recentRuns.get(i));
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    private void replayRun(ArenaRepository.ArenaRunRecord run) {
+        STSArena.logger.info("Replaying run: " + run.loadoutName + " vs " + run.encounterId);
+
+        // Load the loadout from database
+        ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+        ArenaRepository.LoadoutRecord loadout = repo.getLoadoutById(run.loadoutId);
+
+        if (loadout == null) {
+            STSArena.logger.error("Failed to load loadout for replay: " + run.loadoutId);
+            return;
+        }
+
+        this.close();
+        ArenaRunner.startFightWithSavedLoadout(loadout, run.encounterId);
     }
 
     public void render(SpriteBatch sb) {
@@ -123,6 +174,7 @@ public class ArenaHistoryScreen {
         float col3 = LEFT_X + 500.0f * Settings.scale; // Outcome
         float col4 = LEFT_X + 700.0f * Settings.scale; // HP
         float col5 = LEFT_X + 850.0f * Settings.scale; // Date
+        float col6 = LEFT_X + 1000.0f * Settings.scale; // Replay
 
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             "Loadout", col1, headerY, Settings.GOLD_COLOR);
@@ -134,14 +186,17 @@ public class ArenaHistoryScreen {
             "HP", col4, headerY, Settings.GOLD_COLOR);
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             "Date", col5, headerY, Settings.GOLD_COLOR);
+        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+            "Action", col6, headerY, Settings.GOLD_COLOR);
 
         // History rows
         if (recentRuns != null && !recentRuns.isEmpty()) {
             float y = HISTORY_START_Y - scrollY;
-            for (ArenaRepository.ArenaRunRecord run : recentRuns) {
+            for (int i = 0; i < recentRuns.size(); i++) {
+                ArenaRepository.ArenaRunRecord run = recentRuns.get(i);
                 // Only render visible rows
                 if (y > 0 && y < Settings.HEIGHT - 100.0f * Settings.scale) {
-                    renderRunRow(sb, run, y);
+                    renderRunRow(sb, run, y, replayHitboxes[i]);
                 }
                 y -= ROW_HEIGHT;
             }
@@ -155,13 +210,14 @@ public class ArenaHistoryScreen {
         this.cancelButton.render(sb);
     }
 
-    private void renderRunRow(SpriteBatch sb, ArenaRepository.ArenaRunRecord run, float y) {
+    private void renderRunRow(SpriteBatch sb, ArenaRepository.ArenaRunRecord run, float y, Hitbox replayHb) {
         // Column positions - must match header positions
         float col1 = LEFT_X;
         float col2 = LEFT_X + 200.0f * Settings.scale;
         float col3 = LEFT_X + 500.0f * Settings.scale;
         float col4 = LEFT_X + 700.0f * Settings.scale;
         float col5 = LEFT_X + 850.0f * Settings.scale;
+        float col6 = LEFT_X + 1000.0f * Settings.scale;
 
         Color textColor = Settings.CREAM_COLOR;
 
@@ -197,5 +253,17 @@ public class ArenaHistoryScreen {
         String dateText = dateFormat.format(new Date(run.startedAt));
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             dateText, col5, y, textColor);
+
+        // Replay button
+        Color buttonBg = replayHb.hovered ? new Color(0.3f, 0.4f, 0.3f, 0.8f) : new Color(0.15f, 0.2f, 0.15f, 0.6f);
+        sb.setColor(buttonBg);
+        sb.draw(com.megacrit.cardcrawl.helpers.ImageMaster.WHITE_SQUARE_IMG,
+            col6, y - ROW_HEIGHT + 10.0f * Settings.scale,
+            REPLAY_BUTTON_WIDTH, REPLAY_BUTTON_HEIGHT);
+
+        Color buttonTextColor = replayHb.hovered ? Settings.GREEN_TEXT_COLOR : Settings.CREAM_COLOR;
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            "Replay",
+            col6 + REPLAY_BUTTON_WIDTH / 2.0f, y - ROW_HEIGHT / 2.0f + 10.0f * Settings.scale, buttonTextColor);
     }
 }

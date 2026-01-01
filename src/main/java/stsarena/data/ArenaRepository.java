@@ -149,7 +149,7 @@ public class ArenaRepository {
             logger.error("Failed to clean up incomplete runs", e);
         }
 
-        String sql = "SELECT r.id, r.started_at, r.ended_at, r.outcome, r.starting_hp, r.ending_hp, " +
+        String sql = "SELECT r.id, r.loadout_id, r.started_at, r.ended_at, r.outcome, r.starting_hp, r.ending_hp, " +
                      "r.encounter_id, r.potions_used_json, r.damage_dealt, r.damage_taken, r.turns_taken, " +
                      "l.name as loadout_name, l.character_class " +
                      "FROM arena_runs r " +
@@ -167,6 +167,7 @@ public class ArenaRepository {
                 while (rs.next()) {
                     ArenaRunRecord record = new ArenaRunRecord();
                     record.id = rs.getLong("id");
+                    record.loadoutId = rs.getLong("loadout_id");
                     record.startedAt = rs.getLong("started_at");
                     record.endedAt = rs.getLong("ended_at");
                     record.outcome = rs.getString("outcome");
@@ -272,6 +273,7 @@ public class ArenaRepository {
      */
     public static class ArenaRunRecord {
         public long id;
+        public long loadoutId;
         public long startedAt;
         public long endedAt;
         public String outcome;
@@ -297,6 +299,39 @@ public class ArenaRepository {
         public double getWinRate() {
             return totalRuns > 0 ? (double) wins / totalRuns : 0;
         }
+    }
+
+    /**
+     * Get a specific loadout by database ID.
+     */
+    public LoadoutRecord getLoadoutById(long loadoutId) {
+        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, created_at, ascension_level " +
+                     "FROM loadouts WHERE id = ?";
+
+        try (PreparedStatement stmt = database.getConnection().prepareStatement(sql)) {
+            stmt.setLong(1, loadoutId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    LoadoutRecord record = new LoadoutRecord();
+                    record.dbId = rs.getLong("id");
+                    record.uuid = rs.getString("uuid");
+                    record.name = rs.getString("name");
+                    record.characterClass = rs.getString("character_class");
+                    record.maxHp = rs.getInt("max_hp");
+                    record.currentHp = rs.getInt("current_hp");
+                    record.deckJson = rs.getString("deck_json");
+                    record.relicsJson = rs.getString("relics_json");
+                    record.createdAt = rs.getLong("created_at");
+                    record.ascensionLevel = rs.getInt("ascension_level");
+                    return record;
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to get loadout by ID: " + loadoutId, e);
+        }
+
+        return null;
     }
 
     /**
