@@ -41,6 +41,29 @@ mvn package
 
 The built JAR goes to `target/STSArena.jar` and is automatically copied to the game's mods folder.
 
+## macOS Paths
+
+Steam library (default):
+```
+~/Library/Application Support/Steam/steamapps/
+```
+
+Game JAR location:
+```
+.../common/SlayTheSpire/SlayTheSpire.app/Contents/Resources/desktop-1.0.jar
+```
+
+Mods folder:
+```
+.../common/SlayTheSpire/SlayTheSpire.app/Contents/Resources/mods/
+```
+
+Workshop mods:
+```
+.../workshop/content/646570/1605060445/ModTheSpire.jar
+.../workshop/content/646570/1605833019/BaseMod.jar
+```
+
 ## BaseMod Interfaces
 
 Subscribe to these interfaces by implementing them and calling `BaseMod.subscribe(this)`:

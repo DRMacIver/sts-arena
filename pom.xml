@@ -81,7 +81,8 @@
                         <phase>package</phase>
                         <configuration>
                             <target>
-                                <copy file="target/STSArena.jar" todir="${steamPath}/common/SlayTheSpire/mods" overwrite="true" failonerror="false"/>
+                                <!-- macOS: mods folder is inside the app bundle -->
+                                <copy file="target/STSArena.jar" todir="${steamPath}/common/SlayTheSpire/SlayTheSpire.app/Contents/Resources/mods" overwrite="true" failonerror="false"/>
                             </target>
                         </configuration>
                         <goals>
