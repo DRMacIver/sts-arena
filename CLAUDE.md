@@ -23,12 +23,16 @@ sts-arena/
 │   └── BaseMod.jar                 # Modding API
 ├── src/main/java/stsarena/
 │   ├── STSArena.java               # Main mod entry point
+│   ├── arena/                      # Arena fight logic
+│   │   ├── ArenaRunner.java        # Starts arena fights
+│   │   └── RandomLoadoutGenerator.java  # Generates random decks/relics
 │   ├── data/                       # Data layer
 │   │   ├── ArenaDatabase.java      # SQLite connection & schema
 │   │   ├── Loadout.java            # Saved deck/relic configurations
 │   │   └── FightRecord.java        # Historical fight records
 │   └── patches/                    # SpirePatch classes
 │       ├── ArenaMenuButton.java    # Menu button enum & handlers
+│       ├── ArenaDungeonPatch.java  # Hooks into dungeon init
 │       └── MainMenuArenaPatch.java # Adds button to main menu
 └── src/main/resources/
     ├── ModTheSpire.json            # Mod metadata for ModTheSpire
