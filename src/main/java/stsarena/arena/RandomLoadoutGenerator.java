@@ -13,18 +13,13 @@ import java.util.stream.Collectors;
 
 /**
  * Generates random but "vaguely sensible" loadouts for arena fights.
+ *
+ * Pure configuration logic is in LoadoutConfig for testability.
+ * This class handles the StS-specific card/relic library interactions.
  */
 public class RandomLoadoutGenerator {
 
     private static final Random random = new Random();
-
-    // Loadout parameters
-    private static final int MIN_DECK_SIZE = 15;
-    private static final int MAX_DECK_SIZE = 25;
-    private static final int MIN_RELICS = 5;
-    private static final int MAX_RELICS = 10;
-    private static final double UPGRADE_CHANCE = 0.4;
-    private static final double PRISMATIC_SHARD_CHANCE = 0.15;
 
     /**
      * Result of generating a random loadout.
@@ -54,12 +49,7 @@ public class RandomLoadoutGenerator {
      */
     public static GeneratedLoadout generate() {
         // Pick a random character
-        AbstractPlayer.PlayerClass[] classes = {
-            AbstractPlayer.PlayerClass.IRONCLAD,
-            AbstractPlayer.PlayerClass.THE_SILENT,
-            AbstractPlayer.PlayerClass.DEFECT,
-            AbstractPlayer.PlayerClass.WATCHER
-        };
+        AbstractPlayer.PlayerClass[] classes = LoadoutConfig.PLAYER_CLASSES;
         AbstractPlayer.PlayerClass playerClass = classes[random.nextInt(classes.length)];
 
         return generateForClass(playerClass);
@@ -72,7 +62,7 @@ public class RandomLoadoutGenerator {
         STSArena.logger.info("Generating random loadout for: " + playerClass);
 
         // Decide if we're using Prismatic Shard (allows any card color)
-        boolean hasPrismaticShard = random.nextDouble() < PRISMATIC_SHARD_CHANCE;
+        boolean hasPrismaticShard = random.nextDouble() < LoadoutConfig.PRISMATIC_SHARD_CHANCE;
 
         // Generate relics first (Prismatic Shard affects card selection)
         List<AbstractRelic> relics = generateRelics(playerClass, hasPrismaticShard);
@@ -81,7 +71,7 @@ public class RandomLoadoutGenerator {
         List<AbstractCard> deck = generateDeck(playerClass, hasPrismaticShard);
 
         // Calculate HP based on character
-        int baseMaxHp = getBaseMaxHp(playerClass);
+        int baseMaxHp = LoadoutConfig.getBaseMaxHp(playerClass);
         // Add some variance and potential bonus from relics
         int maxHp = baseMaxHp + random.nextInt(20);
         int currentHp = (int) (maxHp * (0.7 + random.nextDouble() * 0.3)); // 70-100% HP
@@ -115,29 +105,30 @@ public class RandomLoadoutGenerator {
 
         // Add common, uncommon, rare relics from the library
         for (AbstractRelic relic : RelicLibrary.commonList) {
-            if (canUseRelic(relic, playerClass)) {
+            if (!LoadoutConfig.isExcludedRelic(relic.relicId)) {
                 availableRelics.add(relic);
             }
         }
         for (AbstractRelic relic : RelicLibrary.uncommonList) {
-            if (canUseRelic(relic, playerClass)) {
+            if (!LoadoutConfig.isExcludedRelic(relic.relicId)) {
                 availableRelics.add(relic);
             }
         }
         for (AbstractRelic relic : RelicLibrary.rareList) {
-            if (canUseRelic(relic, playerClass)) {
+            if (!LoadoutConfig.isExcludedRelic(relic.relicId)) {
                 availableRelics.add(relic);
             }
         }
         for (AbstractRelic relic : RelicLibrary.shopList) {
-            if (canUseRelic(relic, playerClass)) {
+            if (!LoadoutConfig.isExcludedRelic(relic.relicId)) {
                 availableRelics.add(relic);
             }
         }
 
         // Shuffle and pick
         Collections.shuffle(availableRelics, random);
-        int numRelics = MIN_RELICS + random.nextInt(MAX_RELICS - MIN_RELICS + 1);
+        int numRelics = LoadoutConfig.MIN_RELICS +
+            random.nextInt(LoadoutConfig.MAX_RELICS - LoadoutConfig.MIN_RELICS + 1);
 
         Set<String> addedRelicIds = result.stream()
             .map(r -> r.relicId)
@@ -154,36 +145,13 @@ public class RandomLoadoutGenerator {
         return result;
     }
 
-    private static boolean canUseRelic(AbstractRelic relic, AbstractPlayer.PlayerClass playerClass) {
-        // Filter out relics that don't make sense or are problematic
-        String id = relic.relicId;
-
-        // Skip boss relics that replace starter (we handle starter separately)
-        if (id.equals("Black Blood") || id.equals("Ring of the Serpent") ||
-            id.equals("FrozenCore") || id.equals("HolyWater")) {
-            return false;
-        }
-
-        // Skip relics that require specific game state
-        if (id.equals("Circlet") || id.equals("Red Circlet")) {
-            return false;
-        }
-
-        // Skip Neow's Lament (boss kill effect doesn't apply in arena)
-        if (id.equals("NeowsBlessing")) {
-            return false;
-        }
-
-        return true;
-    }
-
     private static List<AbstractCard> generateDeck(AbstractPlayer.PlayerClass playerClass,
                                                     boolean prismaticShard) {
         List<AbstractCard> result = new ArrayList<>();
 
         // Get available cards
         List<AbstractCard> availableCards = new ArrayList<>();
-        AbstractCard.CardColor primaryColor = getCardColor(playerClass);
+        AbstractCard.CardColor primaryColor = LoadoutConfig.getCardColor(playerClass);
 
         // Always include colorless cards
         addCardsOfColor(availableCards, AbstractCard.CardColor.COLORLESS);
@@ -205,7 +173,8 @@ public class RandomLoadoutGenerator {
             .collect(Collectors.toList());
 
         // Build a deck with some balance
-        int deckSize = MIN_DECK_SIZE + random.nextInt(MAX_DECK_SIZE - MIN_DECK_SIZE + 1);
+        int deckSize = LoadoutConfig.MIN_DECK_SIZE +
+            random.nextInt(LoadoutConfig.MAX_DECK_SIZE - LoadoutConfig.MIN_DECK_SIZE + 1);
 
         // Separate by type for balance
         List<AbstractCard> attacks = availableCards.stream()
@@ -223,8 +192,8 @@ public class RandomLoadoutGenerator {
         Collections.shuffle(powers, random);
 
         // Aim for roughly: 40-50% attacks, 35-45% skills, 10-20% powers
-        int numAttacks = (int) (deckSize * (0.4 + random.nextDouble() * 0.1));
-        int numPowers = Math.min(powers.size(), 1 + random.nextInt(4)); // 1-4 powers
+        int numAttacks = LoadoutConfig.calculateAttackCount(deckSize, random.nextDouble());
+        int numPowers = LoadoutConfig.calculatePowerCount(powers.size(), random.nextInt(100));
         int numSkills = deckSize - numAttacks - numPowers;
 
         // Add cards
@@ -234,7 +203,7 @@ public class RandomLoadoutGenerator {
 
         // Upgrade some cards
         for (AbstractCard card : result) {
-            if (card.canUpgrade() && random.nextDouble() < UPGRADE_CHANCE) {
+            if (card.canUpgrade() && random.nextDouble() < LoadoutConfig.UPGRADE_CHANCE) {
                 card.upgrade();
             }
         }
@@ -264,99 +233,23 @@ public class RandomLoadoutGenerator {
         if (card.type == AbstractCard.CardType.STATUS || card.type == AbstractCard.CardType.CURSE) {
             return true;
         }
-        // Skip cards that don't work well in isolated fights
-        String id = card.cardID;
-        if (id.contains("Ritual") && id.contains("Dagger")) {
-            return true; // Ritual Dagger needs kills across fights
-        }
-        if (id.equals("Lesson Learned")) {
-            return true; // Needs to kill to upgrade
-        }
-        return false;
-    }
-
-    private static AbstractCard.CardColor getCardColor(AbstractPlayer.PlayerClass playerClass) {
-        switch (playerClass) {
-            case IRONCLAD:
-                return AbstractCard.CardColor.RED;
-            case THE_SILENT:
-                return AbstractCard.CardColor.GREEN;
-            case DEFECT:
-                return AbstractCard.CardColor.BLUE;
-            case WATCHER:
-                return AbstractCard.CardColor.PURPLE;
-            default:
-                return AbstractCard.CardColor.RED;
-        }
+        // Use config for card-specific exclusions
+        return LoadoutConfig.isExcludedCard(card.cardID);
     }
 
     private static AbstractRelic getStarterRelic(AbstractPlayer.PlayerClass playerClass) {
-        String relicId;
-        switch (playerClass) {
-            case IRONCLAD:
-                relicId = "Burning Blood";
-                break;
-            case THE_SILENT:
-                relicId = "Ring of the Snake";
-                break;
-            case DEFECT:
-                relicId = "Cracked Core";
-                break;
-            case WATCHER:
-                relicId = "PureWater";
-                break;
-            default:
-                return null;
+        String relicId = LoadoutConfig.getStarterRelicId(playerClass);
+        if (relicId == null) {
+            return null;
         }
         AbstractRelic relic = RelicLibrary.getRelic(relicId);
         return relic != null ? relic.makeCopy() : null;
-    }
-
-    private static int getBaseMaxHp(AbstractPlayer.PlayerClass playerClass) {
-        switch (playerClass) {
-            case IRONCLAD:
-                return 80;
-            case THE_SILENT:
-                return 70;
-            case DEFECT:
-                return 75;
-            case WATCHER:
-                return 72;
-            default:
-                return 75;
-        }
     }
 
     /**
      * Get a random encounter ID for any act.
      */
     public static String getRandomEncounter() {
-        // Mix of encounters from all acts
-        String[] encounters = {
-            // Act 1 normal
-            "Cultist", "Jaw Worm", "2 Louse", "Small Slimes",
-            "Blue Slaver", "Gremlin Gang", "Looter", "Large Slime",
-            "Lots of Slimes", "Exordium Thugs", "Exordium Wildlife",
-            "Red Slaver", "3 Louse", "2 Fungi Beasts",
-            // Act 1 elites
-            "Gremlin Nob", "Lagavulin", "3 Sentries",
-            // Act 2 normal
-            "Chosen", "Shell Parasite", "3 Byrds", "2 Thieves",
-            "Chosen and Byrds", "Cultist and Chosen", "Snecko",
-            "Snake Plant", "Centurion and Healer", "Shelled Parasite and Fungi",
-            // Act 2 elites
-            "Gremlin Leader", "Slavers", "Book of Stabbing",
-            // Act 3 normal
-            "3 Darklings", "Orb Walker", "3 Shapes", "Spire Growth",
-            "Transient", "4 Shapes", "Maw", "Jaw Worm Horde",
-            "Sphere and 2 Shapes", "Giant Head",
-            // Act 3 elites
-            "Nemesis", "Reptomancer", "Awakened One",
-            // Bosses
-            "The Guardian", "Hexaghost", "Slime Boss",
-            "Automaton", "Collector", "Champ",
-            "Time Eater", "Donu and Deca", "Awakened One"
-        };
-        return encounters[random.nextInt(encounters.length)];
+        return LoadoutConfig.ENCOUNTERS[random.nextInt(LoadoutConfig.ENCOUNTERS.length)];
     }
 }

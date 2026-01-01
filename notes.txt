@@ -1,0 +1,161 @@
+StS Modding Notes
+==================
+
+This file documents lessons learned while developing the STS Arena mod.
+
+## Mod Structure
+
+- Mods use @SpireInitializer annotation on main class
+- Main class needs a static initialize() method called by ModTheSpire
+- BaseMod provides subscriber interfaces for hooking into game events:
+  - PostInitializeSubscriber: After game fully loads
+  - PostDungeonInitializeSubscriber: After dungeon is created
+  - PostUpdateSubscriber: Every frame
+
+## SpirePatch Annotations
+
+- @SpirePatch(clz = TargetClass.class, method = "methodName")
+- For overloaded methods, use paramtypez: @SpirePatch(clz = X.class, method = "foo", paramtypez = {boolean.class})
+- Prefix methods run before the original, can return SpireReturn.Return(value) to skip original
+- Postfix methods run after the original
+- @SpireInsertPatch with Locator class for inserting at specific bytecode locations
+  - Locators use Matcher classes to find insertion points
+  - Can fail if the matcher doesn't find what it's looking for (e.g., DAILY field not found)
+
+## Menu Buttons
+
+- MenuButton constructor takes (ClickResult result, int index)
+- The index controls vertical position (0 = top, higher = lower on screen)
+- Custom button types use @SpireEnum on a static field
+- Button label is set via patching MenuButton.setLabel()
+- Button behavior via patching MenuButton.buttonEffect()
+
+## Dungeon and Room System
+
+- AbstractDungeon is the core dungeon state (static fields)
+- AbstractDungeon.currMapNode is the current room's map node
+- AbstractDungeon.getCurrRoom() returns currMapNode.room
+- AbstractDungeon.nextRoom is set before room transitions
+- AbstractDungeon.nextRoomTransitionStart() triggers room transition with proper initialization
+
+## Starting Fights (What Works)
+
+BaseMod's dev console Fight command (basemod/devcommands/fight/Fight.java) shows the correct approach:
+1. Add encounter ID to AbstractDungeon.monsterList.add(0, encounterName)
+2. Create new MapRoomNode with MonsterRoom
+3. Copy edges from current node
+4. Set AbstractDungeon.nextRoom = node
+5. Call AbstractDungeon.nextRoomTransitionStart()
+
+This uses the game's built-in transition system which handles:
+- Combat initialization
+- Energy recharge
+- Drawing cards
+- Relic triggers
+- Music changes
+
+## What Doesn't Work for Starting Fights
+
+- Manually calling room.onPlayerEntry() without proper state setup
+- Setting room.monsters directly and hoping onPlayerEntry handles it
+- Setting currMapNode directly without using the transition system
+- Calling getMonsters() for boss encounters (they may need special handling)
+
+## Encounter IDs
+
+- Encounters are identified by string IDs
+- Boss encounters may have different handling than normal encounters
+- Act 1 normal encounters: "Cultist", "Jaw Worm", "2 Louse", "Small Slimes", etc.
+- Act 1 elites: "Gremlin Nob", "Lagavulin", "3 Sentries"
+- getMonsters() returns null if encounter ID isn't valid for current dungeon
+
+## Saving
+
+- SaveAndContinue.save(SaveFile) handles game saves
+- Can be patched to skip saving for custom modes
+- Check with SpireReturn.Return(null) in Prefix to skip
+
+## Screen State
+
+- AbstractDungeon.screen controls what screen is shown
+- AbstractDungeon.isScreenUp indicates if a screen overlay is active
+- AbstractDungeon.CurrentScreen.NONE for normal gameplay
+
+## Common Pitfalls
+
+1. currMapNode may be null when starting from main menu
+2. Boss encounters may not work with regular getMonsters()
+3. Effects from previous screens (like Neow dialogue) can linger
+4. Need to clear AbstractDungeon.topLevelEffects and effectList
+5. Menu button index must not conflict with existing buttons or they overlap
+
+## Debugging
+
+- Use org.apache.logging.log4j.Logger for logging
+- Logs appear in game console and log files
+- Prefix log messages to make them searchable (e.g., "ARENA:")
+
+## Save File Format
+
+Save files are stored in:
+- Mac: ~/Library/Application Support/Steam/steamapps/common/SlayTheSpire/SlayTheSpire.app/Contents/Resources/saves/
+- Files named like: IRONCLAD.autosaveBETA, THE_SILENT.autosaveBETA, etc.
+
+Format is plain JSON with fields including:
+- floor_num: current floor (0 = Neow, 1+ = regular floors)
+- current_room: full class name (e.g., "com.megacrit.cardcrawl.rooms.MonsterRoom")
+- level_name: dungeon name ("Exordium", "TheCity", "TheBeyond", "TheEnding")
+- cards: list of {id, upgrades, misc} objects
+- relics: list of relic ID strings
+- monster_list: list of encounter name strings
+- current_health, max_health: HP values
+- gold: gold amount
+- chose_neow_reward: boolean for whether Neow was done
+
+Card format example: {"upgrades": 0, "misc": 0, "id": "Strike_R"}
+
+## Neow and Floor 0
+
+- When a new dungeon is created, floor_num starts at 0
+- currMapNode is in NeowRoom
+- NeowEvent runs and blocks other interactions
+- Trying to skip Neow by setting floorNum=1 doesn't work well
+- Better approach: Use save file to start on floor 1
+
+## Save File Approach for Custom Starts
+
+Instead of fighting the game's initialization, create a save file:
+1. Generate JSON save with custom loadout
+2. Set CardCrawlGame.loadingSave = true
+3. Set CardCrawlGame.chosenCharacter
+4. Set mainMenuScreen.fadedOut = true (to skip fade animation)
+5. Switch to CardCrawlGame.mode = CHAR_SELECT
+6. Game sees fadedOut=true, transitions to GAMEPLAY, loads save
+7. Then use nextRoomTransitionStart() to enter combat
+
+Save file naming:
+- Game reads from: saves/{CLASS}.autosave (NOT .autosaveBETA!)
+- SaveAndContinue.getPlayerSavePath() returns "saves/{CLASS}.autosave"
+- .autosaveBETA is only written when Settings.isBeta is true, but game reads .autosave
+- Plain JSON is accepted - SaveFileObfuscator.isObfuscated() checks and only decodes if needed
+
+Key save fields for arena:
+- floor_num: 1 (past Neow)
+- chose_neow_reward: true
+- current_room: "com.megacrit.cardcrawl.rooms.EmptyRoom"
+- cards: list with our deck
+- relics: list with our relics
+- monster_list: our encounter first
+- loadout: character class name (required!)
+- red: energy amount (e.g., 3 for default energy)
+- combat_rewards: empty ArrayList (required for post_combat handling)
+- monster_hp_seed_count: 0 (often overlooked seed counter)
+- event_chances: ArrayList of exactly 4 Floats [ELITE=0.0, MONSTER=0.1, SHOP=0.03, TREASURE=0.02]
+
+## SaveFile Class Fields
+
+Defined in com.megacrit.cardcrawl.saveAndContinue.SaveFile:
+- Energy is stored as: red + green + blue (all added together)
+- In practice, game stores all energy in "red" field
+- cards uses CardSave class with fields: id, upgrades, misc
+- Gson deserializes Map<String,Object> to CardSave if field names match

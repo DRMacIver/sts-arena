@@ -1,17 +1,11 @@
 package stsarena.arena;
 
-import com.megacrit.cardcrawl.cards.AbstractCard;
-import com.megacrit.cardcrawl.characters.AbstractPlayer;
 import com.megacrit.cardcrawl.core.CardCrawlGame;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
-import com.megacrit.cardcrawl.map.MapEdge;
 import com.megacrit.cardcrawl.map.MapRoomNode;
-import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.rooms.MonsterRoom;
 import stsarena.STSArena;
-
-import java.util.ArrayList;
 
 /**
  * Handles starting arena fights with custom loadouts.
@@ -21,6 +15,9 @@ public class ArenaRunner {
     private static RandomLoadoutGenerator.GeneratedLoadout pendingLoadout;
     private static String pendingEncounter;
     private static boolean arenaRunInProgress = false;
+
+    // Flag to indicate current run is an arena run (used to disable saving)
+    private static boolean isArenaRun = false;
 
     /**
      * Start a random arena fight from the main menu.
@@ -37,139 +34,144 @@ public class ArenaRunner {
 
     /**
      * Start an arena fight with a specific loadout and encounter.
+     * Uses save file approach to properly initialize game state.
      */
     public static void startFight(RandomLoadoutGenerator.GeneratedLoadout loadout, String encounter) {
         pendingLoadout = loadout;
         pendingEncounter = encounter;
         arenaRunInProgress = true;
+        isArenaRun = true;
 
         STSArena.logger.info("Starting arena: " + loadout.playerClass + " vs " + encounter);
 
-        // Set up the game to start a new run with the chosen character
+        // Create arena save file
+        String savePath = ArenaSaveManager.createArenaSave(loadout, encounter);
+        if (savePath == null) {
+            STSArena.logger.error("Failed to create arena save file");
+            clearPendingState();
+            return;
+        }
+
+        // Set up the game to load the save - mimic what resumeGame() does
+        CardCrawlGame.loadingSave = true;
         CardCrawlGame.chosenCharacter = loadout.playerClass;
 
-        // Generate a random seed for the run
-        Settings.seed = new java.util.Random().nextLong();
-
-        // Use the standard game start mechanism
-        // This will create the dungeon, player, etc.
-        CardCrawlGame.music.fadeOutTempBGM();
-        CardCrawlGame.mainMenuScreen.isFadingOut = true;
-        CardCrawlGame.mainMenuScreen.fadeOutMusic();
-
-        // Set ascension level to 0 for arena
-        AbstractDungeon.isAscensionMode = false;
-        AbstractDungeon.ascensionLevel = 0;
-
-        // Trigger the game to start - the dungeon will be created
-        // We hook into room entry to apply our loadout
+        // Configure run settings
         Settings.isTrial = false;
         Settings.isDailyRun = false;
         Settings.isEndless = false;
 
-        // This triggers CardCrawlGame to create the dungeon on next update
-        CardCrawlGame.mode = CardCrawlGame.GameMode.GAMEPLAY;
+        // Trigger the fade out and set fadedOut to skip animation
+        if (CardCrawlGame.mainMenuScreen != null) {
+            CardCrawlGame.mainMenuScreen.isFadingOut = true;
+            CardCrawlGame.mainMenuScreen.fadedOut = true;  // Skip the fade animation
+            CardCrawlGame.mainMenuScreen.fadeOutMusic();
+        }
+        CardCrawlGame.music.fadeOutTempBGM();
 
-        // The actual loadout application and fight start happens via our patch
-        // after the dungeon initializes and player enters the first room
+        // Set mode to CHAR_SELECT - the game will see fadedOut=true and
+        // transition to GAMEPLAY, loading the save
+        CardCrawlGame.mode = CardCrawlGame.GameMode.CHAR_SELECT;
+
+        STSArena.logger.info("Arena save created, transitioning to load it");
     }
 
     /**
-     * Called after the dungeon is initialized to apply the loadout and start the fight.
-     * This should be called from a patch on AbstractDungeon initialization.
+     * Start the pending fight.
+     * Called from PostUpdateSubscriber after the dungeon is fully initialized.
      */
-    public static void onDungeonInitialized() {
-        if (!arenaRunInProgress || pendingLoadout == null) {
+    public static void startPendingFight() {
+        STSArena.logger.info("=== ARENA: startPendingFight called ===");
+        STSArena.logger.info("ARENA: arenaRunInProgress=" + arenaRunInProgress + ", pendingEncounter=" + pendingEncounter);
+
+        if (!arenaRunInProgress) {
+            STSArena.logger.info("ARENA: Skipping - arenaRunInProgress is false");
+            return;
+        }
+        if (pendingEncounter == null) {
+            STSArena.logger.info("ARENA: Skipping - pendingEncounter is null");
             return;
         }
 
-        STSArena.logger.info("Dungeon initialized, applying arena loadout");
+        STSArena.logger.info("ARENA: Will transition to fight: " + pendingEncounter);
+        STSArena.logger.info("ARENA: CardCrawlGame.mode = " + CardCrawlGame.mode);
 
         try {
-            applyLoadout(pendingLoadout);
             transitionToFight(pendingEncounter);
         } catch (Exception e) {
-            STSArena.logger.error("Failed to start arena fight", e);
+            STSArena.logger.error("ARENA: Exception in transitionToFight", e);
         } finally {
-            // Clear pending state
-            pendingLoadout = null;
-            pendingEncounter = null;
-            arenaRunInProgress = false;
+            STSArena.logger.info("ARENA: Clearing pending state");
+            clearPendingState();
         }
     }
 
     /**
-     * Apply the generated loadout to the current player.
+     * Clear the pending loadout and encounter state.
      */
-    private static void applyLoadout(RandomLoadoutGenerator.GeneratedLoadout loadout) {
-        AbstractPlayer player = AbstractDungeon.player;
-        if (player == null) {
-            STSArena.logger.error("No player to apply loadout to!");
-            return;
-        }
-
-        STSArena.logger.info("Applying loadout to " + player.chosenClass);
-
-        // Clear existing deck and add our cards
-        player.masterDeck.clear();
-        for (AbstractCard card : loadout.deck) {
-            player.masterDeck.addToTop(card.makeCopy());
-        }
-
-        // Clear existing relics and add ours
-        player.relics.clear();
-        int relicIndex = 0;
-        for (AbstractRelic relic : loadout.relics) {
-            AbstractRelic copy = relic.makeCopy();
-            copy.instantObtain(player, relicIndex++, false);
-        }
-
-        // Set HP
-        player.maxHealth = loadout.maxHp;
-        player.currentHealth = loadout.currentHp;
-
-        // Give some gold
-        player.gold = 100 + (int)(Math.random() * 200);
-
-        // Reset energy
-        player.energy.energyMaster = 3;
-
-        STSArena.logger.info("Loadout applied: " + player.masterDeck.size() + " cards, " +
-                            player.relics.size() + " relics");
+    private static void clearPendingState() {
+        pendingLoadout = null;
+        pendingEncounter = null;
+        arenaRunInProgress = false;
     }
 
     /**
      * Force transition to a monster fight.
+     * Uses nextRoomTransitionStart() like BaseMod's dev console Fight command.
      */
     private static void transitionToFight(String encounterName) {
-        STSArena.logger.info("Transitioning to fight: " + encounterName);
+        STSArena.logger.info("=== ARENA: transitionToFight START for: " + encounterName + " ===");
 
-        MapRoomNode currNode = AbstractDungeon.currMapNode;
-        if (currNode == null) {
-            STSArena.logger.error("No current map node!");
+        // Validate preconditions
+        if (encounterName == null || encounterName.isEmpty()) {
+            STSArena.logger.error("ARENA ERROR: encounterName is null or empty!");
+            return;
+        }
+        if (AbstractDungeon.player == null) {
+            STSArena.logger.error("ARENA ERROR: AbstractDungeon.player is null!");
+            return;
+        }
+        if (AbstractDungeon.monsterList == null) {
+            STSArena.logger.error("ARENA ERROR: AbstractDungeon.monsterList is null!");
             return;
         }
 
-        // Add the encounter to the monster list
-        if (AbstractDungeon.getCurrRoom() instanceof MonsterRoom) {
-            AbstractDungeon.monsterList.add(1, encounterName);
-        } else {
-            AbstractDungeon.monsterList.add(0, encounterName);
+        STSArena.logger.info("ARENA: Preconditions OK. Player: " + AbstractDungeon.player.chosenClass);
+        STSArena.logger.info("ARENA: Current currMapNode: " + AbstractDungeon.currMapNode);
+
+        // Clear any lingering visual effects
+        AbstractDungeon.topLevelEffects.clear();
+        AbstractDungeon.effectList.clear();
+
+        // Add encounter to monster list
+        AbstractDungeon.monsterList.add(0, encounterName);
+        STSArena.logger.info("ARENA: Added " + encounterName + " to monster list");
+
+        // Get current node (should exist from dungeon creation)
+        MapRoomNode cur = AbstractDungeon.currMapNode;
+        if (cur == null) {
+            STSArena.logger.error("ARENA ERROR: currMapNode is null, creating one");
+            cur = new MapRoomNode(0, 0);
+            cur.room = new MonsterRoom();
+            AbstractDungeon.currMapNode = cur;
         }
 
-        // Create a new node with a monster room
-        MapRoomNode node = new MapRoomNode(currNode.x, currNode.y);
+        // Create next room node with MonsterRoom (like BaseMod Fight command)
+        MapRoomNode node = new MapRoomNode(cur.x, cur.y);
         node.room = new MonsterRoom();
 
         // Copy edges from current node
-        ArrayList<MapEdge> curEdges = currNode.getEdges();
-        for (MapEdge edge : curEdges) {
+        for (com.megacrit.cardcrawl.map.MapEdge edge : cur.getEdges()) {
             node.addEdge(edge);
         }
 
-        // Start the transition
+        STSArena.logger.info("ARENA: Created next room node, calling nextRoomTransitionStart()");
+
+        // Use the game's room transition system
         AbstractDungeon.nextRoom = node;
         AbstractDungeon.nextRoomTransitionStart();
+
+        STSArena.logger.info("=== ARENA: transitionToFight END ===");
     }
 
     /**
@@ -184,5 +186,20 @@ public class ArenaRunner {
      */
     public static boolean hasPendingLoadout() {
         return pendingLoadout != null;
+    }
+
+    /**
+     * Check if the current run is an arena run.
+     * Used to disable saving for arena runs.
+     */
+    public static boolean isArenaRun() {
+        return isArenaRun;
+    }
+
+    /**
+     * Clear the arena run flag. Called when returning to main menu.
+     */
+    public static void clearArenaRun() {
+        isArenaRun = false;
     }
 }

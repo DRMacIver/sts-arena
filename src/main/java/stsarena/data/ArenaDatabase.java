@@ -1,6 +1,7 @@
 package stsarena.data;
 
-import stsarena.STSArena;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.sql.*;
@@ -15,13 +16,22 @@ public class ArenaDatabase {
 
     private static final String DB_NAME = "arena.db";
     private static final int SCHEMA_VERSION = 1;
+    private static final Logger logger = LogManager.getLogger(ArenaDatabase.class.getName());
 
     private static ArenaDatabase instance;
     private Connection connection;
     private final String dbPath;
 
     private ArenaDatabase() {
-        this.dbPath = getDbPath();
+        this.dbPath = getDefaultDbPath();
+        initialize();
+    }
+
+    /**
+     * Constructor for testing - allows specifying custom database path.
+     */
+    ArenaDatabase(String customDbPath) {
+        this.dbPath = customDbPath;
         initialize();
     }
 
@@ -32,7 +42,24 @@ public class ArenaDatabase {
         return instance;
     }
 
-    private static String getDbPath() {
+    /**
+     * Reset the singleton instance. Used for testing only.
+     */
+    static synchronized void resetInstance() {
+        if (instance != null) {
+            instance.close();
+            instance = null;
+        }
+    }
+
+    /**
+     * Create a test instance with a custom database path.
+     */
+    public static ArenaDatabase createTestInstance(String dbPath) {
+        return new ArenaDatabase(dbPath);
+    }
+
+    private static String getDefaultDbPath() {
         String modDir;
         String os = System.getProperty("os.name").toLowerCase();
 
@@ -59,11 +86,11 @@ public class ArenaDatabase {
             connection.setAutoCommit(true);
 
             createSchema();
-            STSArena.logger.info("Arena database initialized at: " + dbPath);
+            logger.info("Arena database initialized at: " + dbPath);
         } catch (ClassNotFoundException e) {
-            STSArena.logger.error("SQLite JDBC driver not found", e);
+            logger.error("SQLite JDBC driver not found", e);
         } catch (SQLException e) {
-            STSArena.logger.error("Failed to initialize database", e);
+            logger.error("Failed to initialize database", e);
         }
     }
 
@@ -152,9 +179,9 @@ public class ArenaDatabase {
         if (connection != null) {
             try {
                 connection.close();
-                STSArena.logger.info("Arena database closed");
+                logger.info("Arena database closed");
             } catch (SQLException e) {
-                STSArena.logger.error("Error closing database", e);
+                logger.error("Error closing database", e);
             }
         }
     }

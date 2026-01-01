@@ -3,6 +3,7 @@ package stsarena;
 import basemod.BaseMod;
 import basemod.interfaces.PostDungeonInitializeSubscriber;
 import basemod.interfaces.PostInitializeSubscriber;
+import basemod.interfaces.PostUpdateSubscriber;
 import com.evacipated.cardcrawl.modthespire.lib.SpireInitializer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -19,10 +20,13 @@ import stsarena.data.ArenaDatabase;
  * - Practice specific fights without playing through the full game
  */
 @SpireInitializer
-public class STSArena implements PostInitializeSubscriber, PostDungeonInitializeSubscriber {
+public class STSArena implements PostInitializeSubscriber, PostDungeonInitializeSubscriber, PostUpdateSubscriber {
 
     public static final Logger logger = LogManager.getLogger(STSArena.class.getName());
     public static final String MOD_ID = "stsarena";
+
+    // Flag to trigger fight start on next update (gives game time to initialize)
+    private static boolean pendingFightStart = false;
 
     public STSArena() {
         logger.info("Initializing STS Arena");
@@ -53,13 +57,34 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
 
     /**
      * Called after a dungeon is initialized.
-     * This is where we apply our arena loadout and start the fight.
+     * We now apply loadout directly in ArenaRunner.startFight(), so just set the flag.
      */
     @Override
     public void receivePostDungeonInitialize() {
-        if (ArenaRunner.hasPendingLoadout()) {
-            logger.info("Dungeon initialized, triggering arena setup");
-            ArenaRunner.onDungeonInitialized();
+        logger.info("=== ARENA: receivePostDungeonInitialize called ===");
+        logger.info("ARENA: ArenaRunner.isArenaRunInProgress() = " + ArenaRunner.isArenaRunInProgress());
+        if (ArenaRunner.isArenaRunInProgress()) {
+            logger.info("ARENA: Setting pendingFightStart = true");
+            pendingFightStart = true;
+        }
+    }
+
+    /**
+     * Called every frame. Used to trigger fight start after dungeon is fully ready.
+     */
+    @Override
+    public void receivePostUpdate() {
+        if (pendingFightStart) {
+            logger.info("=== ARENA: receivePostUpdate - pendingFightStart is true ===");
+            logger.info("ARENA: ArenaRunner.isArenaRunInProgress() = " + ArenaRunner.isArenaRunInProgress());
+            if (ArenaRunner.isArenaRunInProgress()) {
+                pendingFightStart = false;
+                logger.info("ARENA: Calling ArenaRunner.startPendingFight()");
+                ArenaRunner.startPendingFight();
+            } else {
+                logger.info("ARENA: ArenaRunner not in progress, resetting pendingFightStart");
+                pendingFightStart = false;
+            }
         }
     }
 }
