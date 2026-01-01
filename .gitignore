@@ -38,3 +38,12 @@ lib/*.jar
 
 # Logs
 *.log
+
+# Temporary/working directories
+.temp/
+decompiled/
+scripts/
+sendToDevs/
+
+# Claude Code local settings
+.claude/settings.local.json
