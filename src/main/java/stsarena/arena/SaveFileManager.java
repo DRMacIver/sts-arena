@@ -1,9 +1,11 @@
 package stsarena.arena;
 
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
+import com.megacrit.cardcrawl.core.CardCrawlGame;
 import stsarena.STSArena;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -11,140 +13,241 @@ import java.nio.file.StandardCopyOption;
 /**
  * Manages save file backup and restoration for arena mode.
  *
- * When arena mode starts, any existing save file is backed up.
- * When arena mode ends, the original save is restored (or the arena save is deleted
- * if there was no original).
+ * Design goals:
+ * 1. NEVER leave orphaned arena saves that could corrupt normal gameplay
+ * 2. Survive crashes gracefully - cleanup on next startup
+ * 3. Be idempotent - multiple cleanup calls are safe
+ * 4. Use file-based state, not just in-memory state
  *
- * This ensures arena fights don't corrupt or overwrite normal game saves.
+ * How it works:
+ * - When arena starts: back up original save (if exists), create marker file
+ * - When arena ends: restore original or delete arena save, delete marker file
+ * - On mod startup: check for marker files and clean up any orphaned state
  */
 public class SaveFileManager {
 
     private static final String BACKUP_SUFFIX = ".arena_backup";
+    private static final String MARKER_SUFFIX = ".arena_active";
 
-    // Track whether we have an active backup for each character class
-    private static AbstractPlayer.PlayerClass activeBackupClass = null;
-    private static boolean hadOriginalSave = false;
+    // All character class names for cleanup
+    private static final String[] ALL_CLASSES = {"IRONCLAD", "THE_SILENT", "DEFECT", "WATCHER"};
+
+    /**
+     * Clean up any orphaned arena saves from previous sessions.
+     * Call this on mod initialization.
+     */
+    public static void cleanupOrphanedArenaSaves() {
+        STSArena.logger.info("SaveFileManager: Checking for orphaned arena saves...");
+
+        int cleanedUp = 0;
+        for (String className : ALL_CLASSES) {
+            if (cleanupForClass(className)) {
+                cleanedUp++;
+            }
+        }
+
+        if (cleanedUp > 0) {
+            STSArena.logger.info("SaveFileManager: Cleaned up orphaned arena state for " + cleanedUp + " character(s)");
+
+            // Also reset loadingSave flag in case it was left true from a crash
+            // This prevents the game from trying to load a save when starting a new run
+            CardCrawlGame.loadingSave = false;
+            STSArena.logger.info("SaveFileManager: Reset loadingSave flag");
+        } else {
+            STSArena.logger.info("SaveFileManager: No orphaned arena saves found");
+        }
+    }
+
+    /**
+     * Clean up arena state for a specific character class.
+     * Returns true if cleanup was needed.
+     */
+    private static boolean cleanupForClass(String className) {
+        String savePath = getSavePathForClassName(className);
+        File saveFile = new File(savePath);
+        File backupFile = new File(savePath + BACKUP_SUFFIX);
+        File markerFile = new File(savePath + MARKER_SUFFIX);
+
+        // If marker file exists, arena mode was active when game closed
+        if (markerFile.exists()) {
+            STSArena.logger.warn("SaveFileManager: Found orphaned arena marker for " + className);
+
+            if (backupFile.exists()) {
+                // Restore the backup
+                try {
+                    Files.copy(backupFile.toPath(), saveFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    backupFile.delete();
+                    STSArena.logger.info("SaveFileManager: Restored backup for " + className);
+                } catch (IOException e) {
+                    STSArena.logger.error("SaveFileManager: Failed to restore backup for " + className, e);
+                }
+            } else {
+                // No backup means there was no original save - delete the arena save
+                if (saveFile.exists()) {
+                    if (saveFile.delete()) {
+                        STSArena.logger.info("SaveFileManager: Deleted orphaned arena save for " + className);
+                    }
+                }
+            }
+
+            // Always delete the marker
+            markerFile.delete();
+            return true;
+        }
+
+        // Also clean up any stray backup files (shouldn't happen, but defensive)
+        if (backupFile.exists() && !markerFile.exists()) {
+            STSArena.logger.warn("SaveFileManager: Found stray backup file for " + className + " without marker, cleaning up");
+            backupFile.delete();
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Get save path for a class name string.
+     */
+    private static String getSavePathForClassName(String className) {
+        String userHome = System.getProperty("user.home");
+        String savesDir = userHome + "/Library/Application Support/Steam/steamapps/common/SlayTheSpire/SlayTheSpire.app/Contents/Resources/saves/";
+
+        File savesDirFile = new File(savesDir);
+        if (!savesDirFile.exists()) {
+            savesDir = "saves" + File.separator;
+        }
+
+        return savesDir + className + ".autosave";
+    }
 
     /**
      * Back up the original save file before starting an arena run.
-     * Call this before creating the arena save file.
+     * Creates a marker file to track that arena mode is active.
      *
      * @param playerClass The character class whose save to back up
      */
     public static void backupOriginalSave(AbstractPlayer.PlayerClass playerClass) {
-        if (activeBackupClass != null) {
-            STSArena.logger.warn("SaveFileManager: Already have active backup for " + activeBackupClass +
-                ", will overwrite tracking for " + playerClass);
-        }
-
         String savePath = ArenaSaveManager.getSavePath(playerClass);
         File saveFile = new File(savePath);
         File backupFile = new File(savePath + BACKUP_SUFFIX);
+        File markerFile = new File(savePath + MARKER_SUFFIX);
 
-        activeBackupClass = playerClass;
+        // First, clean up any existing state for this class (idempotent)
+        if (markerFile.exists()) {
+            STSArena.logger.warn("SaveFileManager: Marker already exists for " + playerClass + ", cleaning up first");
+            restoreOriginalSaveForClass(playerClass);
+        }
 
+        // Create marker file FIRST - this is our crash recovery mechanism
+        try {
+            markerFile.getParentFile().mkdirs();
+            try (FileWriter writer = new FileWriter(markerFile)) {
+                writer.write("arena_active:" + System.currentTimeMillis());
+            }
+            STSArena.logger.info("SaveFileManager: Created marker file for " + playerClass);
+        } catch (IOException e) {
+            STSArena.logger.error("SaveFileManager: Failed to create marker file", e);
+            // Continue anyway - the backup is still useful even without marker
+        }
+
+        // Back up original save if it exists
         if (saveFile.exists()) {
             try {
                 Files.copy(saveFile.toPath(), backupFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                hadOriginalSave = true;
                 STSArena.logger.info("SaveFileManager: Backed up original save for " + playerClass +
                     " (" + saveFile.length() + " bytes)");
             } catch (IOException e) {
                 STSArena.logger.error("SaveFileManager: Failed to backup save file", e);
-                hadOriginalSave = false;
             }
         } else {
-            hadOriginalSave = false;
+            // No original save - make sure no stray backup exists
+            if (backupFile.exists()) {
+                backupFile.delete();
+            }
             STSArena.logger.info("SaveFileManager: No original save for " + playerClass + " to backup");
         }
     }
 
     /**
      * Restore the original save file after an arena run ends.
-     * If there was an original save, it is restored.
-     * If there was no original save, any save file created during arena mode is deleted.
-     *
-     * Call this when the arena run ends (victory, defeat, or abandon).
+     * This is idempotent - safe to call multiple times.
      */
     public static void restoreOriginalSave() {
-        if (activeBackupClass == null) {
-            STSArena.logger.info("SaveFileManager: No active backup to restore");
+        // Clean up all classes to be safe
+        for (String className : ALL_CLASSES) {
+            try {
+                AbstractPlayer.PlayerClass playerClass = AbstractPlayer.PlayerClass.valueOf(className);
+                restoreOriginalSaveForClass(playerClass);
+            } catch (IllegalArgumentException e) {
+                // Class name not valid, skip
+            }
+        }
+    }
+
+    /**
+     * Restore original save for a specific character class.
+     */
+    public static void restoreOriginalSaveForClass(AbstractPlayer.PlayerClass playerClass) {
+        String savePath = ArenaSaveManager.getSavePath(playerClass);
+        File saveFile = new File(savePath);
+        File backupFile = new File(savePath + BACKUP_SUFFIX);
+        File markerFile = new File(savePath + MARKER_SUFFIX);
+
+        // If no marker, nothing to do
+        if (!markerFile.exists()) {
             return;
         }
 
-        String savePath = ArenaSaveManager.getSavePath(activeBackupClass);
-        File saveFile = new File(savePath);
-        File backupFile = new File(savePath + BACKUP_SUFFIX);
+        STSArena.logger.info("SaveFileManager: Restoring original save for " + playerClass);
 
-        if (hadOriginalSave) {
+        if (backupFile.exists()) {
             // Restore the backed-up save
-            if (backupFile.exists()) {
-                try {
-                    Files.copy(backupFile.toPath(), saveFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                    backupFile.delete();
-                    STSArena.logger.info("SaveFileManager: Restored original save for " + activeBackupClass);
-                } catch (IOException e) {
-                    STSArena.logger.error("SaveFileManager: Failed to restore save file", e);
-                }
-            } else {
-                STSArena.logger.warn("SaveFileManager: Backup file missing, cannot restore");
+            try {
+                Files.copy(backupFile.toPath(), saveFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                backupFile.delete();
+                STSArena.logger.info("SaveFileManager: Restored original save for " + playerClass);
+            } catch (IOException e) {
+                STSArena.logger.error("SaveFileManager: Failed to restore save file", e);
             }
         } else {
-            // No original save - delete any save file created during arena mode
+            // No backup means there was no original save - delete any arena save
             if (saveFile.exists()) {
                 if (saveFile.delete()) {
-                    STSArena.logger.info("SaveFileManager: Deleted arena save for " + activeBackupClass +
+                    STSArena.logger.info("SaveFileManager: Deleted arena save for " + playerClass +
                         " (no original existed)");
                 } else {
                     STSArena.logger.error("SaveFileManager: Failed to delete arena save");
                 }
             }
-            // Clean up backup file if it somehow exists
-            if (backupFile.exists()) {
-                backupFile.delete();
-            }
         }
 
-        // Clear state
-        activeBackupClass = null;
-        hadOriginalSave = false;
+        // Always delete the marker file last
+        if (markerFile.delete()) {
+            STSArena.logger.info("SaveFileManager: Removed marker file for " + playerClass);
+        }
     }
 
     /**
-     * Check if we have an active save backup.
+     * Check if arena mode is active for any character class.
+     * Uses file-based detection, not in-memory state.
      */
-    public static boolean hasActiveBackup() {
-        return activeBackupClass != null;
-    }
-
-    /**
-     * Get the character class with an active backup, or null if none.
-     */
-    public static AbstractPlayer.PlayerClass getActiveBackupClass() {
-        return activeBackupClass;
-    }
-
-    /**
-     * Check if there was an original save file when the backup was made.
-     */
-    public static boolean hadOriginalSave() {
-        return hadOriginalSave;
-    }
-
-    /**
-     * Force clear the backup state without restoring.
-     * Only use this for error recovery.
-     */
-    public static void clearBackupState() {
-        if (activeBackupClass != null) {
-            // Try to clean up backup file
-            String savePath = ArenaSaveManager.getSavePath(activeBackupClass);
-            File backupFile = new File(savePath + BACKUP_SUFFIX);
-            if (backupFile.exists()) {
-                backupFile.delete();
+    public static boolean hasActiveArenaSession() {
+        for (String className : ALL_CLASSES) {
+            String savePath = getSavePathForClassName(className);
+            File markerFile = new File(savePath + MARKER_SUFFIX);
+            if (markerFile.exists()) {
+                return true;
             }
         }
-        activeBackupClass = null;
-        hadOriginalSave = false;
+        return false;
+    }
+
+    /**
+     * Check if arena mode is active for a specific class.
+     */
+    public static boolean hasActiveArenaSession(AbstractPlayer.PlayerClass playerClass) {
+        String savePath = ArenaSaveManager.getSavePath(playerClass);
+        File markerFile = new File(savePath + MARKER_SUFFIX);
+        return markerFile.exists();
     }
 }

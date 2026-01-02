@@ -269,11 +269,21 @@ public class ArenaRunner {
         // Restore the original save file (or delete arena save if there was no original)
         SaveFileManager.restoreOriginalSave();
 
+        // Reset the loadingSave flag - we set this to true when starting arena fights
+        // If we don't reset it, the next "new" game will try to load a save file
+        CardCrawlGame.loadingSave = false;
+
         isArenaRun = false;
+        arenaRunInProgress = false;
         currentRunDbId = -1;
         currentLoadoutDbId = -1;
         currentLoadout = null;
         currentEncounter = null;
+
+        // Clear pending state too
+        pendingLoadout = null;
+        pendingEncounter = null;
+        pendingReturnToMainMenu = false;
     }
 
     /**
@@ -416,6 +426,110 @@ public class ArenaRunner {
             CardCrawlGame.startOver();
         } catch (Exception e) {
             STSArena.logger.error("ARENA: Error returning to main menu", e);
+        }
+    }
+
+    /**
+     * Restart the current arena fight with the same loadout and encounter.
+     * Called from the "Try Again" button on the arena death screen.
+     */
+    public static void restartCurrentFight() {
+        if (currentLoadout == null || currentEncounter == null) {
+            STSArena.logger.error("Cannot restart fight - no current loadout/encounter stored");
+            return;
+        }
+
+        STSArena.logger.info("=== ARENA: restartCurrentFight() called ===");
+        STSArena.logger.info("ARENA: Restarting with loadout: " + currentLoadout.name + ", encounter: " + currentEncounter);
+
+        // Store references before clearing state
+        RandomLoadoutGenerator.GeneratedLoadout loadout = currentLoadout;
+        String encounter = currentEncounter;
+        long loadoutDbId = currentLoadoutDbId;
+
+        // Clear current arena state
+        clearArenaRun();
+
+        // Restart with the same loadout and encounter
+        pendingLoadout = loadout;
+        pendingEncounter = encounter;
+        arenaRunInProgress = true;
+        isArenaRun = true;
+
+        currentLoadout = loadout;
+        currentEncounter = encounter;
+        combatStartHp = loadout.currentHp;
+        potionsUsedThisCombat.clear();
+        currentLoadoutDbId = loadoutDbId;
+
+        // Start tracking a new run
+        try {
+            ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+            currentRunDbId = repo.startArenaRun(currentLoadoutDbId, encounter, loadout.currentHp);
+            STSArena.logger.info("ARENA: New arena run started with DB ID: " + currentRunDbId);
+        } catch (Exception e) {
+            STSArena.logger.error("ARENA: Failed to start arena run", e);
+        }
+
+        // Backup any existing save file before creating arena save
+        SaveFileManager.backupOriginalSave(loadout.playerClass);
+
+        // Create arena save file
+        String savePath = ArenaSaveManager.createArenaSave(loadout, encounter);
+        if (savePath == null) {
+            STSArena.logger.error("Failed to create arena save file");
+            clearPendingState();
+            return;
+        }
+
+        // Set up the game to load the save
+        CardCrawlGame.loadingSave = true;
+        CardCrawlGame.chosenCharacter = loadout.playerClass;
+
+        Settings.isTrial = false;
+        Settings.isDailyRun = false;
+        Settings.isEndless = false;
+
+        // Close the death screen and trigger game restart
+        CardCrawlGame.mode = CardCrawlGame.GameMode.CHAR_SELECT;
+
+        STSArena.logger.info("Arena restart initiated");
+    }
+
+    /**
+     * Get the current loadout for retry purposes.
+     */
+    public static RandomLoadoutGenerator.GeneratedLoadout getCurrentLoadout() {
+        return currentLoadout;
+    }
+
+    /**
+     * Get the current encounter for retry purposes.
+     */
+    public static String getCurrentEncounter() {
+        return currentEncounter;
+    }
+
+    /**
+     * Start an arena fight with a loadout ID and encounter from a normal run defeat.
+     * Used by the "Try Again in Arena Mode" button.
+     */
+    public static void startFightFromDefeat(long loadoutDbId, String encounter) {
+        STSArena.logger.info("=== ARENA: startFightFromDefeat() called ===");
+        STSArena.logger.info("ARENA: Loadout DB ID: " + loadoutDbId + ", Encounter: " + encounter);
+
+        try {
+            ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+            ArenaRepository.LoadoutRecord savedLoadout = repo.getLoadoutById(loadoutDbId);
+
+            if (savedLoadout == null) {
+                STSArena.logger.error("Failed to load loadout with ID: " + loadoutDbId);
+                return;
+            }
+
+            startFightWithSavedLoadout(savedLoadout, encounter);
+        } catch (Exception e) {
+            STSArena.logger.error("Error starting fight from defeat", e);
         }
     }
 

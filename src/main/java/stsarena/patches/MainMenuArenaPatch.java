@@ -16,15 +16,37 @@ import com.megacrit.cardcrawl.screens.mainMenu.MenuButton;
 public class MainMenuArenaPatch {
 
     public static void Postfix(MainMenuScreen __instance) {
-        // Find the position of Play or Resume Game button (whichever is the topmost game button)
-        // We want to insert Arena Mode just below it
+        // Find the position of Abandon Run button (if it exists) or Play button
+        // Menu order (higher index = higher on screen):
+        //   RESUME_GAME (top)
+        //   ABANDON_RUN
+        //   ARENA_MODE  <- we want to insert here (below Abandon)
+        //   INFO, STAT, SETTINGS, etc.
+        //
+        // If no save exists, order is:
+        //   PLAY (top)
+        //   ARENA_MODE  <- insert here
+        //   INFO, STAT, etc.
+
         int insertIndex = -1;
+
+        // First, look for ABANDON_RUN - we want to insert just below it
         for (int i = 0; i < __instance.buttons.size(); i++) {
             MenuButton button = __instance.buttons.get(i);
-            if (button.result == MenuButton.ClickResult.PLAY ||
-                button.result == MenuButton.ClickResult.RESUME_GAME) {
-                insertIndex = i;  // Insert at this position (pushing Play/Resume up)
+            if (button.result == MenuButton.ClickResult.ABANDON_RUN) {
+                insertIndex = i;  // Insert at Abandon's position (pushes Abandon up)
                 break;
+            }
+        }
+
+        // If no Abandon button, look for PLAY button
+        if (insertIndex < 0) {
+            for (int i = 0; i < __instance.buttons.size(); i++) {
+                MenuButton button = __instance.buttons.get(i);
+                if (button.result == MenuButton.ClickResult.PLAY) {
+                    insertIndex = i;  // Insert at Play's position (pushes Play up)
+                    break;
+                }
             }
         }
 
@@ -42,7 +64,7 @@ public class MainMenuArenaPatch {
                 __instance.buttons.add(new MenuButton(results.get(i), i));
             }
         } else {
-            // Fallback: add at the end
+            // Fallback: add at the end (top of menu)
             int nextIndex = __instance.buttons.size();
             __instance.buttons.add(new MenuButton(ArenaMenuButton.ARENA_MODE, nextIndex));
         }

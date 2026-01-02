@@ -34,6 +34,11 @@ public class NormalRunLoadoutSaver {
     private static int combatStartHp = 0;
     private static int combatStartMaxHp = 0;
     private static List<AbstractPotion> combatStartPotions = new ArrayList<>();
+    private static String combatEncounterId = null;
+
+    // Most recently saved loadout (for "Try Again in Arena" feature)
+    private static long lastSavedLoadoutId = -1;
+    private static String lastSavedEncounterId = null;
 
     /**
      * Capture player state at the start of combat.
@@ -43,6 +48,11 @@ public class NormalRunLoadoutSaver {
     public static class OnCombatStart {
         @SpirePostfixPatch
         public static void Postfix() {
+            // Skip if this is an arena run
+            if (ArenaRunner.isArenaRun()) {
+                return;
+            }
+
             // Capture state when entering a monster room
             if (AbstractDungeon.player != null) {
                 combatStartHp = AbstractDungeon.player.currentHealth;
@@ -56,8 +66,15 @@ public class NormalRunLoadoutSaver {
                     }
                 }
 
+                // Capture encounter ID from the monster list
+                // The current encounter should be at the front of the monster list
+                combatEncounterId = null;
+                if (AbstractDungeon.monsterList != null && !AbstractDungeon.monsterList.isEmpty()) {
+                    combatEncounterId = AbstractDungeon.monsterList.get(0);
+                }
+
                 STSArena.logger.info("Captured combat start state: HP=" + combatStartHp + "/" + combatStartMaxHp +
-                    ", potions=" + combatStartPotions.size());
+                    ", potions=" + combatStartPotions.size() + ", encounter=" + combatEncounterId);
             }
         }
     }
@@ -160,6 +177,12 @@ public class NormalRunLoadoutSaver {
 
             if (dbId > 0) {
                 STSArena.logger.info("Saved loadout '" + name + "' from normal run (dbId=" + dbId + ")");
+
+                // Store for "Try Again in Arena" button
+                lastSavedLoadoutId = dbId;
+                lastSavedEncounterId = combatEncounterId;
+                STSArena.logger.info("Stored for arena retry: loadoutId=" + lastSavedLoadoutId +
+                    ", encounterId=" + lastSavedEncounterId);
             } else {
                 STSArena.logger.error("Failed to save loadout from normal run");
             }
@@ -264,5 +287,36 @@ public class NormalRunLoadoutSaver {
         } else {
             return className + " F" + floor + " " + outcome + " (" + timestamp + ")";
         }
+    }
+
+    /**
+     * Get the most recently saved loadout ID (from a defeat).
+     * Used by the "Try Again in Arena Mode" button.
+     */
+    public static long getLastSavedLoadoutId() {
+        return lastSavedLoadoutId;
+    }
+
+    /**
+     * Get the encounter ID from the most recent defeat.
+     * Used by the "Try Again in Arena Mode" button.
+     */
+    public static String getLastSavedEncounterId() {
+        return lastSavedEncounterId;
+    }
+
+    /**
+     * Check if there's a valid loadout/encounter available for arena retry.
+     */
+    public static boolean hasArenaRetryData() {
+        return lastSavedLoadoutId > 0 && lastSavedEncounterId != null && !lastSavedEncounterId.isEmpty();
+    }
+
+    /**
+     * Clear the saved retry data.
+     */
+    public static void clearRetryData() {
+        lastSavedLoadoutId = -1;
+        lastSavedEncounterId = null;
     }
 }

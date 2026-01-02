@@ -114,6 +114,17 @@ public class ArenaEncounterSelectScreen {
         // Act 4
         items.add(new ListItem("--- Act 4 ---", null, true, false));
         addEncounters(items, new String[]{"Shield and Spear", "The Heart"});
+
+        // Event Encounters
+        items.add(new ListItem("--- Event Encounters ---", null, true, false));
+        addEncounters(items, new String[]{
+            "The Mushroom Lair",     // 3 Fungi Beasts (event version)
+            "Masked Bandits",        // Red Mask gang event
+            "Colosseum Slavers",     // Colosseum fight 1
+            "Colosseum Nobs",        // Colosseum fight 2
+            "2 Orb Walkers",         // Mind Bloom event
+            "Mind Bloom Boss Battle" // Fight 2 act 1 bosses
+        });
     }
 
     private void addEncounters(List<ListItem> list, String[] encounters) {

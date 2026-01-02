@@ -14,6 +14,7 @@ import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import stsarena.arena.ArenaRunner;
+import stsarena.arena.SaveFileManager;
 import stsarena.data.ArenaDatabase;
 import stsarena.screens.ArenaEncounterSelectScreen;
 import stsarena.screens.ArenaHistoryScreen;
@@ -67,6 +68,9 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     @Override
     public void receivePostInitialize() {
         logger.info("STS Arena post-initialize");
+
+        // Clean up any orphaned arena saves from previous sessions (crash recovery)
+        SaveFileManager.cleanupOrphanedArenaSaves();
 
         // Initialize the database
         ArenaDatabase.getInstance();
