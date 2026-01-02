@@ -134,27 +134,6 @@
                     </execution>
                 </executions>
             </plugin>
-            <!-- Copy the built jar to the mods folder for testing -->
-            <!-- Use 'mvn install' to deploy, 'mvn package' to build only -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-antrun-plugin</artifactId>
-                <version>3.1.0</version>
-                <executions>
-                    <execution>
-                        <phase>install</phase>
-                        <configuration>
-                            <target>
-                                <!-- macOS: mods folder is inside the app bundle -->
-                                <copy file="target/STSArena.jar" todir="${steamPath}/common/SlayTheSpire/SlayTheSpire.app/Contents/Resources/mods" overwrite="true" failonerror="false"/>
-                            </target>
-                        </configuration>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
         <resources>
             <resource>
@@ -163,4 +142,35 @@
             </resource>
         </resources>
     </build>
+
+    <profiles>
+        <!-- Deploy profile: copies JAR to mods folder -->
+        <!-- Usage: mvn package -Pdeploy -->
+        <profile>
+            <id>deploy</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <phase>package</phase>
+                                <configuration>
+                                    <target>
+                                        <!-- macOS: mods folder is inside the app bundle -->
+                                        <copy file="target/STSArena.jar" todir="${steamPath}/common/SlayTheSpire/SlayTheSpire.app/Contents/Resources/mods" overwrite="true" failonerror="false"/>
+                                    </target>
+                                </configuration>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
