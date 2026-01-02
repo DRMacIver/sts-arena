@@ -97,6 +97,9 @@ public class ArenaRunner {
         }
         STSArena.logger.info("ARENA: Database save section complete. currentRunDbId=" + currentRunDbId);
 
+        // Backup any existing save file before creating arena save
+        SaveFileManager.backupOriginalSave(loadout.playerClass);
+
         // Create arena save file
         String savePath = ArenaSaveManager.createArenaSave(loadout, encounter);
         if (savePath == null) {
@@ -251,8 +254,12 @@ public class ArenaRunner {
 
     /**
      * Clear the arena run flag. Called when returning to main menu.
+     * Also restores the original save file if one was backed up.
      */
     public static void clearArenaRun() {
+        // Restore the original save file (or delete arena save if there was no original)
+        SaveFileManager.restoreOriginalSave();
+
         isArenaRun = false;
         currentRunDbId = -1;
         currentLoadoutDbId = -1;
@@ -435,6 +442,9 @@ public class ArenaRunner {
         } catch (Exception e) {
             STSArena.logger.error("ARENA: Failed to start arena run", e);
         }
+
+        // Backup any existing save file before creating arena save
+        SaveFileManager.backupOriginalSave(loadout.playerClass);
 
         // Create arena save file
         String savePath = ArenaSaveManager.createArenaSave(loadout, encounter);
