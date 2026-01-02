@@ -105,9 +105,21 @@ public class RandomLoadoutGenerator {
             }
         }
 
-        // Log any failed card conversions
+        // Log any failed card conversions with detailed error reporting
         if (!failedCards.isEmpty()) {
-            STSArena.logger.warn("Failed to find " + failedCards.size() + " cards: " + failedCards);
+            STSArena.logger.error("=== CARD ID MISMATCH DETECTED ===");
+            STSArena.logger.error("Failed to find " + failedCards.size() + " cards for " + playerClass.name() + ":");
+            for (String failedId : failedCards) {
+                STSArena.logger.error("  - Card ID not found: \"" + failedId + "\"");
+                // Try to suggest similar IDs that might be correct
+                String suggestion = suggestSimilarCardId(failedId);
+                if (suggestion != null) {
+                    STSArena.logger.error("    Possible correct ID: \"" + suggestion + "\"");
+                }
+            }
+            STSArena.logger.error("Check LoadoutConfig.java for incorrect card IDs.");
+            STSArena.logger.error("Watcher cards use CamelCase (e.g., TalkToTheHand, not 'Talk to the Hand')");
+            STSArena.logger.error("=================================");
         }
 
         // Ensure minimum deck size - add starter cards if needed
@@ -151,6 +163,7 @@ public class RandomLoadoutGenerator {
 
         // Convert relic IDs to actual relics
         List<AbstractRelic> relics = new ArrayList<>();
+        List<String> failedRelics = new ArrayList<>();
         boolean hasPrismaticShard = false;
         for (String relicId : built.relics) {
             AbstractRelic relic = RelicLibrary.getRelic(relicId);
@@ -160,19 +173,38 @@ public class RandomLoadoutGenerator {
                     hasPrismaticShard = true;
                 }
             } else {
-                STSArena.logger.warn("Relic not found: " + relicId);
+                failedRelics.add(relicId);
             }
+        }
+        if (!failedRelics.isEmpty()) {
+            STSArena.logger.error("=== RELIC ID MISMATCH DETECTED ===");
+            STSArena.logger.error("Failed to find " + failedRelics.size() + " relics:");
+            for (String failedId : failedRelics) {
+                STSArena.logger.error("  - Relic ID not found: \"" + failedId + "\"");
+            }
+            STSArena.logger.error("Check LoadoutConfig.java for incorrect relic IDs.");
+            STSArena.logger.error("==================================");
         }
 
         // Convert potion IDs to actual potions
         List<AbstractPotion> potions = new ArrayList<>();
+        List<String> failedPotions = new ArrayList<>();
         for (String potionId : built.potions) {
             AbstractPotion potion = PotionHelper.getPotion(potionId);
             if (potion != null) {
                 potions.add(potion.makeCopy());
             } else {
-                STSArena.logger.warn("Potion not found: " + potionId);
+                failedPotions.add(potionId);
             }
+        }
+        if (!failedPotions.isEmpty()) {
+            STSArena.logger.error("=== POTION ID MISMATCH DETECTED ===");
+            STSArena.logger.error("Failed to find " + failedPotions.size() + " potions:");
+            for (String failedId : failedPotions) {
+                STSArena.logger.error("  - Potion ID not found: \"" + failedId + "\"");
+            }
+            STSArena.logger.error("Check LoadoutConfig.java for incorrect potion IDs.");
+            STSArena.logger.error("===================================");
         }
 
         STSArena.logger.info("Generated loadout '" + name + "': " + deck.size() + " cards, " +
@@ -214,6 +246,57 @@ public class RandomLoadoutGenerator {
             case "WATCHER": return "Strike_P";
             default: return "Strike_R";
         }
+    }
+
+    /**
+     * Try to suggest a correct card ID based on a failed ID.
+     * Attempts CamelCase conversion and common variations.
+     */
+    private static String suggestSimilarCardId(String failedId) {
+        // Try CamelCase version (remove spaces, capitalize each word)
+        if (failedId.contains(" ")) {
+            String camelCase = toCamelCase(failedId);
+            AbstractCard card = CardLibrary.getCard(camelCase);
+            if (card != null) {
+                return camelCase;
+            }
+        }
+
+        // Try with underscores replaced by nothing
+        if (failedId.contains("_")) {
+            String noUnderscores = failedId.replace("_", "");
+            AbstractCard card = CardLibrary.getCard(noUnderscores);
+            if (card != null) {
+                return noUnderscores;
+            }
+        }
+
+        // Try adding common suffixes for starter cards
+        for (String suffix : new String[]{"_R", "_G", "_B", "_P"}) {
+            AbstractCard card = CardLibrary.getCard(failedId + suffix);
+            if (card != null) {
+                return failedId + suffix;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Convert a space-separated string to CamelCase.
+     * "Talk to the Hand" -> "TalkToTheHand"
+     */
+    private static String toCamelCase(String input) {
+        StringBuilder result = new StringBuilder();
+        for (String word : input.split(" ")) {
+            if (!word.isEmpty()) {
+                result.append(Character.toUpperCase(word.charAt(0)));
+                if (word.length() > 1) {
+                    result.append(word.substring(1));
+                }
+            }
+        }
+        return result.toString();
     }
 
     /**
