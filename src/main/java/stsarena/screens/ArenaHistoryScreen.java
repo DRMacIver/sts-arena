@@ -26,7 +26,7 @@ public class ArenaHistoryScreen {
     private static final float STATS_Y = TITLE_Y - 80.0f * Settings.scale;
     private static final float HISTORY_START_Y = STATS_Y - 100.0f * Settings.scale;
     private static final float ROW_HEIGHT = 50.0f * Settings.scale;
-    private static final float TABLE_WIDTH = 1050.0f * Settings.scale;
+    private static final float TABLE_WIDTH = 1150.0f * Settings.scale;
     private static final float LEFT_X = (Settings.WIDTH - TABLE_WIDTH) / 2.0f;
     private static final float REPLAY_BUTTON_WIDTH = 85.0f * Settings.scale;
     private static final float REPLAY_BUTTON_HEIGHT = 32.0f * Settings.scale;
@@ -111,7 +111,7 @@ public class ArenaHistoryScreen {
 
         // Update replay hitboxes and check for clicks
         if (recentRuns != null && replayHitboxes != null) {
-            float replayX = LEFT_X + 960.0f * Settings.scale + REPLAY_BUTTON_WIDTH / 2.0f;
+            float replayX = LEFT_X + 1000.0f * Settings.scale + REPLAY_BUTTON_WIDTH / 2.0f;
             float y = HISTORY_START_Y - scrollY;
 
             for (int i = 0; i < recentRuns.size(); i++) {
@@ -172,11 +172,10 @@ public class ArenaHistoryScreen {
         // Column headers - adjusted spacing to fit replay button
         float headerY = HISTORY_START_Y + 30.0f * Settings.scale;
         float col1 = LEFT_X;                           // Loadout name
-        float col2 = LEFT_X + 180.0f * Settings.scale; // Encounter
-        float col3 = LEFT_X + 450.0f * Settings.scale; // Outcome
-        float col4 = LEFT_X + 600.0f * Settings.scale; // HP
-        float col5 = LEFT_X + 720.0f * Settings.scale; // Date
-        float col6 = LEFT_X + 960.0f * Settings.scale; // Replay
+        float col2 = LEFT_X + 320.0f * Settings.scale; // Encounter
+        float col3 = LEFT_X + 620.0f * Settings.scale; // Outcome
+        float col4 = LEFT_X + 780.0f * Settings.scale; // Date
+        float col5 = LEFT_X + 1000.0f * Settings.scale; // Replay
 
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             "Loadout", col1, headerY, Settings.GOLD_COLOR);
@@ -185,11 +184,9 @@ public class ArenaHistoryScreen {
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             "Outcome", col3, headerY, Settings.GOLD_COLOR);
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            "HP", col4, headerY, Settings.GOLD_COLOR);
+            "Date", col4, headerY, Settings.GOLD_COLOR);
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            "Date", col5, headerY, Settings.GOLD_COLOR);
-        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            "Action", col6, headerY, Settings.GOLD_COLOR);
+            "Action", col5, headerY, Settings.GOLD_COLOR);
 
         // History rows
         if (recentRuns != null && !recentRuns.isEmpty()) {
@@ -215,11 +212,10 @@ public class ArenaHistoryScreen {
     private void renderRunRow(SpriteBatch sb, ArenaRepository.ArenaRunRecord run, float y, Hitbox replayHb) {
         // Column positions - must match header positions
         float col1 = LEFT_X;
-        float col2 = LEFT_X + 180.0f * Settings.scale;
-        float col3 = LEFT_X + 450.0f * Settings.scale;
-        float col4 = LEFT_X + 600.0f * Settings.scale;
-        float col5 = LEFT_X + 720.0f * Settings.scale;
-        float col6 = LEFT_X + 960.0f * Settings.scale;
+        float col2 = LEFT_X + 320.0f * Settings.scale;
+        float col3 = LEFT_X + 620.0f * Settings.scale;
+        float col4 = LEFT_X + 780.0f * Settings.scale;
+        float col5 = LEFT_X + 1000.0f * Settings.scale;
 
         Color textColor = Settings.CREAM_COLOR;
 
@@ -232,10 +228,11 @@ public class ArenaHistoryScreen {
             outcomeColor = Settings.RED_TEXT_COLOR;
         }
 
-        // Show full loadout name
+        // Show loadout name with wrapping for long names
         String loadoutName = run.loadoutName != null ? run.loadoutName : "Unknown";
-        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            loadoutName, col1, y, textColor);
+        float loadoutColWidth = 300.0f * Settings.scale;
+        FontHelper.renderSmartText(sb, FontHelper.cardDescFont_N,
+            loadoutName, col1, y, loadoutColWidth, 20.0f * Settings.scale, textColor);
 
         // Encounter
         String encounter = run.encounterId != null ? run.encounterId : "Unknown";
@@ -246,18 +243,13 @@ public class ArenaHistoryScreen {
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             outcomeText, col3, y, outcomeColor);
 
-        // HP
-        String hpText = run.endingHp + "/" + run.startingHp;
-        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            hpText, col4, y, textColor);
-
         // Date
         String dateText = dateFormat.format(new Date(run.startedAt));
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            dateText, col5, y, textColor);
+            dateText, col4, y, textColor);
 
         // Replay button - centered vertically in row
-        float buttonX = col6;
+        float buttonX = col5;
         float buttonY = y - REPLAY_BUTTON_HEIGHT - 1.0f * Settings.scale;
         float buttonCenterY = buttonY + REPLAY_BUTTON_HEIGHT / 2.0f;
 
