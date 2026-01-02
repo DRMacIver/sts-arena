@@ -91,6 +91,7 @@ public class RandomLoadoutGenerator {
 
         // Convert card IDs to actual cards
         List<AbstractCard> deck = new ArrayList<>();
+        List<String> failedCards = new ArrayList<>();
         for (LoadoutBuilder.CardEntry entry : built.deck) {
             AbstractCard card = getCard(entry.cardId);
             if (card != null) {
@@ -100,7 +101,51 @@ public class RandomLoadoutGenerator {
                 }
                 deck.add(copy);
             } else {
-                STSArena.logger.warn("Card not found: " + entry.cardId);
+                failedCards.add(entry.cardId);
+            }
+        }
+
+        // Log any failed card conversions
+        if (!failedCards.isEmpty()) {
+            STSArena.logger.warn("Failed to find " + failedCards.size() + " cards: " + failedCards);
+        }
+
+        // Ensure minimum deck size - add starter cards if needed
+        if (deck.size() < LoadoutConfig.MIN_DECK_SIZE) {
+            STSArena.logger.warn("Deck too small (" + deck.size() + " cards), adding starter cards");
+            List<String> starterDeck = LoadoutConfig.getStarterDeck(playerClass.name());
+            for (String cardId : starterDeck) {
+                if (deck.size() >= LoadoutConfig.MIN_DECK_SIZE) break;
+                AbstractCard card = getCard(cardId);
+                if (card != null) {
+                    deck.add(card.makeCopy());
+                }
+            }
+        }
+
+        // Final safety check - this should never happen now
+        if (deck.size() < LoadoutConfig.MIN_DECK_SIZE) {
+            STSArena.logger.error("CRITICAL: Could not build minimum deck size. Built deck has " + deck.size() +
+                " cards, needed " + LoadoutConfig.MIN_DECK_SIZE + ". Failed cards: " + failedCards);
+        }
+
+        // Ensure deck has at least some attacks - a deck with no attacks is not reasonable
+        int attackCount = 0;
+        for (AbstractCard card : deck) {
+            if (card.type == AbstractCard.CardType.ATTACK) {
+                attackCount++;
+            }
+        }
+        if (attackCount == 0) {
+            STSArena.logger.warn("Deck has no attacks, adding Strikes");
+            // Add 3-5 Strikes
+            String strikeId = getStrikeIdForClass(playerClass.name());
+            int strikesToAdd = 3 + random.nextInt(3);
+            for (int i = 0; i < strikesToAdd; i++) {
+                AbstractCard strike = getCard(strikeId);
+                if (strike != null) {
+                    deck.add(strike.makeCopy());
+                }
             }
         }
 
@@ -156,6 +201,19 @@ public class RandomLoadoutGenerator {
         }
 
         return null;
+    }
+
+    /**
+     * Get the Strike card ID for a given player class.
+     */
+    private static String getStrikeIdForClass(String playerClass) {
+        switch (playerClass) {
+            case "IRONCLAD": return "Strike_R";
+            case "THE_SILENT": return "Strike_G";
+            case "DEFECT": return "Strike_B";
+            case "WATCHER": return "Strike_P";
+            default: return "Strike_R";
+        }
     }
 
     /**

@@ -311,11 +311,12 @@ public class LoadoutConfig {
     public static final Set<String> BLOCK_CARDS = new HashSet<>(Arrays.asList(
         "Defend_R", "Defend_G", "Defend_B", "Defend_P",
         "Shrug It Off", "Flame Barrier", "Impervious", "Entrench", "Barricade",
-        "Footwork", "Blur", "Cloak and Dagger", "Dodge and Roll",
+        "Footwork", "Blur", "Cloak And Dagger", "Dodge and Roll",
         "Leg Sweep", "Backflip", "Escape Plan", "After Image",
         "Glacier", "Reinforced Body", "Equilibrium", "Genetic Algorithm",
-        "Vigilance", "Like Water", "Empty Body", "Protect", "Wave of the Hand",
-        "Talk to the Hand", "Mental Fortress", "Spirit Shield"
+        // Watcher cards (CamelCase IDs)
+        "Vigilance", "LikeWater", "EmptyBody", "Protect", "WaveOfTheHand",
+        "TalkToTheHand", "MentalFortress", "SpiritShield"
     ));
 
     public static final Set<String> STRENGTH_GENERATORS = new HashSet<>(Arrays.asList(
@@ -332,8 +333,8 @@ public class LoadoutConfig {
     ));
 
     public static final Set<String> RETAIN_CARDS = new HashSet<>(Arrays.asList(
-        "Establishment", "Meditate", "Protect", "Windmill Strike",
-        "Sands of Time", "Perseverance", "Sash Whip"
+        "Establishment", "Meditate", "Protect", "WindmillStrike",
+        "SandsOfTime", "Perseverance", "SashWhip"
     ));
 
     // Cards that need synergies
@@ -359,17 +360,17 @@ public class LoadoutConfig {
         CARD_SYNERGIES.put("Heavy Blade", LoadoutBuilder.CardSynergy.REQUIRES_STRENGTH);
         CARD_SYNERGIES.put("Sword Boomerang", LoadoutBuilder.CardSynergy.REQUIRES_STRENGTH);
 
-        // Focus synergy
-        CARD_SYNERGIES.put("Hyperbeam", LoadoutBuilder.CardSynergy.REQUIRES_FOCUS);
+        // Orb synergy
+        // Note: Hyperbeam removes all focus - it's anti-synergy with focus, not a requirement
         CARD_SYNERGIES.put("Blizzard", LoadoutBuilder.CardSynergy.REQUIRES_ORBS);
 
-        // Mantra synergy
-        CARD_SYNERGIES.put("Rushdown", LoadoutBuilder.CardSynergy.REQUIRES_MANTRA);
-        CARD_SYNERGIES.put("Blasphemy", LoadoutBuilder.CardSynergy.REQUIRES_MANTRA);
+        // Mantra synergy - cards that specifically need mantra generation
+        // Note: Rushdown (Adaptation) triggers on Wrath entry, not mantra - no requirement
+        // Note: Blasphemy sets you to Divinity directly - no requirement
 
-        // Retain synergy
-        CARD_SYNERGIES.put("Windmill Strike", LoadoutBuilder.CardSynergy.REQUIRES_RETAIN);
-        CARD_SYNERGIES.put("Sands of Time", LoadoutBuilder.CardSynergy.REQUIRES_RETAIN);
+        // Retain synergy (Watcher CamelCase IDs)
+        CARD_SYNERGIES.put("WindmillStrike", LoadoutBuilder.CardSynergy.REQUIRES_RETAIN);
+        CARD_SYNERGIES.put("SandsOfTime", LoadoutBuilder.CardSynergy.REQUIRES_RETAIN);
     }
 
     public static LoadoutBuilder.CardSynergy getCardSynergy(String cardId) {
@@ -437,22 +438,22 @@ public class LoadoutConfig {
         DEFECT_PRIORITY.put("Cold Snap", 75);
         DEFECT_PRIORITY.put("Doom and Gloom", 80);
 
-        // Watcher priorities
+        // Watcher priorities (uses CamelCase IDs)
         WATCHER_PRIORITY.put("Vault", 10);
         WATCHER_PRIORITY.put("Scrawl", 15);
-        WATCHER_PRIORITY.put("Lesson Learned", 20);
+        WATCHER_PRIORITY.put("LessonLearned", 20);
         WATCHER_PRIORITY.put("Ragnarok", 25);
         WATCHER_PRIORITY.put("Omniscience", 30);
-        WATCHER_PRIORITY.put("Talk to the Hand", 35);
+        WATCHER_PRIORITY.put("TalkToTheHand", 35);
         WATCHER_PRIORITY.put("Tantrum", 40);
-        WATCHER_PRIORITY.put("Empty Fist", 45);
+        WATCHER_PRIORITY.put("EmptyFist", 45);
         WATCHER_PRIORITY.put("Wallop", 50);
         WATCHER_PRIORITY.put("Crescendo", 55);
-        WATCHER_PRIORITY.put("Flurry of Blows", 60);
+        WATCHER_PRIORITY.put("FlurryOfBlows", 60);
         WATCHER_PRIORITY.put("Eruption", 65);
         WATCHER_PRIORITY.put("Vigilance", 70);
         WATCHER_PRIORITY.put("Halt", 75);
-        WATCHER_PRIORITY.put("Empty Body", 80);
+        WATCHER_PRIORITY.put("EmptyBody", 80);
     }
 
     public static int getCardPriority(String cardId, String playerClass) {
@@ -485,8 +486,8 @@ public class LoadoutConfig {
         MAX_COPIES.put("Buffer", 2);
         MAX_COPIES.put("Metallicize", 2);
         MAX_COPIES.put("Inflame", 2);
-        MAX_COPIES.put("Like Water", 1);
-        MAX_COPIES.put("Mental Fortress", 2);
+        MAX_COPIES.put("LikeWater", 1);
+        MAX_COPIES.put("MentalFortress", 2);
 
         // Limited attacks
         MAX_COPIES.put("Offering", 1);
@@ -519,9 +520,10 @@ public class LoadoutConfig {
             "Echo Form", "Electrodynamics", "Defragment", "Biased Cognition",
             "Buffer", "Creative AI", "Hello World", "Machine Learning",
             "Loop", "Static Discharge", "Storm", "Capacitor", "Heatsinks",
-            "Like Water", "Mental Fortress", "Establishment", "Foresight",
-            "Rushdown", "Devotion", "Battle Hymn", "Deva Form", "Deus Ex Machina",
-            "Master Reality", "Study", "Omega"
+            // Watcher powers (CamelCase IDs)
+            "LikeWater", "MentalFortress", "Establishment", "Wireheading",  // Wireheading = Foresight
+            "Adaptation", "Devotion", "BattleHymn", "DevaForm", "DeusExMachina",  // Adaptation = Rushdown
+            "MasterReality", "Study", "Omega", "Nirvana"
         )) {
             CARD_TYPES.put(card, "POWER");
         }
@@ -533,20 +535,22 @@ public class LoadoutConfig {
             "True Grit", "Power Through", "Burning Pact", "Disarm", "Sentinel",
             "Intimidate", "Double Tap", "Dual Wield", "Second Wind", "Seeing Red",
             "Ghostly Armor", "Bloodletting", "Warcry", "Havoc", "Exhume",
-            "Backflip", "Blur", "Prepared", "Acrobatics", "Cloak and Dagger",
+            "Backflip", "Blur", "Prepared", "Acrobatics", "Cloak And Dagger",
             "Dodge and Roll", "Leg Sweep", "Escape Plan", "Outmaneuver",
             "Concentrate", "Malaise", "Piercing Wail", "Setup", "Distraction",
             "Nightmare", "Storm of Steel", "Corpse Explosion", "Adrenaline",
             "Bullet Time", "Dagger Spray", "Calculated Gamble", "Terror",
             "Glacier", "Coolheaded", "Reinforced Body", "Equilibrium", "Hologram",
             "Skim", "Turbo", "White Noise", "Seek", "Reboot", "Reprogram",
-            "Self Repair", "Boot Sequence", "Recursion", "Undo", "Amplify",
+            "Self Repair", "BootSequence", "Recursion", "Undo", "Amplify",
             "Stack", "Force Field", "Multi-Cast", "Core Surge",
-            "Vigilance", "Protect", "Empty Body", "Third Eye", "Perseverance",
-            "Halt", "Evaluate", "Pray", "Prostrate", "Crescendo", "Tranquility",
-            "Worship", "Collect", "Deceive Reality", "Inner Peace", "Meditate",
-            "Sash Whip", "Wave of the Hand", "Sanctity", "Spirit Shield",
-            "Swivel", "Blasphemy", "Scrawl", "Vault", "Wish"
+            // Watcher skills (CamelCase IDs)
+            "Vigilance", "Protect", "EmptyBody", "ThirdEye", "Perseverance",
+            "Halt", "Evaluate", "Pray", "Prostrate", "Crescendo", "ClearTheMind",  // ClearTheMind = Tranquility
+            "Worship", "Collect", "DeceiveReality", "InnerPeace", "Meditate",
+            "SashWhip", "WaveOfTheHand", "Sanctity", "SpiritShield",
+            "Swivel", "Blasphemy", "Scrawl", "Vault", "Wish", "EmptyMind",
+            "Fasting2", "FearNoEvil", "Indignation", "ReachHeaven"
         )) {
             CARD_TYPES.put(card, "SKILL");
         }
@@ -648,25 +652,25 @@ public class LoadoutConfig {
     );
 
     private static final List<String> WATCHER_CARDS = Arrays.asList(
-        // Commons
-        "Bowling Bash", "Consecrate", "Crescendo", "Crush Joints", "Cut Through Fate",
-        "Empty Body", "Empty Fist", "Evaluate", "Flurry of Blows", "Flying Sleeves",
-        "Follow Up", "Halt", "Just Lucky", "Pressure Points", "Prostrate",
-        "Protect", "Sash Whip", "Third Eye", "Tranquility", "Vigilance",
+        // Commons (Watcher uses CamelCase IDs, some have different internal names)
+        "BowlingBash", "Consecrate", "Crescendo", "CrushJoints", "CutThroughFate",
+        "EmptyBody", "EmptyFist", "Evaluate", "FlurryOfBlows", "FlyingSleeves",
+        "FollowUp", "Halt", "JustLucky", "PathToVictory", "Prostrate",  // PathToVictory = Pressure Points
+        "Protect", "SashWhip", "ThirdEye", "ClearTheMind", "Vigilance",  // ClearTheMind = Tranquility
         // Uncommons
-        "Battle Hymn", "Carve Reality", "Collect", "Conclude", "Deceive Reality",
-        "Empty Mind", "Fasting", "Fear No Evil", "Foresight", "Indignation",
-        "Inner Peace", "Like Water", "Meditate", "Mental Fortress", "Nirvana",
-        "Perseverance", "Pray", "Reach Heaven", "Rushdown", "Sanctity",
-        "Sands of Time", "Signature Move", "Simmering Fury", "Study", "Swivel",
-        "Talk to the Hand", "Tantrum", "Wallop", "Wave of the Hand", "Wheel Kick",
-        "Windmill Strike", "Worship", "Wreath of Flame"
+        "BattleHymn", "CarveReality", "Collect", "Conclude", "DeceiveReality",
+        "EmptyMind", "Fasting2", "FearNoEvil", "Wireheading", "Indignation",  // Wireheading = Foresight
+        "InnerPeace", "LikeWater", "Meditate", "MentalFortress", "Nirvana",
+        "Perseverance", "Pray", "ReachHeaven", "Adaptation", "Sanctity",  // Adaptation = Rushdown
+        "SandsOfTime", "SignatureMove", "Vengeance", "Study", "Swivel",  // Vengeance = Simmering Fury
+        "TalkToTheHand", "Tantrum", "Wallop", "WaveOfTheHand", "WheelKick",
+        "WindmillStrike", "Worship", "WreathOfFlame"
     );
 
     private static final List<String> WATCHER_RARES = Arrays.asList(
-        "Alpha", "Blasphemy", "Brilliance", "Conjure Blade", "Deus Ex Machina",
-        "Deva Form", "Establishment", "Judgment", "Lesson Learned", "Master Reality",
-        "Omega", "Omniscience", "Ragnarok", "Scrawl", "Spirit Shield",
+        "Alpha", "Blasphemy", "Brilliance", "ConjureBlade", "DeusExMachina",
+        "DevaForm", "Establishment", "Judgement", "LessonLearned", "MasterReality",
+        "Omniscience", "Ragnarok", "Scrawl", "SpiritShield",  // Omega removed (it's a temp card from Alpha)
         "Vault", "Wish"
     );
 

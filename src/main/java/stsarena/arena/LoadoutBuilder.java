@@ -176,21 +176,26 @@ public class LoadoutBuilder {
     }
 
     private void applyRandomEvent() {
-        // Weight different event types
+        // Weight different event types - tuned so average deck size >= 10
+        // Add events: 45% (40% common + 5% rare) = net +0.45 cards/event
+        // Remove events: 5% (with deck.size() > 7 guard) = net -0.05 cards/event
+        // Net: ~+0.4 cards/event, with 30 avg events = +12 cards
         double roll = random.nextDouble();
 
-        if (roll < 0.35) {
+        if (roll < 0.40) {
             // Add a card (most common)
             addRandomCard();
-        } else if (roll < 0.50) {
+        } else if (roll < 0.52) {
             // Add a relic
             addRandomRelic();
-        } else if (roll < 0.60) {
+        } else if (roll < 0.62) {
             // Gain a potion
             gainRandomPotion();
-        } else if (roll < 0.70) {
-            // Remove a card
-            removeWorstCard();
+        } else if (roll < 0.67) {
+            // Remove a card (reduced from 10% to 5%, stricter guard)
+            if (deck.size() > 7) {
+                removeWorstCard();
+            }
         } else if (roll < 0.80) {
             // Upgrade a card
             upgradeRandomCard();
@@ -201,7 +206,7 @@ public class LoadoutBuilder {
             currentHp += hpGain;
         } else if (roll < 0.95) {
             // Transform a card (remove one, add random)
-            if (deck.size() > 5) {
+            if (deck.size() > 7) {
                 removeWorstCard();
                 addRandomCard();
             }
