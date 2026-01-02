@@ -490,6 +490,14 @@ public class ArenaRunner {
         Settings.isDailyRun = false;
         Settings.isEndless = false;
 
+        // Set main menu to already faded out to prevent visible flash
+        if (CardCrawlGame.mainMenuScreen != null) {
+            CardCrawlGame.mainMenuScreen.isFadingOut = true;
+            CardCrawlGame.mainMenuScreen.fadedOut = true;
+            CardCrawlGame.mainMenuScreen.fadeOutMusic();
+        }
+        CardCrawlGame.music.fadeOutTempBGM();
+
         // Close the death screen and trigger game restart
         CardCrawlGame.mode = CardCrawlGame.GameMode.CHAR_SELECT;
 
