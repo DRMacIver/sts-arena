@@ -31,7 +31,7 @@ import java.util.List;
 public class ArenaLoadoutSelectScreen {
 
     // Layout constants - left panel (loadout list)
-    private static final float LEFT_PANEL_WIDTH = 380.0f * Settings.scale;
+    private static final float LEFT_PANEL_WIDTH = 480.0f * Settings.scale;
     private static final float LEFT_PANEL_X = 80.0f * Settings.scale;
     private static final float TITLE_Y = Settings.HEIGHT - 100.0f * Settings.scale;
     private static final float LIST_START_Y = TITLE_Y - 80.0f * Settings.scale;
@@ -259,6 +259,9 @@ public class ArenaLoadoutSelectScreen {
 
         // Cancel button
         this.cancelButton.render(sb);
+
+        // Render cursor
+        com.megacrit.cardcrawl.core.CardCrawlGame.cursor.render(sb);
     }
 
     private void renderLoadoutList(SpriteBatch sb) {
@@ -294,10 +297,11 @@ public class ArenaLoadoutSelectScreen {
         }
 
         sb.setColor(bgColor);
+        float rowWidth = LEFT_PANEL_WIDTH - 20.0f * Settings.scale;
         sb.draw(ImageMaster.WHITE_SQUARE_IMG,
             LEFT_PANEL_X,
             y - BUTTON_HEIGHT,
-            LEFT_PANEL_WIDTH - 20.0f * Settings.scale,
+            rowWidth,
             BUTTON_HEIGHT);
 
         // Text
@@ -312,8 +316,20 @@ public class ArenaLoadoutSelectScreen {
             textColor = Settings.CREAM_COLOR;
         }
 
+        // Truncate long names to fit
+        String displayText = item.text;
+        float maxWidth = rowWidth - 20.0f * Settings.scale;
+        if (FontHelper.getSmartWidth(FontHelper.cardDescFont_N, displayText, maxWidth, 0) > maxWidth) {
+            // Truncate until it fits
+            while (displayText.length() > 3 &&
+                   FontHelper.getSmartWidth(FontHelper.cardDescFont_N, displayText + "...", maxWidth, 0) > maxWidth) {
+                displayText = displayText.substring(0, displayText.length() - 1);
+            }
+            displayText = displayText.trim() + "...";
+        }
+
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            item.text,
+            displayText,
             LEFT_PANEL_X + 10.0f * Settings.scale, y - 8.0f * Settings.scale, textColor);
     }
 
@@ -473,13 +489,18 @@ public class ArenaLoadoutSelectScreen {
                     x, y, Settings.GOLD_COLOR);
                 y -= 25.0f * Settings.scale;
 
-                // Render cards in columns
+                // Render cards in columns with dynamic widths
                 float lineHeight = 28.0f * Settings.scale;
-                float columnWidth = 180.0f * Settings.scale;
                 int cardsPerColumn = 16;
-                int column = 0;
-                int row = 0;
+                float columnPadding = 15.0f * Settings.scale;
                 float startY = y;
+
+                // First pass: build card names and calculate column widths
+                List<String> cardNames = new ArrayList<>();
+                List<Color> cardColors = new ArrayList<>();
+                List<Float> columnWidths = new ArrayList<>();
+                float currentColumnMaxWidth = 0;
+                int cardIndex = 0;
 
                 for (ArenaRepository.CardData cardData : cardDataList) {
                     AbstractCard card = CardLibrary.getCard(cardData.id);
@@ -488,30 +509,50 @@ public class ArenaLoadoutSelectScreen {
                         if (cardData.upgrades > 0) {
                             cardName += "+";
                         }
+                        cardNames.add(cardName);
 
-                        // Truncate long names
-                        if (cardName.length() > 16) {
-                            cardName = cardName.substring(0, 14) + "..";
-                        }
-
-                        // Color by card type
                         Color cardColor = getCardTypeColor(card.type);
                         if (cardData.upgrades > 0) {
                             cardColor = Settings.GREEN_TEXT_COLOR;
                         }
+                        cardColors.add(cardColor);
 
-                        float cardX = x + column * columnWidth;
-                        float cardY = startY - row * lineHeight;
-
-                        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-                            cardName,
-                            cardX, cardY, cardColor);
-
-                        row++;
-                        if (row >= cardsPerColumn) {
-                            row = 0;
-                            column++;
+                        float textWidth = FontHelper.getSmartWidth(FontHelper.cardDescFont_N, cardName, 9999, 0);
+                        if (textWidth > currentColumnMaxWidth) {
+                            currentColumnMaxWidth = textWidth;
                         }
+
+                        cardIndex++;
+                        if (cardIndex % cardsPerColumn == 0) {
+                            columnWidths.add(currentColumnMaxWidth + columnPadding);
+                            currentColumnMaxWidth = 0;
+                        }
+                    }
+                }
+                // Add last column width if there are remaining cards
+                if (cardIndex % cardsPerColumn != 0) {
+                    columnWidths.add(currentColumnMaxWidth + columnPadding);
+                }
+
+                // Second pass: render cards using calculated column positions
+                float cardX = x;
+                int column = 0;
+                int row = 0;
+
+                for (int i = 0; i < cardNames.size(); i++) {
+                    float cardY = startY - row * lineHeight;
+
+                    FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+                        cardNames.get(i),
+                        cardX, cardY, cardColors.get(i));
+
+                    row++;
+                    if (row >= cardsPerColumn) {
+                        row = 0;
+                        if (column < columnWidths.size()) {
+                            cardX += columnWidths.get(column);
+                        }
+                        column++;
                     }
                 }
             } else {

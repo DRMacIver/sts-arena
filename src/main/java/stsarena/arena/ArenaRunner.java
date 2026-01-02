@@ -10,6 +10,7 @@ import com.megacrit.cardcrawl.screens.GameOverScreen;
 import stsarena.STSArena;
 import stsarena.data.ArenaDatabase;
 import stsarena.data.ArenaRepository;
+import stsarena.screens.ArenaLoadoutSelectScreen;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -88,6 +89,14 @@ public class ArenaRunner {
                 STSArena.logger.info("ARENA: Calling startArenaRun...");
                 currentRunDbId = repo.startArenaRun(currentLoadoutDbId, encounter, loadout.currentHp);
                 STSArena.logger.info("ARENA: Arena run started with DB ID: " + currentRunDbId);
+
+                // Update loadout selection state so subsequent fights use the same loadout
+                ArenaRepository.LoadoutRecord savedRecord = repo.getLoadoutById(currentLoadoutDbId);
+                if (savedRecord != null) {
+                    ArenaLoadoutSelectScreen.selectedSavedLoadout = savedRecord;
+                    ArenaLoadoutSelectScreen.useNewRandomLoadout = false;
+                    STSArena.logger.info("ARENA: Updated loadout selection to use saved loadout: " + savedRecord.name);
+                }
             } else {
                 STSArena.logger.error("ARENA: saveLoadout failed, returned: " + currentLoadoutDbId);
             }
