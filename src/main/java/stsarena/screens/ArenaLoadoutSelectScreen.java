@@ -83,6 +83,12 @@ public class ArenaLoadoutSelectScreen {
     private boolean isConfirmingDelete = false;
     private Hitbox confirmDeleteHb, cancelDeleteHb;
 
+    // Backspace repeat timing
+    private float backspaceHeldTime = 0f;
+    private static final float BACKSPACE_INITIAL_DELAY = 0.4f;
+    private static final float BACKSPACE_REPEAT_DELAY = 0.05f;
+    private boolean backspaceRepeating = false;
+
     // Selection state for starting fights
     public static boolean useNewRandomLoadout = false;
     public static ArenaRepository.LoadoutRecord selectedSavedLoadout = null;
@@ -276,9 +282,36 @@ public class ArenaLoadoutSelectScreen {
     }
 
     private void handleRenameInput() {
-        // Handle backspace
-        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.BACKSPACE) && !renameText.isEmpty()) {
-            renameText = renameText.substring(0, renameText.length() - 1);
+        float delta = com.badlogic.gdx.Gdx.graphics.getDeltaTime();
+        boolean shift = com.badlogic.gdx.Gdx.input.isKeyPressed(com.badlogic.gdx.Input.Keys.SHIFT_LEFT) ||
+                        com.badlogic.gdx.Gdx.input.isKeyPressed(com.badlogic.gdx.Input.Keys.SHIFT_RIGHT);
+
+        // Handle backspace with repeat
+        if (com.badlogic.gdx.Gdx.input.isKeyPressed(com.badlogic.gdx.Input.Keys.BACKSPACE)) {
+            if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.BACKSPACE)) {
+                // First press - delete immediately
+                if (!renameText.isEmpty()) {
+                    renameText = renameText.substring(0, renameText.length() - 1);
+                }
+                backspaceHeldTime = 0f;
+                backspaceRepeating = false;
+            } else {
+                // Held - use repeat delay
+                backspaceHeldTime += delta;
+                if (!backspaceRepeating && backspaceHeldTime >= BACKSPACE_INITIAL_DELAY) {
+                    backspaceRepeating = true;
+                    backspaceHeldTime = 0f;
+                }
+                if (backspaceRepeating && backspaceHeldTime >= BACKSPACE_REPEAT_DELAY) {
+                    if (!renameText.isEmpty()) {
+                        renameText = renameText.substring(0, renameText.length() - 1);
+                    }
+                    backspaceHeldTime = 0f;
+                }
+            }
+        } else {
+            backspaceHeldTime = 0f;
+            backspaceRepeating = false;
         }
 
         // Handle enter to save
@@ -304,30 +337,64 @@ public class ArenaLoadoutSelectScreen {
             return;
         }
 
-        // Handle typed characters
+        // Handle typed characters - letters
         for (int keycode = com.badlogic.gdx.Input.Keys.A; keycode <= com.badlogic.gdx.Input.Keys.Z; keycode++) {
             if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(keycode)) {
-                boolean shift = com.badlogic.gdx.Gdx.input.isKeyPressed(com.badlogic.gdx.Input.Keys.SHIFT_LEFT) ||
-                                com.badlogic.gdx.Gdx.input.isKeyPressed(com.badlogic.gdx.Input.Keys.SHIFT_RIGHT);
                 char c = (char) ('a' + (keycode - com.badlogic.gdx.Input.Keys.A));
                 if (shift) c = Character.toUpperCase(c);
                 renameText += c;
             }
         }
-        for (int keycode = com.badlogic.gdx.Input.Keys.NUM_0; keycode <= com.badlogic.gdx.Input.Keys.NUM_9; keycode++) {
+
+        // Handle numbers with shift for symbols
+        String shiftedNumbers = ")!@#$%^&*(";  // Shift + 0-9
+        for (int i = 0; i <= 9; i++) {
+            int keycode = com.badlogic.gdx.Input.Keys.NUM_0 + i;
             if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(keycode)) {
-                char c = (char) ('0' + (keycode - com.badlogic.gdx.Input.Keys.NUM_0));
-                renameText += c;
+                if (shift) {
+                    renameText += shiftedNumbers.charAt(i);
+                } else {
+                    renameText += (char) ('0' + i);
+                }
             }
         }
+
+        // Handle other keys with shift variants
         if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.SPACE)) {
             renameText += ' ';
         }
         if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.MINUS)) {
-            renameText += '-';
+            renameText += shift ? '_' : '-';
         }
         if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.PERIOD)) {
-            renameText += '.';
+            renameText += shift ? '>' : '.';
+        }
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.COMMA)) {
+            renameText += shift ? '<' : ',';
+        }
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.SLASH)) {
+            renameText += shift ? '?' : '/';
+        }
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.SEMICOLON)) {
+            renameText += shift ? ':' : ';';
+        }
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.APOSTROPHE)) {
+            renameText += shift ? '"' : '\'';
+        }
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.LEFT_BRACKET)) {
+            renameText += shift ? '{' : '[';
+        }
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.RIGHT_BRACKET)) {
+            renameText += shift ? '}' : ']';
+        }
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.BACKSLASH)) {
+            renameText += shift ? '|' : '\\';
+        }
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.EQUALS)) {
+            renameText += shift ? '+' : '=';
+        }
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.GRAVE)) {
+            renameText += shift ? '~' : '`';
         }
     }
 
