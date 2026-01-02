@@ -1,6 +1,7 @@
 package stsarena.screens;
 
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.megacrit.cardcrawl.cards.AbstractCard;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
@@ -10,10 +11,13 @@ import com.megacrit.cardcrawl.helpers.FontHelper;
 import com.megacrit.cardcrawl.helpers.Hitbox;
 import com.megacrit.cardcrawl.helpers.ImageMaster;
 import com.megacrit.cardcrawl.helpers.MathHelper;
+import com.megacrit.cardcrawl.helpers.PotionHelper;
 import com.megacrit.cardcrawl.helpers.RelicLibrary;
 import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import com.megacrit.cardcrawl.potions.AbstractPotion;
+import com.megacrit.cardcrawl.potions.PotionSlot;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
+import com.megacrit.cardcrawl.relics.PrismaticShard;
 import com.megacrit.cardcrawl.screens.mainMenu.MenuCancelButton;
 import stsarena.STSArena;
 import stsarena.arena.LoadoutConfig;
@@ -28,27 +32,38 @@ import java.util.UUID;
 
 /**
  * Screen for creating a custom loadout.
- * Allows selecting character, searching/adding cards, and toggling upgrades.
+ * Allows selecting character, cards, relics, potions, HP, and ascension.
  */
 public class LoadoutCreatorScreen {
 
     // Layout constants
-    private static final float TITLE_Y = Settings.HEIGHT - 80.0f * Settings.scale;
-    private static final float TAB_Y = TITLE_Y - 60.0f * Settings.scale;
-    private static final float SEARCH_Y = TAB_Y - 50.0f * Settings.scale;
-    private static final float LIST_START_Y = SEARCH_Y - 60.0f * Settings.scale;
+    private static final float TITLE_Y = Settings.HEIGHT - 60.0f * Settings.scale;
+    private static final float CHAR_TAB_Y = TITLE_Y - 50.0f * Settings.scale;
+    private static final float STATS_Y = CHAR_TAB_Y - 45.0f * Settings.scale;
+    private static final float CONTENT_TAB_Y = STATS_Y - 45.0f * Settings.scale;
+    private static final float SEARCH_Y = CONTENT_TAB_Y - 40.0f * Settings.scale;
+    private static final float LIST_START_Y = SEARCH_Y - 50.0f * Settings.scale;
 
-    private static final float ROW_HEIGHT = 35.0f * Settings.scale;
-    private static final float COLUMN_WIDTH = 400.0f * Settings.scale;
-    private static final float LEFT_COLUMN_X = Settings.WIDTH * 0.28f;
-    private static final float RIGHT_COLUMN_X = Settings.WIDTH * 0.72f;
+    private static final float ROW_HEIGHT = 32.0f * Settings.scale;
+    private static final float COLUMN_WIDTH = 380.0f * Settings.scale;
+    private static final float LEFT_COLUMN_X = Settings.WIDTH * 0.25f;
+    private static final float RIGHT_COLUMN_X = Settings.WIDTH * 0.70f;
 
-    private static final float TAB_WIDTH = 120.0f * Settings.scale;
-    private static final float TAB_HEIGHT = 35.0f * Settings.scale;
-    private static final float TAB_START_X = Settings.WIDTH / 2.0f - 2.0f * TAB_WIDTH;
+    private static final float CHAR_TAB_WIDTH = 100.0f * Settings.scale;
+    private static final float CHAR_TAB_HEIGHT = 30.0f * Settings.scale;
+    private static final float CHAR_TAB_START_X = Settings.WIDTH / 2.0f - 2.0f * CHAR_TAB_WIDTH;
 
-    private static final float BUTTON_HEIGHT = 30.0f * Settings.scale;
-    private static final float ADD_BUTTON_WIDTH = 30.0f * Settings.scale;
+    private static final float CONTENT_TAB_WIDTH = 100.0f * Settings.scale;
+    private static final float CONTENT_TAB_HEIGHT = 28.0f * Settings.scale;
+
+    private static final float BUTTON_HEIGHT = 28.0f * Settings.scale;
+    private static final float SMALL_BUTTON_WIDTH = 28.0f * Settings.scale;
+
+    // List heights
+    private static final float LIST_HEIGHT = 380.0f * Settings.scale;
+
+    // Content tab enum
+    private enum ContentTab { CARDS, RELICS, POTIONS }
 
     // UI components
     private MenuCancelButton cancelButton;
@@ -58,29 +73,44 @@ public class LoadoutCreatorScreen {
     private AbstractPlayer.PlayerClass selectedClass = AbstractPlayer.PlayerClass.IRONCLAD;
     private Hitbox[] characterTabHitboxes;
 
+    // Content tab selection
+    private ContentTab activeTab = ContentTab.CARDS;
+    private Hitbox[] contentTabHitboxes;
+
+    // Stats
+    private int currentHp;
+    private int maxHp;
+    private int ascensionLevel = 0;
+    private Hitbox hpMinusHitbox, hpPlusHitbox;
+    private Hitbox maxHpMinusHitbox, maxHpPlusHitbox;
+    private Hitbox ascMinusHitbox, ascPlusHitbox;
+
     // Search
     private String searchText = "";
     private boolean isTypingSearch = false;
     private Hitbox searchBoxHitbox;
 
-    // Available cards (left panel)
+    // Available items (left panel) - depends on active tab
     private List<AbstractCard> availableCards;
-    private Hitbox[] availableCardHitboxes;
+    private List<AbstractRelic> availableRelics;
+    private List<AbstractPotion> availablePotions;
+    private Hitbox[] availableItemHitboxes;
     private float availableScrollY = 0.0f;
     private float availableTargetScrollY = 0.0f;
 
-    // Deck cards (right panel)
+    // Selected items (right panel)
     private List<DeckCard> deckCards;
+    private List<AbstractRelic> selectedRelics;
+    private List<AbstractPotion> selectedPotions;
     private Hitbox[] deckCardUpgradeHitboxes;
     private Hitbox[] deckCardRemoveHitboxes;
-    private float deckScrollY = 0.0f;
-    private float deckTargetScrollY = 0.0f;
+    private Hitbox[] relicRemoveHitboxes;
+    private Hitbox[] potionRemoveHitboxes;
+    private float selectedScrollY = 0.0f;
+    private float selectedTargetScrollY = 0.0f;
 
     // Save button
     private Hitbox saveButtonHitbox;
-
-    // Visible list height
-    private static final float LIST_HEIGHT = 450.0f * Settings.scale;
 
     /**
      * A card in the deck with its upgrade status.
@@ -98,19 +128,38 @@ public class LoadoutCreatorScreen {
     public LoadoutCreatorScreen() {
         this.cancelButton = new MenuCancelButton();
         this.availableCards = new ArrayList<>();
+        this.availableRelics = new ArrayList<>();
+        this.availablePotions = new ArrayList<>();
         this.deckCards = new ArrayList<>();
+        this.selectedRelics = new ArrayList<>();
+        this.selectedPotions = new ArrayList<>();
 
         // Create character tab hitboxes
         characterTabHitboxes = new Hitbox[4];
         for (int i = 0; i < 4; i++) {
-            characterTabHitboxes[i] = new Hitbox(TAB_WIDTH, TAB_HEIGHT);
+            characterTabHitboxes[i] = new Hitbox(CHAR_TAB_WIDTH, CHAR_TAB_HEIGHT);
+        }
+
+        // Create content tab hitboxes
+        contentTabHitboxes = new Hitbox[3];
+        for (int i = 0; i < 3; i++) {
+            contentTabHitboxes[i] = new Hitbox(CONTENT_TAB_WIDTH, CONTENT_TAB_HEIGHT);
         }
 
         // Search box hitbox
-        searchBoxHitbox = new Hitbox(300.0f * Settings.scale, 30.0f * Settings.scale);
+        searchBoxHitbox = new Hitbox(280.0f * Settings.scale, 28.0f * Settings.scale);
 
         // Save button hitbox
-        saveButtonHitbox = new Hitbox(150.0f * Settings.scale, 40.0f * Settings.scale);
+        saveButtonHitbox = new Hitbox(120.0f * Settings.scale, 35.0f * Settings.scale);
+
+        // Stats hitboxes
+        float smallBtn = 30.0f * Settings.scale;
+        hpMinusHitbox = new Hitbox(smallBtn, smallBtn);
+        hpPlusHitbox = new Hitbox(smallBtn, smallBtn);
+        maxHpMinusHitbox = new Hitbox(smallBtn, smallBtn);
+        maxHpPlusHitbox = new Hitbox(smallBtn, smallBtn);
+        ascMinusHitbox = new Hitbox(smallBtn, smallBtn);
+        ascPlusHitbox = new Hitbox(smallBtn, smallBtn);
     }
 
     public void open() {
@@ -120,16 +169,40 @@ public class LoadoutCreatorScreen {
 
         // Reset state
         this.selectedClass = AbstractPlayer.PlayerClass.IRONCLAD;
+        this.activeTab = ContentTab.CARDS;
         this.searchText = "";
         this.isTypingSearch = false;
         this.deckCards.clear();
+        this.selectedRelics.clear();
+        this.selectedPotions.clear();
         this.availableScrollY = 0.0f;
         this.availableTargetScrollY = 0.0f;
-        this.deckScrollY = 0.0f;
-        this.deckTargetScrollY = 0.0f;
+        this.selectedScrollY = 0.0f;
+        this.selectedTargetScrollY = 0.0f;
 
-        // Build available cards list
-        refreshAvailableCards();
+        // Set default HP for selected class
+        this.maxHp = LoadoutConfig.getBaseMaxHp(selectedClass);
+        this.currentHp = this.maxHp;
+        this.ascensionLevel = 0;
+
+        // Add starter relic
+        String starterRelicId = LoadoutConfig.getStarterRelicId(selectedClass);
+        if (starterRelicId != null) {
+            AbstractRelic starterRelic = RelicLibrary.getRelic(starterRelicId);
+            if (starterRelic != null) {
+                selectedRelics.add(starterRelic.makeCopy());
+            }
+        }
+
+        // Add starter deck
+        addStarterDeck();
+
+        // Initialize potions for this class
+        PotionHelper.initialize(selectedClass);
+
+        // Build available items list
+        refreshAvailableItems();
+        refreshSelectedHitboxes();
     }
 
     public void close() {
@@ -138,15 +211,46 @@ public class LoadoutCreatorScreen {
         this.isTypingSearch = false;
     }
 
+    private boolean hasPrismaticShard() {
+        for (AbstractRelic r : selectedRelics) {
+            if (r instanceof PrismaticShard || r.relicId.equals("PrismaticShard")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void refreshAvailableItems() {
+        switch (activeTab) {
+            case CARDS:
+                refreshAvailableCards();
+                break;
+            case RELICS:
+                refreshAvailableRelics();
+                break;
+            case POTIONS:
+                refreshAvailablePotions();
+                break;
+        }
+    }
+
     private void refreshAvailableCards() {
         availableCards.clear();
 
         AbstractCard.CardColor targetColor = LoadoutConfig.getCardColor(selectedClass);
+        boolean prismatic = hasPrismaticShard();
 
         for (AbstractCard card : CardLibrary.cards.values()) {
-            // Include character cards + colorless
-            if (card.color != targetColor && card.color != AbstractCard.CardColor.COLORLESS) {
-                continue;
+            // Include character cards + colorless (+ all colors if prismatic)
+            if (!prismatic) {
+                if (card.color != targetColor && card.color != AbstractCard.CardColor.COLORLESS) {
+                    continue;
+                }
+            } else {
+                // With Prismatic Shard, include all non-special colors
+                if (card.color == AbstractCard.CardColor.CURSE) {
+                    continue;
+                }
             }
 
             // Skip basic/special/status/curse
@@ -171,23 +275,124 @@ public class LoadoutCreatorScreen {
         // Sort alphabetically
         availableCards.sort(Comparator.comparing(c -> c.name));
 
-        // Create hitboxes for available cards
-        availableCardHitboxes = new Hitbox[availableCards.size()];
+        // Create hitboxes (width must match rendered row width)
+        float rowWidth = COLUMN_WIDTH - 30.0f * Settings.scale;
+        availableItemHitboxes = new Hitbox[availableCards.size()];
         for (int i = 0; i < availableCards.size(); i++) {
-            availableCardHitboxes[i] = new Hitbox(COLUMN_WIDTH - 50.0f * Settings.scale, BUTTON_HEIGHT);
+            availableItemHitboxes[i] = new Hitbox(rowWidth, BUTTON_HEIGHT);
         }
 
-        // Reset scroll
         availableScrollY = 0.0f;
         availableTargetScrollY = 0.0f;
     }
 
-    private void refreshDeckHitboxes() {
+    private void refreshAvailableRelics() {
+        availableRelics.clear();
+
+        for (AbstractRelic relic : RelicLibrary.starterList) {
+            addRelicIfMatches(relic);
+        }
+        for (AbstractRelic relic : RelicLibrary.commonList) {
+            addRelicIfMatches(relic);
+        }
+        for (AbstractRelic relic : RelicLibrary.uncommonList) {
+            addRelicIfMatches(relic);
+        }
+        for (AbstractRelic relic : RelicLibrary.rareList) {
+            addRelicIfMatches(relic);
+        }
+        for (AbstractRelic relic : RelicLibrary.bossList) {
+            addRelicIfMatches(relic);
+        }
+        for (AbstractRelic relic : RelicLibrary.shopList) {
+            addRelicIfMatches(relic);
+        }
+        for (AbstractRelic relic : RelicLibrary.specialList) {
+            addRelicIfMatches(relic);
+        }
+
+        // Sort alphabetically
+        availableRelics.sort(Comparator.comparing(r -> r.name));
+
+        // Create hitboxes (width must match rendered row width)
+        float rowWidth = COLUMN_WIDTH - 30.0f * Settings.scale;
+        availableItemHitboxes = new Hitbox[availableRelics.size()];
+        for (int i = 0; i < availableRelics.size(); i++) {
+            availableItemHitboxes[i] = new Hitbox(rowWidth, BUTTON_HEIGHT);
+        }
+
+        availableScrollY = 0.0f;
+        availableTargetScrollY = 0.0f;
+    }
+
+    private void addRelicIfMatches(AbstractRelic relic) {
+        if (relic == null) return;
+
+        // Filter by search
+        if (!searchText.isEmpty() &&
+            !relic.name.toLowerCase().contains(searchText.toLowerCase())) {
+            return;
+        }
+
+        // Check if already selected
+        for (AbstractRelic r : selectedRelics) {
+            if (r.relicId.equals(relic.relicId)) {
+                return;
+            }
+        }
+
+        availableRelics.add(relic);
+    }
+
+    private void refreshAvailablePotions() {
+        availablePotions.clear();
+
+        for (String potionId : PotionHelper.potions) {
+            AbstractPotion potion = PotionHelper.getPotion(potionId);
+            if (potion == null || potion instanceof PotionSlot) continue;
+
+            // Filter by search
+            if (!searchText.isEmpty() &&
+                !potion.name.toLowerCase().contains(searchText.toLowerCase())) {
+                continue;
+            }
+
+            availablePotions.add(potion);
+        }
+
+        // Sort alphabetically
+        availablePotions.sort(Comparator.comparing(p -> p.name));
+
+        // Create hitboxes (width must match rendered row width)
+        float rowWidth = COLUMN_WIDTH - 30.0f * Settings.scale;
+        availableItemHitboxes = new Hitbox[availablePotions.size()];
+        for (int i = 0; i < availablePotions.size(); i++) {
+            availableItemHitboxes[i] = new Hitbox(rowWidth, BUTTON_HEIGHT);
+        }
+
+        availableScrollY = 0.0f;
+        availableTargetScrollY = 0.0f;
+    }
+
+    private void refreshSelectedHitboxes() {
+        // Deck card hitboxes
         deckCardUpgradeHitboxes = new Hitbox[deckCards.size()];
         deckCardRemoveHitboxes = new Hitbox[deckCards.size()];
         for (int i = 0; i < deckCards.size(); i++) {
-            deckCardUpgradeHitboxes[i] = new Hitbox(ADD_BUTTON_WIDTH, BUTTON_HEIGHT);
-            deckCardRemoveHitboxes[i] = new Hitbox(ADD_BUTTON_WIDTH, BUTTON_HEIGHT);
+            deckCardUpgradeHitboxes[i] = new Hitbox(SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
+            deckCardRemoveHitboxes[i] = new Hitbox(SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
+        }
+
+        // Relic hitboxes
+        relicRemoveHitboxes = new Hitbox[selectedRelics.size()];
+        for (int i = 0; i < selectedRelics.size(); i++) {
+            relicRemoveHitboxes[i] = new Hitbox(SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
+        }
+
+        // Potion hitboxes
+        potionRemoveHitboxes = new Hitbox[selectedPotions.size()];
+        for (int i = 0; i < selectedPotions.size(); i++) {
+            potionRemoveHitboxes[i] = new Hitbox(SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
         }
     }
 
@@ -210,7 +415,7 @@ public class LoadoutCreatorScreen {
         }
 
         // Update search box hitbox
-        searchBoxHitbox.move(Settings.WIDTH / 2.0f, SEARCH_Y);
+        searchBoxHitbox.move(LEFT_COLUMN_X, SEARCH_Y);
         searchBoxHitbox.update();
         if (searchBoxHitbox.hovered && InputHelper.justClickedLeft) {
             isTypingSearch = true;
@@ -221,19 +426,52 @@ public class LoadoutCreatorScreen {
 
         // Update character tabs
         for (int i = 0; i < 4; i++) {
-            float tabX = TAB_START_X + i * TAB_WIDTH + TAB_WIDTH / 2.0f;
-            characterTabHitboxes[i].move(tabX, TAB_Y);
+            float tabX = CHAR_TAB_START_X + i * CHAR_TAB_WIDTH + CHAR_TAB_WIDTH / 2.0f;
+            characterTabHitboxes[i].move(tabX, CHAR_TAB_Y);
             characterTabHitboxes[i].update();
 
             if (characterTabHitboxes[i].hovered && InputHelper.justClickedLeft) {
-                selectedClass = LoadoutConfig.PLAYER_CLASSES[i];
-                refreshAvailableCards();
+                AbstractPlayer.PlayerClass newClass = LoadoutConfig.PLAYER_CLASSES[i];
+                if (newClass != selectedClass) {
+                    selectedClass = newClass;
+                    // Update HP for new class
+                    maxHp = LoadoutConfig.getBaseMaxHp(selectedClass);
+                    currentHp = Math.min(currentHp, maxHp);
+                    // Update starter relic and deck
+                    updateStarterRelic();
+                    addStarterDeck();
+                    // Reinitialize potions for new class
+                    PotionHelper.initialize(selectedClass);
+                    refreshAvailableItems();
+                }
                 InputHelper.justClickedLeft = false;
             }
         }
 
+        // Update content tabs
+        float contentTabStartX = LEFT_COLUMN_X - CONTENT_TAB_WIDTH;
+        for (int i = 0; i < 3; i++) {
+            float tabX = contentTabStartX + i * CONTENT_TAB_WIDTH;
+            // move() sets CENTER, so add half width to match rendered position
+            contentTabHitboxes[i].move(tabX + CONTENT_TAB_WIDTH / 2.0f, CONTENT_TAB_Y);
+            contentTabHitboxes[i].update();
+
+            if (contentTabHitboxes[i].hovered && InputHelper.justClickedLeft) {
+                ContentTab newTab = ContentTab.values()[i];
+                if (newTab != activeTab) {
+                    activeTab = newTab;
+                    searchText = "";
+                    refreshAvailableItems();
+                }
+                InputHelper.justClickedLeft = false;
+            }
+        }
+
+        // Update stats controls
+        updateStatsControls();
+
         // Update save button
-        saveButtonHitbox.move(Settings.WIDTH - 120.0f * Settings.scale, TITLE_Y);
+        saveButtonHitbox.move(Settings.WIDTH - 100.0f * Settings.scale, TITLE_Y);
         saveButtonHitbox.update();
         if (saveButtonHitbox.hovered && InputHelper.justClickedLeft && !deckCards.isEmpty()) {
             saveLoadout();
@@ -241,7 +479,7 @@ public class LoadoutCreatorScreen {
             return;
         }
 
-        // Scrolling for available cards (left panel) - when mouse is on left side
+        // Scrolling for available items (left panel)
         if (InputHelper.mX < Settings.WIDTH / 2.0f) {
             if (InputHelper.scrolledDown) {
                 availableTargetScrollY += Settings.SCROLL_SPEED;
@@ -250,62 +488,208 @@ public class LoadoutCreatorScreen {
             }
         }
 
-        // Scrolling for deck (right panel) - when mouse is on right side
+        // Scrolling for selected items (right panel)
         if (InputHelper.mX >= Settings.WIDTH / 2.0f) {
             if (InputHelper.scrolledDown) {
-                deckTargetScrollY += Settings.SCROLL_SPEED;
+                selectedTargetScrollY += Settings.SCROLL_SPEED;
             } else if (InputHelper.scrolledUp) {
-                deckTargetScrollY -= Settings.SCROLL_SPEED;
+                selectedTargetScrollY -= Settings.SCROLL_SPEED;
             }
         }
 
         // Clamp scrolling
-        float availableMaxScroll = Math.max(0, availableCards.size() * ROW_HEIGHT - LIST_HEIGHT);
+        int availableCount = getAvailableCount();
+        float availableMaxScroll = Math.max(0, availableCount * ROW_HEIGHT - LIST_HEIGHT);
         availableTargetScrollY = Math.max(0, Math.min(availableMaxScroll, availableTargetScrollY));
         availableScrollY = MathHelper.scrollSnapLerpSpeed(availableScrollY, availableTargetScrollY);
 
-        float deckMaxScroll = Math.max(0, deckCards.size() * ROW_HEIGHT - LIST_HEIGHT);
-        deckTargetScrollY = Math.max(0, Math.min(deckMaxScroll, deckTargetScrollY));
-        deckScrollY = MathHelper.scrollSnapLerpSpeed(deckScrollY, deckTargetScrollY);
+        int selectedCount = deckCards.size() + selectedRelics.size() + selectedPotions.size() + 3; // +3 for headers
+        float selectedMaxScroll = Math.max(0, selectedCount * ROW_HEIGHT - LIST_HEIGHT);
+        selectedTargetScrollY = Math.max(0, Math.min(selectedMaxScroll, selectedTargetScrollY));
+        selectedScrollY = MathHelper.scrollSnapLerpSpeed(selectedScrollY, selectedTargetScrollY);
 
-        // Update available cards hitboxes and check for clicks
+        // Update available item hitboxes and check for clicks
+        updateAvailableItems();
+
+        // Update selected item hitboxes and check for clicks
+        updateSelectedItems();
+    }
+
+    private void updateStatsControls() {
+        float statsX = Settings.WIDTH / 2.0f + 80.0f * Settings.scale;
+        float btnSize = 30.0f * Settings.scale;
+
+        // HP controls
+        float hpX = statsX;
+        hpMinusHitbox.move(hpX, STATS_Y);
+        hpPlusHitbox.move(hpX + 80.0f * Settings.scale, STATS_Y);
+        hpMinusHitbox.update();
+        hpPlusHitbox.update();
+
+        if (hpMinusHitbox.hovered && InputHelper.justClickedLeft) {
+            currentHp = Math.max(1, currentHp - 1);
+            InputHelper.justClickedLeft = false;
+        }
+        if (hpPlusHitbox.hovered && InputHelper.justClickedLeft) {
+            currentHp = Math.min(maxHp, currentHp + 1);
+            InputHelper.justClickedLeft = false;
+        }
+
+        // Max HP controls
+        float maxHpX = statsX + 160.0f * Settings.scale;
+        maxHpMinusHitbox.move(maxHpX, STATS_Y);
+        maxHpPlusHitbox.move(maxHpX + 80.0f * Settings.scale, STATS_Y);
+        maxHpMinusHitbox.update();
+        maxHpPlusHitbox.update();
+
+        if (maxHpMinusHitbox.hovered && InputHelper.justClickedLeft) {
+            maxHp = Math.max(1, maxHp - 1);
+            currentHp = Math.min(currentHp, maxHp);
+            InputHelper.justClickedLeft = false;
+        }
+        if (maxHpPlusHitbox.hovered && InputHelper.justClickedLeft) {
+            maxHp = Math.min(999, maxHp + 1);
+            InputHelper.justClickedLeft = false;
+        }
+
+        // Ascension controls
+        float ascX = statsX + 320.0f * Settings.scale;
+        ascMinusHitbox.move(ascX, STATS_Y);
+        ascPlusHitbox.move(ascX + 60.0f * Settings.scale, STATS_Y);
+        ascMinusHitbox.update();
+        ascPlusHitbox.update();
+
+        if (ascMinusHitbox.hovered && InputHelper.justClickedLeft) {
+            ascensionLevel = Math.max(0, ascensionLevel - 1);
+            InputHelper.justClickedLeft = false;
+        }
+        if (ascPlusHitbox.hovered && InputHelper.justClickedLeft) {
+            ascensionLevel = Math.min(20, ascensionLevel + 1);
+            InputHelper.justClickedLeft = false;
+        }
+    }
+
+    private int getAvailableCount() {
+        switch (activeTab) {
+            case CARDS: return availableCards.size();
+            case RELICS: return availableRelics.size();
+            case POTIONS: return availablePotions.size();
+            default: return 0;
+        }
+    }
+
+    private void updateAvailableItems() {
         float y = LIST_START_Y + availableScrollY;
-        for (int i = 0; i < availableCards.size(); i++) {
-            float cardY = y - i * ROW_HEIGHT;
+        int count = getAvailableCount();
+
+        for (int i = 0; i < count; i++) {
+            float itemY = y - i * ROW_HEIGHT;
+
+            if (itemY > LIST_START_Y - LIST_HEIGHT && itemY < LIST_START_Y + ROW_HEIGHT) {
+                if (i < availableItemHitboxes.length) {
+                    availableItemHitboxes[i].move(LEFT_COLUMN_X, itemY - BUTTON_HEIGHT / 2.0f);
+                    availableItemHitboxes[i].update();
+
+                    if (availableItemHitboxes[i].hovered && InputHelper.justClickedLeft) {
+                        addItemFromAvailable(i);
+                        InputHelper.justClickedLeft = false;
+                    }
+                }
+            }
+        }
+    }
+
+    private void addItemFromAvailable(int index) {
+        switch (activeTab) {
+            case CARDS:
+                if (index < availableCards.size()) {
+                    addCardToDeck(availableCards.get(index));
+                }
+                break;
+            case RELICS:
+                if (index < availableRelics.size()) {
+                    addRelic(availableRelics.get(index));
+                }
+                break;
+            case POTIONS:
+                if (index < availablePotions.size()) {
+                    addPotion(availablePotions.get(index));
+                }
+                break;
+        }
+    }
+
+    private void updateSelectedItems() {
+        float y = LIST_START_Y + selectedScrollY;
+        int row = 0;
+        // Row width must match render code
+        float rowWidth = COLUMN_WIDTH - 20.0f * Settings.scale;
+
+        // Cards section
+        row++; // Header
+        for (int i = 0; i < deckCards.size(); i++) {
+            float cardY = y - row * ROW_HEIGHT;
+            row++;
 
             if (cardY > LIST_START_Y - LIST_HEIGHT && cardY < LIST_START_Y + ROW_HEIGHT) {
-                availableCardHitboxes[i].move(LEFT_COLUMN_X, cardY - BUTTON_HEIGHT / 2.0f);
-                availableCardHitboxes[i].update();
+                float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 70.0f * Settings.scale;
 
-                if (availableCardHitboxes[i].hovered && InputHelper.justClickedLeft) {
-                    addCardToDeck(availableCards.get(i));
-                    InputHelper.justClickedLeft = false;
+                // Upgrade button
+                if (i < deckCardUpgradeHitboxes.length) {
+                    deckCardUpgradeHitboxes[i].move(buttonX, cardY - BUTTON_HEIGHT / 2.0f);
+                    deckCardUpgradeHitboxes[i].update();
+                    if (deckCardUpgradeHitboxes[i].hovered && InputHelper.justClickedLeft) {
+                        toggleUpgrade(i);
+                        InputHelper.justClickedLeft = false;
+                    }
+                }
+
+                // Remove button
+                if (i < deckCardRemoveHitboxes.length) {
+                    deckCardRemoveHitboxes[i].move(buttonX + 35.0f * Settings.scale, cardY - BUTTON_HEIGHT / 2.0f);
+                    deckCardRemoveHitboxes[i].update();
+                    if (deckCardRemoveHitboxes[i].hovered && InputHelper.justClickedLeft) {
+                        removeCardFromDeck(i);
+                        InputHelper.justClickedLeft = false;
+                    }
                 }
             }
         }
 
-        // Update deck hitboxes and check for clicks
-        y = LIST_START_Y + deckScrollY;
-        for (int i = 0; i < deckCards.size(); i++) {
-            float cardY = y - i * ROW_HEIGHT;
+        // Relics section
+        row++; // Header
+        for (int i = 0; i < selectedRelics.size(); i++) {
+            float relicY = y - row * ROW_HEIGHT;
+            row++;
 
-            if (cardY > LIST_START_Y - LIST_HEIGHT && cardY < LIST_START_Y + ROW_HEIGHT) {
-                float buttonX = RIGHT_COLUMN_X + COLUMN_WIDTH / 2.0f - 70.0f * Settings.scale;
-
-                // Upgrade button
-                deckCardUpgradeHitboxes[i].move(buttonX, cardY - BUTTON_HEIGHT / 2.0f);
-                deckCardUpgradeHitboxes[i].update();
-                if (deckCardUpgradeHitboxes[i].hovered && InputHelper.justClickedLeft) {
-                    toggleUpgrade(i);
-                    InputHelper.justClickedLeft = false;
+            if (relicY > LIST_START_Y - LIST_HEIGHT && relicY < LIST_START_Y + ROW_HEIGHT) {
+                if (i < relicRemoveHitboxes.length) {
+                    float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 35.0f * Settings.scale;
+                    relicRemoveHitboxes[i].move(buttonX, relicY - BUTTON_HEIGHT / 2.0f);
+                    relicRemoveHitboxes[i].update();
+                    if (relicRemoveHitboxes[i].hovered && InputHelper.justClickedLeft) {
+                        removeRelic(i);
+                        InputHelper.justClickedLeft = false;
+                    }
                 }
+            }
+        }
 
-                // Remove button
-                deckCardRemoveHitboxes[i].move(buttonX + 40.0f * Settings.scale, cardY - BUTTON_HEIGHT / 2.0f);
-                deckCardRemoveHitboxes[i].update();
-                if (deckCardRemoveHitboxes[i].hovered && InputHelper.justClickedLeft) {
-                    removeCardFromDeck(i);
-                    InputHelper.justClickedLeft = false;
+        // Potions section
+        row++; // Header
+        for (int i = 0; i < selectedPotions.size(); i++) {
+            float potionY = y - row * ROW_HEIGHT;
+            row++;
+
+            if (potionY > LIST_START_Y - LIST_HEIGHT && potionY < LIST_START_Y + ROW_HEIGHT) {
+                if (i < potionRemoveHitboxes.length) {
+                    float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 35.0f * Settings.scale;
+                    potionRemoveHitboxes[i].move(buttonX, potionY - BUTTON_HEIGHT / 2.0f);
+                    potionRemoveHitboxes[i].update();
+                    if (potionRemoveHitboxes[i].hovered && InputHelper.justClickedLeft) {
+                        removePotion(i);
+                        InputHelper.justClickedLeft = false;
+                    }
                 }
             }
         }
@@ -315,7 +699,7 @@ public class LoadoutCreatorScreen {
         // Handle backspace
         if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.BACKSPACE) && !searchText.isEmpty()) {
             searchText = searchText.substring(0, searchText.length() - 1);
-            refreshAvailableCards();
+            refreshAvailableItems();
         }
 
         // Handle escape or enter to stop typing
@@ -324,39 +708,87 @@ public class LoadoutCreatorScreen {
             isTypingSearch = false;
         }
 
-        // Handle typed characters (A-Z, 0-9, space)
+        // Handle typed characters
         for (int keycode = com.badlogic.gdx.Input.Keys.A; keycode <= com.badlogic.gdx.Input.Keys.Z; keycode++) {
             if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(keycode)) {
                 char c = (char) ('a' + (keycode - com.badlogic.gdx.Input.Keys.A));
                 searchText += c;
-                refreshAvailableCards();
+                refreshAvailableItems();
             }
         }
         for (int keycode = com.badlogic.gdx.Input.Keys.NUM_0; keycode <= com.badlogic.gdx.Input.Keys.NUM_9; keycode++) {
             if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(keycode)) {
                 char c = (char) ('0' + (keycode - com.badlogic.gdx.Input.Keys.NUM_0));
                 searchText += c;
-                refreshAvailableCards();
+                refreshAvailableItems();
             }
         }
         if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.SPACE)) {
             searchText += ' ';
-            refreshAvailableCards();
+            refreshAvailableItems();
         }
+    }
+
+    private void updateStarterRelic() {
+        // Remove old starter relic and add new one
+        String newStarterRelicId = LoadoutConfig.getStarterRelicId(selectedClass);
+        if (newStarterRelicId != null) {
+            // Check if we already have a starter relic from the new class
+            boolean hasNewStarter = false;
+            for (AbstractRelic r : selectedRelics) {
+                if (r.relicId.equals(newStarterRelicId)) {
+                    hasNewStarter = true;
+                    break;
+                }
+            }
+
+            if (!hasNewStarter) {
+                // Remove old class starter relics
+                selectedRelics.removeIf(r ->
+                    r.relicId.equals("Burning Blood") ||
+                    r.relicId.equals("Ring of the Snake") ||
+                    r.relicId.equals("Cracked Core") ||
+                    r.relicId.equals("PureWater")
+                );
+
+                // Add new starter
+                AbstractRelic starterRelic = RelicLibrary.getRelic(newStarterRelicId);
+                if (starterRelic != null) {
+                    selectedRelics.add(0, starterRelic.makeCopy());
+                }
+            }
+        }
+        refreshSelectedHitboxes();
+    }
+
+    private void addStarterDeck() {
+        deckCards.clear();
+
+        // Get the character instance to access its starting deck
+        AbstractPlayer character = com.megacrit.cardcrawl.core.CardCrawlGame.characterManager.recreateCharacter(selectedClass);
+        if (character != null) {
+            java.util.ArrayList<String> starterCardIds = character.getStartingDeck();
+            for (String cardId : starterCardIds) {
+                AbstractCard card = CardLibrary.getCard(cardId);
+                if (card != null) {
+                    deckCards.add(new DeckCard(card.makeCopy()));
+                }
+            }
+        }
+
+        refreshSelectedHitboxes();
     }
 
     private void addCardToDeck(AbstractCard card) {
         DeckCard dc = new DeckCard(card.makeCopy());
         deckCards.add(dc);
-        refreshDeckHitboxes();
-        STSArena.logger.info("Added card to deck: " + card.name);
+        refreshSelectedHitboxes();
     }
 
     private void removeCardFromDeck(int index) {
         if (index >= 0 && index < deckCards.size()) {
-            STSArena.logger.info("Removed card from deck: " + deckCards.get(index).card.name);
             deckCards.remove(index);
-            refreshDeckHitboxes();
+            refreshSelectedHitboxes();
         }
     }
 
@@ -365,9 +797,67 @@ public class LoadoutCreatorScreen {
             DeckCard dc = deckCards.get(index);
             if (dc.card.canUpgrade() || dc.upgraded) {
                 dc.upgraded = !dc.upgraded;
-                STSArena.logger.info("Toggled upgrade for: " + dc.card.name + " -> " + dc.upgraded);
             }
         }
+    }
+
+    private void addRelic(AbstractRelic relic) {
+        selectedRelics.add(relic.makeCopy());
+        refreshSelectedHitboxes();
+        // Refresh available relics to remove the added one
+        if (activeTab == ContentTab.RELICS) {
+            refreshAvailableRelics();
+        }
+        // If Prismatic Shard was added, refresh cards
+        if (relic.relicId.equals("PrismaticShard") && activeTab == ContentTab.CARDS) {
+            refreshAvailableCards();
+        }
+    }
+
+    private void removeRelic(int index) {
+        if (index >= 0 && index < selectedRelics.size()) {
+            AbstractRelic removed = selectedRelics.remove(index);
+            refreshSelectedHitboxes();
+            // Refresh available relics
+            if (activeTab == ContentTab.RELICS) {
+                refreshAvailableRelics();
+            }
+            // If Prismatic Shard was removed, refresh cards
+            if (removed.relicId.equals("PrismaticShard") && activeTab == ContentTab.CARDS) {
+                refreshAvailableCards();
+            }
+        }
+    }
+
+    private void addPotion(AbstractPotion potion) {
+        // Limit potions (base is 3, but can be modified by ascension/relics)
+        int maxPotions = getPotionSlots();
+        if (selectedPotions.size() < maxPotions) {
+            selectedPotions.add(potion.makeCopy());
+            refreshSelectedHitboxes();
+        }
+    }
+
+    private void removePotion(int index) {
+        if (index >= 0 && index < selectedPotions.size()) {
+            selectedPotions.remove(index);
+            refreshSelectedHitboxes();
+        }
+    }
+
+    private int getPotionSlots() {
+        int slots = 3;
+        // Ascension 11+ reduces to 2
+        if (ascensionLevel >= 11) {
+            slots = 2;
+        }
+        // Potion Belt adds 2
+        for (AbstractRelic r : selectedRelics) {
+            if (r.relicId.equals("Potion Belt")) {
+                slots += 2;
+            }
+        }
+        return slots;
     }
 
     private void saveLoadout() {
@@ -383,22 +873,19 @@ public class LoadoutCreatorScreen {
             deck.add(copy);
         }
 
-        // Default values for MVP
-        int maxHp = LoadoutConfig.getBaseMaxHp(selectedClass);
-        int potionSlots = 3;
-        int ascension = 0;
-
-        // Just starter relic
+        // Copy relics
         List<AbstractRelic> relics = new ArrayList<>();
-        String starterRelicId = LoadoutConfig.getStarterRelicId(selectedClass);
-        if (starterRelicId != null) {
-            AbstractRelic starterRelic = RelicLibrary.getRelic(starterRelicId);
-            if (starterRelic != null) {
-                relics.add(starterRelic.makeCopy());
-            }
+        for (AbstractRelic r : selectedRelics) {
+            relics.add(r.makeCopy());
         }
 
+        // Copy potions
         List<AbstractPotion> potions = new ArrayList<>();
+        for (AbstractPotion p : selectedPotions) {
+            potions.add(p.makeCopy());
+        }
+
+        int potionSlots = getPotionSlots();
 
         // Generate name
         String className = selectedClass.name();
@@ -413,17 +900,18 @@ public class LoadoutCreatorScreen {
             relics,
             potions,
             potionSlots,
-            false,  // hasPrismaticShard
+            hasPrismaticShard(),
             maxHp,
-            maxHp,
-            ascension
+            currentHp,
+            ascensionLevel
         );
 
         ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
         long dbId = repo.saveLoadout(loadout);
 
         if (dbId > 0) {
-            STSArena.logger.info("Saved custom loadout with " + deck.size() + " cards");
+            STSArena.logger.info("Saved custom loadout with " + deck.size() + " cards, " +
+                relics.size() + " relics, " + potions.size() + " potions");
         }
 
         close();
@@ -434,7 +922,7 @@ public class LoadoutCreatorScreen {
         if (!isOpen) return;
 
         // Darken background
-        sb.setColor(new Color(0, 0, 0, 0.9f));
+        sb.setColor(new Color(0, 0, 0, 0.92f));
         sb.draw(ImageMaster.WHITE_SQUARE_IMG, 0, 0, Settings.WIDTH, Settings.HEIGHT);
 
         // Title
@@ -443,6 +931,53 @@ public class LoadoutCreatorScreen {
             Settings.WIDTH / 2.0f, TITLE_Y, Settings.GOLD_COLOR);
 
         // Save button
+        renderSaveButton(sb);
+
+        // Character tabs
+        renderCharacterTabs(sb);
+
+        // Stats row (HP, Max HP, Ascension)
+        renderStats(sb);
+
+        // Content tabs
+        renderContentTabs(sb);
+
+        // Search box
+        renderSearchBox(sb);
+
+        // Column headers
+        String leftHeader = getLeftColumnHeader();
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            leftHeader,
+            LEFT_COLUMN_X, LIST_START_Y + 25.0f * Settings.scale, Settings.GOLD_COLOR);
+
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            "Your Loadout",
+            RIGHT_COLUMN_X, LIST_START_Y + 25.0f * Settings.scale, Settings.GOLD_COLOR);
+
+        // Render available items (left panel)
+        renderAvailableItems(sb);
+
+        // Render selected items (right panel)
+        renderSelectedItems(sb);
+
+        // Cancel button
+        this.cancelButton.render(sb);
+
+        // Render cursor (must be last)
+        com.megacrit.cardcrawl.core.CardCrawlGame.cursor.render(sb);
+    }
+
+    private String getLeftColumnHeader() {
+        switch (activeTab) {
+            case CARDS: return "Available Cards (" + availableCards.size() + ")";
+            case RELICS: return "Available Relics (" + availableRelics.size() + ")";
+            case POTIONS: return "Available Potions (" + availablePotions.size() + ")";
+            default: return "";
+        }
+    }
+
+    private void renderSaveButton(SpriteBatch sb) {
         Color saveBgColor = saveButtonHitbox.hovered && !deckCards.isEmpty() ?
             new Color(0.2f, 0.5f, 0.2f, 0.9f) : new Color(0.1f, 0.3f, 0.1f, 0.6f);
         if (deckCards.isEmpty()) {
@@ -456,41 +991,16 @@ public class LoadoutCreatorScreen {
             "Save",
             saveButtonHitbox.cX, saveButtonHitbox.cY,
             deckCards.isEmpty() ? Settings.CREAM_COLOR : Settings.GREEN_TEXT_COLOR);
-
-        // Character tabs
-        renderCharacterTabs(sb);
-
-        // Search box
-        renderSearchBox(sb);
-
-        // Column headers
-        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
-            "Available Cards (" + availableCards.size() + ")",
-            LEFT_COLUMN_X, LIST_START_Y + 30.0f * Settings.scale, Settings.GOLD_COLOR);
-
-        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
-            "Your Deck (" + deckCards.size() + " cards)",
-            RIGHT_COLUMN_X, LIST_START_Y + 30.0f * Settings.scale, Settings.GOLD_COLOR);
-
-        // Render available cards (left panel)
-        renderAvailableCards(sb);
-
-        // Render deck cards (right panel)
-        renderDeckCards(sb);
-
-        // Cancel button
-        this.cancelButton.render(sb);
     }
 
     private void renderCharacterTabs(SpriteBatch sb) {
         String[] tabNames = {"Ironclad", "Silent", "Defect", "Watcher"};
 
         for (int i = 0; i < 4; i++) {
-            float tabX = TAB_START_X + i * TAB_WIDTH;
+            float tabX = CHAR_TAB_START_X + i * CHAR_TAB_WIDTH;
             boolean isSelected = LoadoutConfig.PLAYER_CLASSES[i] == selectedClass;
             boolean isHovered = characterTabHitboxes[i].hovered;
 
-            // Background
             Color bgColor;
             if (isSelected) {
                 bgColor = new Color(0.3f, 0.4f, 0.5f, 0.9f);
@@ -500,151 +1010,417 @@ public class LoadoutCreatorScreen {
                 bgColor = new Color(0.1f, 0.15f, 0.2f, 0.5f);
             }
             sb.setColor(bgColor);
-            sb.draw(ImageMaster.WHITE_SQUARE_IMG, tabX, TAB_Y - TAB_HEIGHT / 2.0f, TAB_WIDTH, TAB_HEIGHT);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, tabX, CHAR_TAB_Y - CHAR_TAB_HEIGHT / 2.0f, CHAR_TAB_WIDTH, CHAR_TAB_HEIGHT);
 
-            // Text
             Color textColor = isSelected ? Settings.GOLD_COLOR : Settings.CREAM_COLOR;
             FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
                 tabNames[i],
-                tabX + TAB_WIDTH / 2.0f, TAB_Y, textColor);
+                tabX + CHAR_TAB_WIDTH / 2.0f, CHAR_TAB_Y, textColor);
+        }
+    }
+
+    private void renderStats(SpriteBatch sb) {
+        float statsX = Settings.WIDTH / 2.0f + 80.0f * Settings.scale;
+        float btnSize = 30.0f * Settings.scale;
+
+        // HP
+        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+            "HP:",
+            statsX - 90.0f * Settings.scale, STATS_Y + 10.0f * Settings.scale, Settings.CREAM_COLOR);
+        renderStatButton(sb, hpMinusHitbox, "-");
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            String.valueOf(currentHp),
+            statsX + 40.0f * Settings.scale, STATS_Y, Settings.CREAM_COLOR);
+        renderStatButton(sb, hpPlusHitbox, "+");
+
+        // Max HP
+        float maxHpX = statsX + 160.0f * Settings.scale;
+        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+            "Max:",
+            maxHpX - 50.0f * Settings.scale, STATS_Y + 10.0f * Settings.scale, Settings.CREAM_COLOR);
+        renderStatButton(sb, maxHpMinusHitbox, "-");
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            String.valueOf(maxHp),
+            maxHpX + 40.0f * Settings.scale, STATS_Y, Settings.CREAM_COLOR);
+        renderStatButton(sb, maxHpPlusHitbox, "+");
+
+        // Ascension
+        float ascX = statsX + 320.0f * Settings.scale;
+        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+            "A:",
+            ascX - 30.0f * Settings.scale, STATS_Y + 10.0f * Settings.scale, Settings.CREAM_COLOR);
+        renderStatButton(sb, ascMinusHitbox, "-");
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            String.valueOf(ascensionLevel),
+            ascX + 30.0f * Settings.scale, STATS_Y, Settings.CREAM_COLOR);
+        renderStatButton(sb, ascPlusHitbox, "+");
+    }
+
+    private void renderStatButton(SpriteBatch sb, Hitbox hb, String text) {
+        Color bgColor = hb.hovered ? new Color(0.3f, 0.3f, 0.4f, 0.9f) : new Color(0.15f, 0.15f, 0.2f, 0.7f);
+        sb.setColor(bgColor);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, hb.x, hb.y, hb.width, hb.height);
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            text, hb.cX, hb.cY,
+            hb.hovered ? Settings.GOLD_COLOR : Settings.CREAM_COLOR);
+    }
+
+    private void renderContentTabs(SpriteBatch sb) {
+        String[] tabNames = {"Cards", "Relics", "Potions"};
+        float contentTabStartX = LEFT_COLUMN_X - CONTENT_TAB_WIDTH;
+
+        for (int i = 0; i < 3; i++) {
+            float tabX = contentTabStartX + i * CONTENT_TAB_WIDTH;
+            boolean isSelected = ContentTab.values()[i] == activeTab;
+            boolean isHovered = contentTabHitboxes[i].hovered;
+
+            Color bgColor;
+            if (isSelected) {
+                bgColor = new Color(0.25f, 0.35f, 0.45f, 0.9f);
+            } else if (isHovered) {
+                bgColor = new Color(0.2f, 0.25f, 0.35f, 0.7f);
+            } else {
+                bgColor = new Color(0.1f, 0.12f, 0.18f, 0.5f);
+            }
+            sb.setColor(bgColor);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, tabX, CONTENT_TAB_Y - CONTENT_TAB_HEIGHT / 2.0f,
+                CONTENT_TAB_WIDTH, CONTENT_TAB_HEIGHT);
+
+            Color textColor = isSelected ? Settings.GOLD_COLOR : Settings.CREAM_COLOR;
+            FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+                tabNames[i],
+                tabX + CONTENT_TAB_WIDTH / 2.0f, CONTENT_TAB_Y, textColor);
         }
     }
 
     private void renderSearchBox(SpriteBatch sb) {
-        // Background
         Color bgColor = isTypingSearch ? new Color(0.2f, 0.2f, 0.3f, 0.9f) : new Color(0.1f, 0.1f, 0.15f, 0.7f);
         sb.setColor(bgColor);
         sb.draw(ImageMaster.WHITE_SQUARE_IMG,
             searchBoxHitbox.x, searchBoxHitbox.y,
             searchBoxHitbox.width, searchBoxHitbox.height);
 
-        // Border if typing
         if (isTypingSearch) {
             sb.setColor(Settings.GOLD_COLOR);
-            // Top border
             sb.draw(ImageMaster.WHITE_SQUARE_IMG, searchBoxHitbox.x, searchBoxHitbox.y + searchBoxHitbox.height - 2, searchBoxHitbox.width, 2);
-            // Bottom border
             sb.draw(ImageMaster.WHITE_SQUARE_IMG, searchBoxHitbox.x, searchBoxHitbox.y, searchBoxHitbox.width, 2);
-            // Left border
             sb.draw(ImageMaster.WHITE_SQUARE_IMG, searchBoxHitbox.x, searchBoxHitbox.y, 2, searchBoxHitbox.height);
-            // Right border
             sb.draw(ImageMaster.WHITE_SQUARE_IMG, searchBoxHitbox.x + searchBoxHitbox.width - 2, searchBoxHitbox.y, 2, searchBoxHitbox.height);
         }
 
-        // Text
-        String displayText = searchText.isEmpty() ? "Search cards..." : searchText;
+        String displayText = searchText.isEmpty() ? "Search..." : searchText;
         Color textColor = searchText.isEmpty() ? new Color(0.5f, 0.5f, 0.5f, 1.0f) : Settings.CREAM_COLOR;
         if (isTypingSearch) {
-            displayText = searchText + "|";  // Cursor
+            displayText = searchText + "|";
         }
         FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
             displayText,
             searchBoxHitbox.cX, searchBoxHitbox.cY, textColor);
     }
 
-    private void renderAvailableCards(SpriteBatch sb) {
+    private void renderAvailableItems(SpriteBatch sb) {
         float y = LIST_START_Y + availableScrollY;
 
-        for (int i = 0; i < availableCards.size(); i++) {
-            float cardY = y - i * ROW_HEIGHT;
+        switch (activeTab) {
+            case CARDS:
+                renderAvailableCards(sb, y);
+                break;
+            case RELICS:
+                renderAvailableRelics(sb, y);
+                break;
+            case POTIONS:
+                renderAvailablePotions(sb, y);
+                break;
+        }
+    }
 
-            // Only render visible cards
+    private void renderAvailableCards(SpriteBatch sb, float startY) {
+        for (int i = 0; i < availableCards.size(); i++) {
+            float cardY = startY - i * ROW_HEIGHT;
+
             if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y + ROW_HEIGHT) {
                 AbstractCard card = availableCards.get(i);
-                boolean hovered = i < availableCardHitboxes.length && availableCardHitboxes[i].hovered;
+                boolean hovered = i < availableItemHitboxes.length && availableItemHitboxes[i].hovered;
 
-                // Background
                 Color bgColor = hovered ? new Color(0.2f, 0.3f, 0.2f, 0.8f) : new Color(0.1f, 0.1f, 0.15f, 0.5f);
                 sb.setColor(bgColor);
-                float rowWidth = COLUMN_WIDTH - 20.0f * Settings.scale;
+                float rowWidth = COLUMN_WIDTH - 30.0f * Settings.scale;
                 sb.draw(ImageMaster.WHITE_SQUARE_IMG,
                     LEFT_COLUMN_X - rowWidth / 2.0f, cardY - BUTTON_HEIGHT,
                     rowWidth, BUTTON_HEIGHT);
 
-                // Card name with cost
                 String costStr = card.cost >= 0 ? "[" + card.cost + "] " : "";
                 Color textColor = hovered ? Settings.GREEN_TEXT_COLOR : getCardTypeColor(card.type);
                 FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
                     costStr + card.name,
-                    LEFT_COLUMN_X - rowWidth / 2.0f + 10.0f * Settings.scale,
-                    cardY - 5.0f * Settings.scale, textColor);
+                    LEFT_COLUMN_X - rowWidth / 2.0f + 8.0f * Settings.scale,
+                    cardY - 4.0f * Settings.scale, textColor);
 
-                // [+] indicator on right
                 FontHelper.renderFontRightTopAligned(sb, FontHelper.cardDescFont_N,
                     "+",
-                    LEFT_COLUMN_X + rowWidth / 2.0f - 10.0f * Settings.scale,
-                    cardY - 5.0f * Settings.scale,
+                    LEFT_COLUMN_X + rowWidth / 2.0f - 8.0f * Settings.scale,
+                    cardY - 4.0f * Settings.scale,
                     hovered ? Settings.GREEN_TEXT_COLOR : Settings.CREAM_COLOR);
             }
         }
     }
 
-    private void renderDeckCards(SpriteBatch sb) {
-        float y = LIST_START_Y + deckScrollY;
+    private void renderAvailableRelics(SpriteBatch sb, float startY) {
+        for (int i = 0; i < availableRelics.size(); i++) {
+            float relicY = startY - i * ROW_HEIGHT;
 
-        for (int i = 0; i < deckCards.size(); i++) {
-            float cardY = y - i * ROW_HEIGHT;
+            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY < LIST_START_Y + ROW_HEIGHT) {
+                AbstractRelic relic = availableRelics.get(i);
+                boolean hovered = i < availableItemHitboxes.length && availableItemHitboxes[i].hovered;
 
-            // Only render visible cards
-            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y + ROW_HEIGHT) {
-                DeckCard dc = deckCards.get(i);
-                AbstractCard card = dc.card;
-
-                // Background
-                Color bgColor = new Color(0.1f, 0.1f, 0.15f, 0.5f);
+                Color bgColor = hovered ? new Color(0.2f, 0.3f, 0.2f, 0.8f) : new Color(0.1f, 0.1f, 0.15f, 0.5f);
                 sb.setColor(bgColor);
-                float rowWidth = COLUMN_WIDTH - 20.0f * Settings.scale;
+                float rowWidth = COLUMN_WIDTH - 30.0f * Settings.scale;
                 sb.draw(ImageMaster.WHITE_SQUARE_IMG,
-                    RIGHT_COLUMN_X - rowWidth / 2.0f, cardY - BUTTON_HEIGHT,
+                    LEFT_COLUMN_X - rowWidth / 2.0f, relicY - BUTTON_HEIGHT,
                     rowWidth, BUTTON_HEIGHT);
 
-                // Card name (with + if upgraded)
-                String name = card.name + (dc.upgraded ? "+" : "");
-                Color textColor = dc.upgraded ? Settings.GREEN_TEXT_COLOR : getCardTypeColor(card.type);
+                Color textColor = hovered ? Settings.GREEN_TEXT_COLOR : getRelicTierColor(relic.tier);
                 FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-                    name,
-                    RIGHT_COLUMN_X - rowWidth / 2.0f + 10.0f * Settings.scale,
-                    cardY - 5.0f * Settings.scale, textColor);
+                    relic.name,
+                    LEFT_COLUMN_X - rowWidth / 2.0f + 8.0f * Settings.scale,
+                    relicY - 4.0f * Settings.scale, textColor);
 
-                // Upgrade button [U]
-                boolean upgradeHovered = i < deckCardUpgradeHitboxes.length && deckCardUpgradeHitboxes[i].hovered;
-                boolean canUpgrade = card.canUpgrade();
-                Color upgradeBg = upgradeHovered && canUpgrade ? new Color(0.3f, 0.4f, 0.3f, 0.9f) : new Color(0.15f, 0.2f, 0.15f, 0.6f);
-                if (!canUpgrade && !dc.upgraded) {
-                    upgradeBg = new Color(0.2f, 0.2f, 0.2f, 0.3f);
-                }
-                float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 80.0f * Settings.scale;
-                sb.setColor(upgradeBg);
-                sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - ADD_BUTTON_WIDTH / 2.0f, cardY - BUTTON_HEIGHT, ADD_BUTTON_WIDTH, BUTTON_HEIGHT);
-                FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
-                    dc.upgraded ? "U" : "u",
-                    buttonX, cardY - BUTTON_HEIGHT / 2.0f,
-                    dc.upgraded ? Settings.GREEN_TEXT_COLOR : Settings.CREAM_COLOR);
-
-                // Remove button [-]
-                boolean removeHovered = i < deckCardRemoveHitboxes.length && deckCardRemoveHitboxes[i].hovered;
-                Color removeBg = removeHovered ? new Color(0.4f, 0.2f, 0.2f, 0.9f) : new Color(0.2f, 0.1f, 0.1f, 0.6f);
-                float removeX = buttonX + 40.0f * Settings.scale;
-                sb.setColor(removeBg);
-                sb.draw(ImageMaster.WHITE_SQUARE_IMG, removeX - ADD_BUTTON_WIDTH / 2.0f, cardY - BUTTON_HEIGHT, ADD_BUTTON_WIDTH, BUTTON_HEIGHT);
-                FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
-                    "-",
-                    removeX, cardY - BUTTON_HEIGHT / 2.0f,
-                    removeHovered ? Settings.RED_TEXT_COLOR : Settings.CREAM_COLOR);
+                FontHelper.renderFontRightTopAligned(sb, FontHelper.cardDescFont_N,
+                    "+",
+                    LEFT_COLUMN_X + rowWidth / 2.0f - 8.0f * Settings.scale,
+                    relicY - 4.0f * Settings.scale,
+                    hovered ? Settings.GREEN_TEXT_COLOR : Settings.CREAM_COLOR);
             }
         }
     }
 
+    private void renderAvailablePotions(SpriteBatch sb, float startY) {
+        int maxPotions = getPotionSlots();
+        boolean canAddMore = selectedPotions.size() < maxPotions;
+
+        for (int i = 0; i < availablePotions.size(); i++) {
+            float potionY = startY - i * ROW_HEIGHT;
+
+            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY < LIST_START_Y + ROW_HEIGHT) {
+                AbstractPotion potion = availablePotions.get(i);
+                boolean hovered = i < availableItemHitboxes.length && availableItemHitboxes[i].hovered && canAddMore;
+
+                Color bgColor = hovered ? new Color(0.2f, 0.3f, 0.2f, 0.8f) : new Color(0.1f, 0.1f, 0.15f, 0.5f);
+                if (!canAddMore) {
+                    bgColor = new Color(0.1f, 0.1f, 0.1f, 0.3f);
+                }
+                sb.setColor(bgColor);
+                float rowWidth = COLUMN_WIDTH - 30.0f * Settings.scale;
+                sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+                    LEFT_COLUMN_X - rowWidth / 2.0f, potionY - BUTTON_HEIGHT,
+                    rowWidth, BUTTON_HEIGHT);
+
+                Color textColor = canAddMore ? (hovered ? Settings.GREEN_TEXT_COLOR : getPotionRarityColor(potion.rarity)) : new Color(0.4f, 0.4f, 0.4f, 1.0f);
+                FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+                    potion.name,
+                    LEFT_COLUMN_X - rowWidth / 2.0f + 8.0f * Settings.scale,
+                    potionY - 4.0f * Settings.scale, textColor);
+
+                if (canAddMore) {
+                    FontHelper.renderFontRightTopAligned(sb, FontHelper.cardDescFont_N,
+                        "+",
+                        LEFT_COLUMN_X + rowWidth / 2.0f - 8.0f * Settings.scale,
+                        potionY - 4.0f * Settings.scale,
+                        hovered ? Settings.GREEN_TEXT_COLOR : Settings.CREAM_COLOR);
+                }
+            }
+        }
+    }
+
+    private void renderSelectedItems(SpriteBatch sb) {
+        float y = LIST_START_Y + selectedScrollY;
+        int row = 0;
+
+        // Cards section header
+        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+            "Deck (" + deckCards.size() + ")",
+            RIGHT_COLUMN_X - COLUMN_WIDTH / 2.0f + 8.0f * Settings.scale,
+            y - row * ROW_HEIGHT - 4.0f * Settings.scale, Settings.GOLD_COLOR);
+        row++;
+
+        // Cards
+        for (int i = 0; i < deckCards.size(); i++) {
+            float cardY = y - row * ROW_HEIGHT;
+            row++;
+
+            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y + ROW_HEIGHT) {
+                renderDeckCard(sb, i, cardY);
+            }
+        }
+
+        // Relics section header
+        float relicHeaderY = y - row * ROW_HEIGHT;
+        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+            "Relics (" + selectedRelics.size() + ")",
+            RIGHT_COLUMN_X - COLUMN_WIDTH / 2.0f + 8.0f * Settings.scale,
+            relicHeaderY - 4.0f * Settings.scale, Settings.GOLD_COLOR);
+        row++;
+
+        // Relics
+        for (int i = 0; i < selectedRelics.size(); i++) {
+            float relicY = y - row * ROW_HEIGHT;
+            row++;
+
+            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY < LIST_START_Y + ROW_HEIGHT) {
+                renderSelectedRelic(sb, i, relicY);
+            }
+        }
+
+        // Potions section header
+        int maxPotions = getPotionSlots();
+        float potionHeaderY = y - row * ROW_HEIGHT;
+        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+            "Potions (" + selectedPotions.size() + "/" + maxPotions + ")",
+            RIGHT_COLUMN_X - COLUMN_WIDTH / 2.0f + 8.0f * Settings.scale,
+            potionHeaderY - 4.0f * Settings.scale, Settings.GOLD_COLOR);
+        row++;
+
+        // Potions
+        for (int i = 0; i < selectedPotions.size(); i++) {
+            float potionY = y - row * ROW_HEIGHT;
+            row++;
+
+            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY < LIST_START_Y + ROW_HEIGHT) {
+                renderSelectedPotion(sb, i, potionY);
+            }
+        }
+    }
+
+    private void renderDeckCard(SpriteBatch sb, int index, float cardY) {
+        DeckCard dc = deckCards.get(index);
+        AbstractCard card = dc.card;
+
+        Color bgColor = new Color(0.1f, 0.1f, 0.15f, 0.5f);
+        sb.setColor(bgColor);
+        float rowWidth = COLUMN_WIDTH - 20.0f * Settings.scale;
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+            RIGHT_COLUMN_X - rowWidth / 2.0f, cardY - BUTTON_HEIGHT,
+            rowWidth, BUTTON_HEIGHT);
+
+        String name = card.name + (dc.upgraded ? "+" : "");
+        Color textColor = dc.upgraded ? Settings.GREEN_TEXT_COLOR : getCardTypeColor(card.type);
+        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+            name,
+            RIGHT_COLUMN_X - rowWidth / 2.0f + 8.0f * Settings.scale,
+            cardY - 4.0f * Settings.scale, textColor);
+
+        // Upgrade button
+        boolean upgradeHovered = index < deckCardUpgradeHitboxes.length && deckCardUpgradeHitboxes[index].hovered;
+        boolean canUpgrade = card.canUpgrade();
+        Color upgradeBg = upgradeHovered && canUpgrade ? new Color(0.3f, 0.4f, 0.3f, 0.9f) : new Color(0.15f, 0.2f, 0.15f, 0.6f);
+        if (!canUpgrade && !dc.upgraded) {
+            upgradeBg = new Color(0.2f, 0.2f, 0.2f, 0.3f);
+        }
+        float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 70.0f * Settings.scale;
+        sb.setColor(upgradeBg);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - SMALL_BUTTON_WIDTH / 2.0f, cardY - BUTTON_HEIGHT, SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            dc.upgraded ? "U" : "u",
+            buttonX, cardY - BUTTON_HEIGHT / 2.0f,
+            dc.upgraded ? Settings.GREEN_TEXT_COLOR : Settings.CREAM_COLOR);
+
+        // Remove button
+        boolean removeHovered = index < deckCardRemoveHitboxes.length && deckCardRemoveHitboxes[index].hovered;
+        Color removeBg = removeHovered ? new Color(0.4f, 0.2f, 0.2f, 0.9f) : new Color(0.2f, 0.1f, 0.1f, 0.6f);
+        float removeX = buttonX + 35.0f * Settings.scale;
+        sb.setColor(removeBg);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, removeX - SMALL_BUTTON_WIDTH / 2.0f, cardY - BUTTON_HEIGHT, SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            "-",
+            removeX, cardY - BUTTON_HEIGHT / 2.0f,
+            removeHovered ? Settings.RED_TEXT_COLOR : Settings.CREAM_COLOR);
+    }
+
+    private void renderSelectedRelic(SpriteBatch sb, int index, float relicY) {
+        AbstractRelic relic = selectedRelics.get(index);
+
+        Color bgColor = new Color(0.1f, 0.1f, 0.15f, 0.5f);
+        sb.setColor(bgColor);
+        float rowWidth = COLUMN_WIDTH - 20.0f * Settings.scale;
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+            RIGHT_COLUMN_X - rowWidth / 2.0f, relicY - BUTTON_HEIGHT,
+            rowWidth, BUTTON_HEIGHT);
+
+        Color textColor = getRelicTierColor(relic.tier);
+        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+            relic.name,
+            RIGHT_COLUMN_X - rowWidth / 2.0f + 8.0f * Settings.scale,
+            relicY - 4.0f * Settings.scale, textColor);
+
+        // Remove button
+        boolean removeHovered = index < relicRemoveHitboxes.length && relicRemoveHitboxes[index].hovered;
+        Color removeBg = removeHovered ? new Color(0.4f, 0.2f, 0.2f, 0.9f) : new Color(0.2f, 0.1f, 0.1f, 0.6f);
+        float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 35.0f * Settings.scale;
+        sb.setColor(removeBg);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - SMALL_BUTTON_WIDTH / 2.0f, relicY - BUTTON_HEIGHT, SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            "-",
+            buttonX, relicY - BUTTON_HEIGHT / 2.0f,
+            removeHovered ? Settings.RED_TEXT_COLOR : Settings.CREAM_COLOR);
+    }
+
+    private void renderSelectedPotion(SpriteBatch sb, int index, float potionY) {
+        AbstractPotion potion = selectedPotions.get(index);
+
+        Color bgColor = new Color(0.1f, 0.1f, 0.15f, 0.5f);
+        sb.setColor(bgColor);
+        float rowWidth = COLUMN_WIDTH - 20.0f * Settings.scale;
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+            RIGHT_COLUMN_X - rowWidth / 2.0f, potionY - BUTTON_HEIGHT,
+            rowWidth, BUTTON_HEIGHT);
+
+        Color textColor = getPotionRarityColor(potion.rarity);
+        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+            potion.name,
+            RIGHT_COLUMN_X - rowWidth / 2.0f + 8.0f * Settings.scale,
+            potionY - 4.0f * Settings.scale, textColor);
+
+        // Remove button
+        boolean removeHovered = index < potionRemoveHitboxes.length && potionRemoveHitboxes[index].hovered;
+        Color removeBg = removeHovered ? new Color(0.4f, 0.2f, 0.2f, 0.9f) : new Color(0.2f, 0.1f, 0.1f, 0.6f);
+        float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 35.0f * Settings.scale;
+        sb.setColor(removeBg);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - SMALL_BUTTON_WIDTH / 2.0f, potionY - BUTTON_HEIGHT, SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            "-",
+            buttonX, potionY - BUTTON_HEIGHT / 2.0f,
+            removeHovered ? Settings.RED_TEXT_COLOR : Settings.CREAM_COLOR);
+    }
+
     private Color getCardTypeColor(AbstractCard.CardType type) {
         switch (type) {
-            case ATTACK:
-                return new Color(0.9f, 0.4f, 0.4f, 1.0f);  // Reddish
-            case SKILL:
-                return new Color(0.4f, 0.7f, 0.9f, 1.0f);  // Bluish
-            case POWER:
-                return new Color(0.9f, 0.8f, 0.3f, 1.0f);  // Yellowish
-            default:
-                return Settings.CREAM_COLOR;
+            case ATTACK: return new Color(0.9f, 0.4f, 0.4f, 1.0f);
+            case SKILL: return new Color(0.4f, 0.7f, 0.9f, 1.0f);
+            case POWER: return new Color(0.9f, 0.8f, 0.3f, 1.0f);
+            default: return Settings.CREAM_COLOR;
+        }
+    }
+
+    private Color getRelicTierColor(AbstractRelic.RelicTier tier) {
+        switch (tier) {
+            case STARTER: return new Color(0.6f, 0.6f, 0.6f, 1.0f);
+            case COMMON: return new Color(0.7f, 0.7f, 0.7f, 1.0f);
+            case UNCOMMON: return new Color(0.4f, 0.7f, 0.9f, 1.0f);
+            case RARE: return new Color(0.9f, 0.8f, 0.3f, 1.0f);
+            case BOSS: return new Color(0.9f, 0.4f, 0.4f, 1.0f);
+            case SHOP: return new Color(0.5f, 0.9f, 0.5f, 1.0f);
+            case SPECIAL: return new Color(0.8f, 0.5f, 0.9f, 1.0f);
+            default: return Settings.CREAM_COLOR;
+        }
+    }
+
+    private Color getPotionRarityColor(AbstractPotion.PotionRarity rarity) {
+        switch (rarity) {
+            case COMMON: return new Color(0.7f, 0.7f, 0.7f, 1.0f);
+            case UNCOMMON: return new Color(0.4f, 0.7f, 0.9f, 1.0f);
+            case RARE: return new Color(0.9f, 0.8f, 0.3f, 1.0f);
+            default: return Settings.CREAM_COLOR;
         }
     }
 }

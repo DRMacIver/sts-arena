@@ -50,25 +50,29 @@ if [ ! -f "${JAR_PATH}" ]; then
     exit 1
 fi
 
-# Copy JAR with version in name for release
-cp "${JAR_PATH}" "target/${RELEASE_JAR}"
-
-echo "Built: target/${RELEASE_JAR}"
+echo "Build complete."
 echo ""
 
-# Check if tag already exists
-if git rev-parse "${TAG}" >/dev/null 2>&1; then
-    echo "Warning: Tag ${TAG} already exists."
-    read -p "Delete and recreate? (y/N) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        git tag -d "${TAG}"
-        gh release delete "${TAG}" --yes 2>/dev/null || true
-    else
-        echo "Aborting."
-        exit 1
-    fi
-fi
+# Auto-bump version if tag already exists
+while git rev-parse "${TAG}" >/dev/null 2>&1; do
+    echo "Tag ${TAG} already exists, bumping version..."
+
+    # Parse version components (handles X.Y.Z format)
+    IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION}"
+    MINOR=$((MINOR + 1))
+    PATCH=0
+    VERSION="${MAJOR}.${MINOR}.${PATCH}"
+    TAG="v${VERSION}"
+    RELEASE_JAR="STSArena-${VERSION}.jar"
+done
+
+echo "Using version: ${VERSION}"
+echo ""
+
+# Copy JAR with version in name for release
+cp "${JAR_PATH}" "target/${RELEASE_JAR}"
+echo "Release JAR: target/${RELEASE_JAR}"
+echo ""
 
 # Create tag
 echo "Creating tag ${TAG}..."
