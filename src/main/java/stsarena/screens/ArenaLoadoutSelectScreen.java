@@ -66,7 +66,24 @@ public class ArenaLoadoutSelectScreen {
     // Currently hovered item for preview
     private ListItem hoveredItem = null;
 
-    // Selection state
+    // Persistently selected item (for action buttons)
+    private ListItem selectedItem = null;
+
+    // Action buttons (shown when a saved loadout is selected)
+    private static final float ACTION_BUTTON_WIDTH = 180.0f * Settings.scale;
+    private static final float ACTION_BUTTON_HEIGHT = 40.0f * Settings.scale;
+    private static final float ACTION_BUTTON_SPACING = 50.0f * Settings.scale;
+    private Hitbox fightButtonHb, copyButtonHb, renameButtonHb, deleteButtonHb, loadoutHistoryButtonHb;
+
+    // Rename state
+    private boolean isRenaming = false;
+    private String renameText = "";
+
+    // Delete confirmation state
+    private boolean isConfirmingDelete = false;
+    private Hitbox confirmDeleteHb, cancelDeleteHb;
+
+    // Selection state for starting fights
     public static boolean useNewRandomLoadout = false;
     public static ArenaRepository.LoadoutRecord selectedSavedLoadout = null;
 
@@ -94,6 +111,17 @@ public class ArenaLoadoutSelectScreen {
         this.items = new ArrayList<>();
         this.hitboxes = new Hitbox[0];
         this.historyButtonHitbox = new Hitbox(HISTORY_BUTTON_WIDTH, HISTORY_BUTTON_HEIGHT);
+
+        // Action buttons
+        fightButtonHb = new Hitbox(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT);
+        copyButtonHb = new Hitbox(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT);
+        renameButtonHb = new Hitbox(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT);
+        deleteButtonHb = new Hitbox(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT);
+        loadoutHistoryButtonHb = new Hitbox(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT);
+
+        // Delete confirmation buttons
+        confirmDeleteHb = new Hitbox(80.0f * Settings.scale, 35.0f * Settings.scale);
+        cancelDeleteHb = new Hitbox(80.0f * Settings.scale, 35.0f * Settings.scale);
     }
 
     public void open() {
@@ -103,10 +131,16 @@ public class ArenaLoadoutSelectScreen {
         this.scrollY = 0.0f;
         this.targetScrollY = 0.0f;
         this.hoveredItem = null;
+        this.selectedItem = null;
 
         // Reset selection state
         useNewRandomLoadout = false;
         selectedSavedLoadout = null;
+
+        // Reset rename/delete state
+        this.isRenaming = false;
+        this.renameText = "";
+        this.isConfirmingDelete = false;
 
         // Build the item list
         buildItemList();
@@ -154,30 +188,58 @@ public class ArenaLoadoutSelectScreen {
     public void update() {
         if (!isOpen) return;
 
+        // Handle rename text input
+        if (isRenaming) {
+            handleRenameInput();
+        }
+
         // Cancel button
         this.cancelButton.update();
         if (this.cancelButton.hb.clicked || InputHelper.pressedEscape) {
             InputHelper.pressedEscape = false;
             this.cancelButton.hb.clicked = false;
+            // If renaming or confirming delete, cancel that instead of closing screen
+            if (isRenaming) {
+                isRenaming = false;
+                renameText = "";
+                return;
+            }
+            if (isConfirmingDelete) {
+                isConfirmingDelete = false;
+                return;
+            }
             this.close();
             return;
         }
 
-        // History button
+        // History button (global)
         historyButtonHitbox.move(HISTORY_BUTTON_X + HISTORY_BUTTON_WIDTH / 2.0f, HISTORY_BUTTON_Y + HISTORY_BUTTON_HEIGHT / 2.0f);
         historyButtonHitbox.update();
-        if (historyButtonHitbox.hovered && InputHelper.justClickedLeft) {
+        if (historyButtonHitbox.hovered && InputHelper.justClickedLeft && !isRenaming && !isConfirmingDelete) {
             InputHelper.justClickedLeft = false;
             this.close();
             STSArena.openHistoryScreen();
             return;
         }
 
-        // Scrolling
-        if (InputHelper.scrolledDown) {
-            targetScrollY += Settings.SCROLL_SPEED;
-        } else if (InputHelper.scrolledUp) {
-            targetScrollY -= Settings.SCROLL_SPEED;
+        // Handle delete confirmation
+        if (isConfirmingDelete && selectedItem != null && selectedItem.savedLoadout != null) {
+            updateDeleteConfirmation();
+            return;  // Block other interaction while confirming
+        }
+
+        // Update action buttons when a saved loadout is selected
+        if (selectedItem != null && selectedItem.savedLoadout != null && !isRenaming) {
+            updateActionButtons();
+        }
+
+        // Scrolling (only when not in modal states)
+        if (!isRenaming && !isConfirmingDelete) {
+            if (InputHelper.scrolledDown) {
+                targetScrollY += Settings.SCROLL_SPEED;
+            } else if (InputHelper.scrolledUp) {
+                targetScrollY -= Settings.SCROLL_SPEED;
+            }
         }
 
         // Clamp scroll
@@ -204,8 +266,8 @@ public class ArenaLoadoutSelectScreen {
 
                 if (hitboxes[i].hovered) {
                     hoveredItem = item;
-                    if (InputHelper.justClickedLeft) {
-                        selectLoadout(item);
+                    if (InputHelper.justClickedLeft && !isRenaming && !isConfirmingDelete) {
+                        handleItemClick(item);
                         return;
                     }
                 }
@@ -213,7 +275,140 @@ public class ArenaLoadoutSelectScreen {
         }
     }
 
-    private void selectLoadout(ListItem item) {
+    private void handleRenameInput() {
+        // Handle backspace
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.BACKSPACE) && !renameText.isEmpty()) {
+            renameText = renameText.substring(0, renameText.length() - 1);
+        }
+
+        // Handle enter to save
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ENTER)) {
+            if (!renameText.trim().isEmpty() && selectedItem != null && selectedItem.savedLoadout != null) {
+                // Save the new name
+                ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+                if (repo.renameLoadout(selectedItem.savedLoadout.dbId, renameText.trim())) {
+                    selectedItem.savedLoadout.name = renameText.trim();
+                    selectedItem.text = renameText.trim();
+                    STSArena.logger.info("Renamed loadout to: " + renameText.trim());
+                }
+            }
+            isRenaming = false;
+            renameText = "";
+            return;
+        }
+
+        // Handle escape to cancel
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ESCAPE)) {
+            isRenaming = false;
+            renameText = "";
+            return;
+        }
+
+        // Handle typed characters
+        for (int keycode = com.badlogic.gdx.Input.Keys.A; keycode <= com.badlogic.gdx.Input.Keys.Z; keycode++) {
+            if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(keycode)) {
+                boolean shift = com.badlogic.gdx.Gdx.input.isKeyPressed(com.badlogic.gdx.Input.Keys.SHIFT_LEFT) ||
+                                com.badlogic.gdx.Gdx.input.isKeyPressed(com.badlogic.gdx.Input.Keys.SHIFT_RIGHT);
+                char c = (char) ('a' + (keycode - com.badlogic.gdx.Input.Keys.A));
+                if (shift) c = Character.toUpperCase(c);
+                renameText += c;
+            }
+        }
+        for (int keycode = com.badlogic.gdx.Input.Keys.NUM_0; keycode <= com.badlogic.gdx.Input.Keys.NUM_9; keycode++) {
+            if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(keycode)) {
+                char c = (char) ('0' + (keycode - com.badlogic.gdx.Input.Keys.NUM_0));
+                renameText += c;
+            }
+        }
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.SPACE)) {
+            renameText += ' ';
+        }
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.MINUS)) {
+            renameText += '-';
+        }
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.PERIOD)) {
+            renameText += '.';
+        }
+    }
+
+    private void updateDeleteConfirmation() {
+        float centerX = RIGHT_PANEL_X + RIGHT_PANEL_WIDTH / 2.0f;
+        float centerY = Settings.HEIGHT / 2.0f;
+
+        confirmDeleteHb.move(centerX - 50.0f * Settings.scale, centerY - 50.0f * Settings.scale);
+        cancelDeleteHb.move(centerX + 50.0f * Settings.scale, centerY - 50.0f * Settings.scale);
+        confirmDeleteHb.update();
+        cancelDeleteHb.update();
+
+        if (InputHelper.justClickedLeft) {
+            if (confirmDeleteHb.hovered) {
+                // Delete the loadout
+                ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+                if (repo.deleteLoadout(selectedItem.savedLoadout.dbId)) {
+                    STSArena.logger.info("Deleted loadout: " + selectedItem.savedLoadout.name);
+                    // Refresh the list
+                    selectedItem = null;
+                    isConfirmingDelete = false;
+                    buildItemList();
+                    hitboxes = new Hitbox[items.size()];
+                    for (int i = 0; i < items.size(); i++) {
+                        hitboxes[i] = new Hitbox(LEFT_PANEL_WIDTH - 20.0f * Settings.scale, BUTTON_HEIGHT);
+                    }
+                }
+                InputHelper.justClickedLeft = false;
+            } else if (cancelDeleteHb.hovered) {
+                isConfirmingDelete = false;
+                InputHelper.justClickedLeft = false;
+            }
+        }
+    }
+
+    private void updateActionButtons() {
+        float buttonX = RIGHT_PANEL_X + RIGHT_PANEL_WIDTH / 2.0f;
+        float buttonStartY = 350.0f * Settings.scale;
+
+        fightButtonHb.move(buttonX, buttonStartY);
+        copyButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING);
+        renameButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 2);
+        loadoutHistoryButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 3);
+        deleteButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 4);
+
+        fightButtonHb.update();
+        copyButtonHb.update();
+        renameButtonHb.update();
+        loadoutHistoryButtonHb.update();
+        deleteButtonHb.update();
+
+        if (InputHelper.justClickedLeft) {
+            if (fightButtonHb.hovered) {
+                // Fight with this loadout
+                startFightWithSelectedLoadout();
+                InputHelper.justClickedLeft = false;
+            } else if (copyButtonHb.hovered) {
+                // Copy to loadout creator
+                this.close();
+                STSArena.openLoadoutCreatorWithLoadout(selectedItem.savedLoadout);
+                InputHelper.justClickedLeft = false;
+            } else if (renameButtonHb.hovered) {
+                // Start rename mode
+                isRenaming = true;
+                renameText = selectedItem.savedLoadout.name;
+                InputHelper.justClickedLeft = false;
+            } else if (loadoutHistoryButtonHb.hovered) {
+                // Open history for this loadout
+                this.close();
+                STSArena.openHistoryScreenForLoadout(selectedItem.savedLoadout.dbId, selectedItem.savedLoadout.name);
+                InputHelper.justClickedLeft = false;
+            } else if (deleteButtonHb.hovered) {
+                // Start delete confirmation
+                isConfirmingDelete = true;
+                InputHelper.justClickedLeft = false;
+            }
+        }
+    }
+
+    private void handleItemClick(ListItem item) {
+        // For Create Custom and New Random, navigate immediately
         if (item.isCustomCreate) {
             STSArena.logger.info("Opening custom loadout creator");
             this.close();
@@ -222,18 +417,30 @@ public class ArenaLoadoutSelectScreen {
         }
 
         if (item.isNewRandom) {
-            STSArena.logger.info("New random loadout selected");
+            STSArena.logger.info("New random loadout - proceeding to encounter selection");
             useNewRandomLoadout = true;
             selectedSavedLoadout = null;
-        } else if (item.savedLoadout != null) {
-            STSArena.logger.info("Saved loadout selected: " + item.savedLoadout.name);
-            useNewRandomLoadout = false;
-            selectedSavedLoadout = item.savedLoadout;
+            this.close();
+            STSArena.openEncounterSelectScreen();
+            return;
         }
 
-        // Close this screen and open encounter selection
-        this.close();
-        STSArena.openEncounterSelectScreen();
+        // For saved loadouts, just select it
+        if (item.savedLoadout != null) {
+            selectedItem = item;
+            isRenaming = false;
+            isConfirmingDelete = false;
+        }
+    }
+
+    private void startFightWithSelectedLoadout() {
+        if (selectedItem != null && selectedItem.savedLoadout != null) {
+            STSArena.logger.info("Saved loadout selected: " + selectedItem.savedLoadout.name);
+            useNewRandomLoadout = false;
+            selectedSavedLoadout = selectedItem.savedLoadout;
+            this.close();
+            STSArena.openEncounterSelectScreen();
+        }
     }
 
     public void render(SpriteBatch sb) {
@@ -288,9 +495,13 @@ public class ArenaLoadoutSelectScreen {
     }
 
     private void renderOption(SpriteBatch sb, ListItem item, float y, Hitbox hb) {
+        boolean isSelected = (selectedItem == item);
+
         // Background
         Color bgColor;
-        if (hb.hovered) {
+        if (isSelected) {
+            bgColor = new Color(0.2f, 0.4f, 0.3f, 0.9f);  // Green tint for selected
+        } else if (hb.hovered) {
             bgColor = new Color(0.3f, 0.3f, 0.4f, 0.8f);
         } else {
             bgColor = new Color(0.1f, 0.1f, 0.15f, 0.6f);
@@ -309,6 +520,8 @@ public class ArenaLoadoutSelectScreen {
         if (item.isCustomCreate) {
             textColor = new Color(0.4f, 0.8f, 1.0f, 1.0f);  // Cyan
         } else if (item.isNewRandom) {
+            textColor = Settings.GREEN_TEXT_COLOR;
+        } else if (isSelected) {
             textColor = Settings.GREEN_TEXT_COLOR;
         } else if (hb.hovered) {
             textColor = Settings.GOLD_COLOR;
@@ -348,21 +561,154 @@ public class ArenaLoadoutSelectScreen {
         sb.draw(ImageMaster.WHITE_SQUARE_IMG, RIGHT_PANEL_X, 100.0f * Settings.scale, borderWidth, Settings.HEIGHT - 200.0f * Settings.scale);
         sb.draw(ImageMaster.WHITE_SQUARE_IMG, RIGHT_PANEL_X + RIGHT_PANEL_WIDTH - borderWidth, 100.0f * Settings.scale, borderWidth, Settings.HEIGHT - 200.0f * Settings.scale);
 
-        if (hoveredItem == null) {
+        // Show delete confirmation if active
+        if (isConfirmingDelete && selectedItem != null && selectedItem.savedLoadout != null) {
+            renderDeleteConfirmation(sb);
+            return;
+        }
+
+        // Use selectedItem if available, otherwise hoveredItem
+        ListItem previewItem = selectedItem != null ? selectedItem : hoveredItem;
+
+        if (previewItem == null) {
             // No selection - show instruction
             FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
-                "Hover over a loadout to preview",
+                "Click a loadout to select it",
                 RIGHT_PANEL_X + RIGHT_PANEL_WIDTH / 2.0f, Settings.HEIGHT / 2.0f, Settings.CREAM_COLOR);
-        } else if (hoveredItem.isNewRandom || hoveredItem.isCustomCreate) {
-            // Random loadout - show question mark
-            renderRandomPreview(sb);
-        } else if (hoveredItem.savedLoadout != null) {
-            // Saved loadout - show details
-            renderLoadoutPreview(sb, hoveredItem.savedLoadout);
+        } else if (previewItem.isNewRandom || previewItem.isCustomCreate) {
+            // Random/Custom loadout - show question mark
+            renderRandomPreview(sb, previewItem);
+        } else if (previewItem.savedLoadout != null) {
+            // Saved loadout - show details and action buttons
+            renderLoadoutPreview(sb, previewItem.savedLoadout);
+
+            // Render action buttons (only if this is the selected item)
+            if (selectedItem == previewItem && !isRenaming) {
+                renderActionButtons(sb);
+            }
+
+            // Render rename input if active
+            if (isRenaming && selectedItem == previewItem) {
+                renderRenameInput(sb);
+            }
         }
     }
 
-    private void renderRandomPreview(SpriteBatch sb) {
+    private void renderActionButtons(SpriteBatch sb) {
+        float buttonX = RIGHT_PANEL_X + RIGHT_PANEL_WIDTH / 2.0f;
+        float buttonStartY = 350.0f * Settings.scale;
+
+        // Fight button (green)
+        renderActionButton(sb, fightButtonHb, "Fight", buttonStartY,
+            new Color(0.2f, 0.5f, 0.2f, 0.9f), Settings.GREEN_TEXT_COLOR);
+
+        // Copy button (blue)
+        renderActionButton(sb, copyButtonHb, "Copy", buttonStartY - ACTION_BUTTON_SPACING,
+            new Color(0.2f, 0.3f, 0.5f, 0.9f), new Color(0.5f, 0.7f, 1.0f, 1.0f));
+
+        // Rename button (gray)
+        renderActionButton(sb, renameButtonHb, "Rename", buttonStartY - ACTION_BUTTON_SPACING * 2,
+            new Color(0.25f, 0.25f, 0.3f, 0.9f), Settings.CREAM_COLOR);
+
+        // History button (gray)
+        renderActionButton(sb, loadoutHistoryButtonHb, "History", buttonStartY - ACTION_BUTTON_SPACING * 3,
+            new Color(0.25f, 0.25f, 0.3f, 0.9f), Settings.CREAM_COLOR);
+
+        // Delete button (red)
+        renderActionButton(sb, deleteButtonHb, "Delete", buttonStartY - ACTION_BUTTON_SPACING * 4,
+            new Color(0.5f, 0.2f, 0.2f, 0.9f), new Color(1.0f, 0.5f, 0.5f, 1.0f));
+    }
+
+    private void renderActionButton(SpriteBatch sb, Hitbox hb, String text, float y, Color bgColor, Color textColor) {
+        float buttonX = RIGHT_PANEL_X + RIGHT_PANEL_WIDTH / 2.0f;
+
+        // Darken or lighten on hover
+        Color finalBgColor = hb.hovered ?
+            new Color(bgColor.r * 1.3f, bgColor.g * 1.3f, bgColor.b * 1.3f, bgColor.a) : bgColor;
+        Color finalTextColor = hb.hovered ? Settings.GOLD_COLOR : textColor;
+
+        sb.setColor(finalBgColor);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+            buttonX - ACTION_BUTTON_WIDTH / 2.0f,
+            y - ACTION_BUTTON_HEIGHT / 2.0f,
+            ACTION_BUTTON_WIDTH,
+            ACTION_BUTTON_HEIGHT);
+
+        // Border
+        sb.setColor(hb.hovered ? Settings.GOLD_COLOR : new Color(0.4f, 0.4f, 0.5f, 1.0f));
+        float bw = 2.0f * Settings.scale;
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - ACTION_BUTTON_WIDTH / 2.0f, y - ACTION_BUTTON_HEIGHT / 2.0f, ACTION_BUTTON_WIDTH, bw);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - ACTION_BUTTON_WIDTH / 2.0f, y + ACTION_BUTTON_HEIGHT / 2.0f - bw, ACTION_BUTTON_WIDTH, bw);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - ACTION_BUTTON_WIDTH / 2.0f, y - ACTION_BUTTON_HEIGHT / 2.0f, bw, ACTION_BUTTON_HEIGHT);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX + ACTION_BUTTON_WIDTH / 2.0f - bw, y - ACTION_BUTTON_HEIGHT / 2.0f, bw, ACTION_BUTTON_HEIGHT);
+
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N, text, buttonX, y, finalTextColor);
+    }
+
+    private void renderRenameInput(SpriteBatch sb) {
+        float centerX = RIGHT_PANEL_X + RIGHT_PANEL_WIDTH / 2.0f;
+        float y = 350.0f * Settings.scale;
+
+        // Input box background
+        float inputWidth = 300.0f * Settings.scale;
+        float inputHeight = 40.0f * Settings.scale;
+
+        sb.setColor(new Color(0.1f, 0.1f, 0.15f, 1.0f));
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+            centerX - inputWidth / 2.0f, y - inputHeight / 2.0f,
+            inputWidth, inputHeight);
+
+        // Border
+        sb.setColor(Settings.GOLD_COLOR);
+        float bw = 2.0f * Settings.scale;
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, centerX - inputWidth / 2.0f, y - inputHeight / 2.0f, inputWidth, bw);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, centerX - inputWidth / 2.0f, y + inputHeight / 2.0f - bw, inputWidth, bw);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, centerX - inputWidth / 2.0f, y - inputHeight / 2.0f, bw, inputHeight);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, centerX + inputWidth / 2.0f - bw, y - inputHeight / 2.0f, bw, inputHeight);
+
+        // Text with cursor
+        String displayText = renameText + "|";
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N, displayText, centerX, y, Settings.CREAM_COLOR);
+
+        // Instructions
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            "Press Enter to save, Escape to cancel",
+            centerX, y - 50.0f * Settings.scale, new Color(0.6f, 0.6f, 0.6f, 1.0f));
+    }
+
+    private void renderDeleteConfirmation(SpriteBatch sb) {
+        float centerX = RIGHT_PANEL_X + RIGHT_PANEL_WIDTH / 2.0f;
+        float centerY = Settings.HEIGHT / 2.0f;
+
+        // Warning message
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            "Delete \"" + selectedItem.savedLoadout.name + "\"?",
+            centerX, centerY + 50.0f * Settings.scale, Settings.RED_TEXT_COLOR);
+
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            "This will also delete all fight history for this loadout.",
+            centerX, centerY + 20.0f * Settings.scale, Settings.CREAM_COLOR);
+
+        // Confirm button
+        Color confirmBg = confirmDeleteHb.hovered ? new Color(0.6f, 0.2f, 0.2f, 1.0f) : new Color(0.4f, 0.15f, 0.15f, 0.9f);
+        sb.setColor(confirmBg);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+            confirmDeleteHb.x, confirmDeleteHb.y, confirmDeleteHb.width, confirmDeleteHb.height);
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N, "Delete",
+            confirmDeleteHb.cX, confirmDeleteHb.cY,
+            confirmDeleteHb.hovered ? Settings.RED_TEXT_COLOR : Settings.CREAM_COLOR);
+
+        // Cancel button
+        Color cancelBg = cancelDeleteHb.hovered ? new Color(0.3f, 0.3f, 0.4f, 1.0f) : new Color(0.2f, 0.2f, 0.25f, 0.9f);
+        sb.setColor(cancelBg);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+            cancelDeleteHb.x, cancelDeleteHb.y, cancelDeleteHb.width, cancelDeleteHb.height);
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N, "Cancel",
+            cancelDeleteHb.cX, cancelDeleteHb.cY,
+            cancelDeleteHb.hovered ? Settings.GOLD_COLOR : Settings.CREAM_COLOR);
+    }
+
+    private void renderRandomPreview(SpriteBatch sb, ListItem item) {
         float centerX = RIGHT_PANEL_X + RIGHT_PANEL_WIDTH / 2.0f;
         float centerY = Settings.HEIGHT / 2.0f;
 
@@ -379,7 +725,7 @@ public class ArenaLoadoutSelectScreen {
             centerX, centerY, Settings.GOLD_COLOR);
 
         // Label
-        String label = hoveredItem.isCustomCreate ? "Create New Custom Loadout" : "Random Loadout";
+        String label = item.isCustomCreate ? "Create New Custom Loadout" : "Random Loadout";
         FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
             label,
             centerX, centerY - boxSize / 2.0f - 40.0f * Settings.scale, Settings.CREAM_COLOR);

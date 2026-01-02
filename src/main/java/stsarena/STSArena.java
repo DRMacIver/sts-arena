@@ -16,6 +16,7 @@ import org.apache.logging.log4j.Logger;
 import stsarena.arena.ArenaRunner;
 import stsarena.arena.SaveFileManager;
 import stsarena.data.ArenaDatabase;
+import stsarena.data.ArenaRepository;
 import stsarena.screens.ArenaEncounterSelectScreen;
 import stsarena.screens.ArenaHistoryScreen;
 import stsarena.screens.ArenaLoadoutSelectScreen;
@@ -218,6 +219,24 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     public static void openLoadoutCreatorScreen() {
         if (loadoutCreatorScreen != null) {
             loadoutCreatorScreen.open();
+        }
+    }
+
+    /**
+     * Open the loadout creator screen pre-populated with an existing loadout (for copying).
+     */
+    public static void openLoadoutCreatorWithLoadout(ArenaRepository.LoadoutRecord loadout) {
+        if (loadoutCreatorScreen != null) {
+            loadoutCreatorScreen.openWithLoadout(loadout);
+        }
+    }
+
+    /**
+     * Open the history screen filtered to a specific loadout.
+     */
+    public static void openHistoryScreenForLoadout(long loadoutId, String loadoutName) {
+        if (historyScreen != null) {
+            historyScreen.openForLoadout(loadoutId, loadoutName);
         }
     }
 

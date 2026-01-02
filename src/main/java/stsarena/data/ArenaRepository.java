@@ -405,6 +405,110 @@ public class ArenaRepository {
     }
 
     /**
+     * Delete a loadout and its associated arena runs.
+     * Returns true if successful.
+     */
+    public boolean deleteLoadout(long loadoutId) {
+        try {
+            // First delete associated arena runs
+            String deleteRunsSql = "DELETE FROM arena_runs WHERE loadout_id = ?";
+            try (PreparedStatement stmt = database.getConnection().prepareStatement(deleteRunsSql)) {
+                stmt.setLong(1, loadoutId);
+                int deletedRuns = stmt.executeUpdate();
+                logger.info("Deleted " + deletedRuns + " arena runs for loadout " + loadoutId);
+            }
+
+            // Then delete the loadout
+            String deleteLoadoutSql = "DELETE FROM loadouts WHERE id = ?";
+            try (PreparedStatement stmt = database.getConnection().prepareStatement(deleteLoadoutSql)) {
+                stmt.setLong(1, loadoutId);
+                int deleted = stmt.executeUpdate();
+                if (deleted > 0) {
+                    logger.info("Deleted loadout " + loadoutId);
+                    return true;
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to delete loadout", e);
+        }
+        return false;
+    }
+
+    /**
+     * Rename a loadout.
+     * Returns true if successful.
+     */
+    public boolean renameLoadout(long loadoutId, String newName) {
+        String sql = "UPDATE loadouts SET name = ? WHERE id = ?";
+
+        try (PreparedStatement stmt = database.getConnection().prepareStatement(sql)) {
+            stmt.setString(1, newName);
+            stmt.setLong(2, loadoutId);
+
+            int updated = stmt.executeUpdate();
+            if (updated > 0) {
+                logger.info("Renamed loadout " + loadoutId + " to: " + newName);
+                return true;
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to rename loadout", e);
+        }
+        return false;
+    }
+
+    /**
+     * Get arena runs for a specific loadout.
+     */
+    public List<ArenaRunRecord> getRunsForLoadout(long loadoutId, int limit) {
+        String sql = "SELECT r.id, r.loadout_id, r.started_at, r.ended_at, r.outcome, r.starting_hp, r.ending_hp, " +
+                     "r.encounter_id, r.potions_used_json, r.damage_dealt, r.damage_taken, r.turns_taken, " +
+                     "l.name as loadout_name, l.character_class " +
+                     "FROM arena_runs r " +
+                     "JOIN loadouts l ON r.loadout_id = l.id " +
+                     "WHERE r.loadout_id = ? AND r.outcome IS NOT NULL " +
+                     "ORDER BY r.started_at DESC " +
+                     "LIMIT ?";
+
+        List<ArenaRunRecord> results = new ArrayList<>();
+
+        try (PreparedStatement stmt = database.getConnection().prepareStatement(sql)) {
+            stmt.setLong(1, loadoutId);
+            stmt.setInt(2, limit);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    ArenaRunRecord record = new ArenaRunRecord();
+                    record.id = rs.getLong("id");
+                    record.loadoutId = rs.getLong("loadout_id");
+                    record.startedAt = rs.getLong("started_at");
+                    record.endedAt = rs.getLong("ended_at");
+                    record.outcome = rs.getString("outcome");
+                    record.startingHp = rs.getInt("starting_hp");
+                    record.endingHp = rs.getInt("ending_hp");
+                    record.encounterId = rs.getString("encounter_id");
+                    record.loadoutName = rs.getString("loadout_name");
+                    record.characterClass = rs.getString("character_class");
+                    record.damageDealt = rs.getInt("damage_dealt");
+                    record.damageTaken = rs.getInt("damage_taken");
+                    record.turnsTaken = rs.getInt("turns_taken");
+
+                    String potionsJson = rs.getString("potions_used_json");
+                    if (potionsJson != null) {
+                        Type listType = new TypeToken<List<String>>(){}.getType();
+                        record.potionsUsed = gson.fromJson(potionsJson, listType);
+                    }
+
+                    results.add(record);
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to get runs for loadout", e);
+        }
+
+        return results;
+    }
+
+    /**
      * Get encounter outcomes for a specific loadout.
      * Returns a map of encounter ID to outcome (VICTORY or DEFEAT).
      * If an encounter was faced multiple times, returns the most recent outcome.

@@ -46,20 +46,50 @@ public class ArenaHistoryScreen {
     // Replay button hitboxes (one per row)
     private Hitbox[] replayHitboxes;
 
+    // Filter by loadout (null = show all)
+    private Long filterLoadoutId = null;
+    private String filterLoadoutName = null;
+
     public ArenaHistoryScreen() {
         this.cancelButton = new MenuCancelButton();
     }
 
     public void open() {
-        STSArena.logger.info("Opening Arena History Screen");
+        // Clear any filter when opening normally
+        this.filterLoadoutId = null;
+        this.filterLoadoutName = null;
+        openInternal();
+    }
+
+    /**
+     * Open the history screen filtered to a specific loadout.
+     */
+    public void openForLoadout(long loadoutId, String loadoutName) {
+        this.filterLoadoutId = loadoutId;
+        this.filterLoadoutName = loadoutName;
+        openInternal();
+    }
+
+    private void openInternal() {
+        STSArena.logger.info("Opening Arena History Screen" +
+            (filterLoadoutId != null ? " for loadout: " + filterLoadoutName : ""));
         this.isOpen = true;
         this.cancelButton.show("Return");
 
         // Load data from database
         try {
             ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
-            this.recentRuns = repo.getRecentRuns(50);
-            this.stats = repo.getStats();
+
+            if (filterLoadoutId != null) {
+                // Filtered mode - show runs for specific loadout
+                this.recentRuns = repo.getRunsForLoadout(filterLoadoutId, 50);
+                this.stats = null;  // Don't show overall stats in filtered mode
+            } else {
+                // Normal mode - show all runs
+                this.recentRuns = repo.getRecentRuns(50);
+                this.stats = repo.getStats();
+            }
+
             STSArena.logger.info("Loaded " + recentRuns.size() + " arena runs");
 
             // Create hitboxes for replay buttons
@@ -156,14 +186,28 @@ public class ArenaHistoryScreen {
         sb.draw(com.megacrit.cardcrawl.helpers.ImageMaster.WHITE_SQUARE_IMG, 0, 0, Settings.WIDTH, Settings.HEIGHT);
 
         // Title
+        String title = filterLoadoutName != null ?
+            "History: " + filterLoadoutName : "Arena History";
         FontHelper.renderFontCentered(sb, FontHelper.SCP_cardTitleFont_small,
-            "Arena History",
+            title,
             Settings.WIDTH / 2.0f, TITLE_Y, Settings.GOLD_COLOR);
 
-        // Stats summary
-        if (stats != null) {
+        // Stats summary (only in unfiltered mode)
+        if (stats != null && filterLoadoutId == null) {
             String statsText = String.format("Total Runs: %d  |  Wins: %d  |  Losses: %d  |  Win Rate: %.1f%%",
                 stats.totalRuns, stats.wins, stats.losses, stats.getWinRate() * 100);
+            FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+                statsText,
+                Settings.WIDTH / 2.0f, STATS_Y, Settings.CREAM_COLOR);
+        } else if (filterLoadoutId != null && recentRuns != null) {
+            // Show simple count in filtered mode
+            int wins = 0, losses = 0;
+            for (ArenaRepository.ArenaRunRecord run : recentRuns) {
+                if ("VICTORY".equals(run.outcome)) wins++;
+                else if ("DEFEAT".equals(run.outcome)) losses++;
+            }
+            String statsText = String.format("Runs: %d  |  Wins: %d  |  Losses: %d",
+                recentRuns.size(), wins, losses);
             FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
                 statsText,
                 Settings.WIDTH / 2.0f, STATS_Y, Settings.CREAM_COLOR);

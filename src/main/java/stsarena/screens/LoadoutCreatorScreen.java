@@ -25,6 +25,10 @@ import stsarena.arena.RandomLoadoutGenerator;
 import stsarena.data.ArenaDatabase;
 import stsarena.data.ArenaRepository;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -111,6 +115,9 @@ public class LoadoutCreatorScreen {
 
     // Save button
     private Hitbox saveButtonHitbox;
+
+    // For parsing JSON
+    private static final Gson gson = new Gson();
 
     /**
      * A card in the deck with its upgrade status.
@@ -209,6 +216,98 @@ public class LoadoutCreatorScreen {
         this.isOpen = false;
         this.cancelButton.hide();
         this.isTypingSearch = false;
+    }
+
+    /**
+     * Open the loadout creator pre-populated with data from an existing loadout.
+     * Used for "Copy" functionality.
+     */
+    public void openWithLoadout(ArenaRepository.LoadoutRecord loadout) {
+        STSArena.logger.info("Opening Loadout Creator with existing loadout: " + loadout.name);
+
+        // Call open() to initialize the screen with defaults
+        this.isOpen = true;
+        this.cancelButton.show("Cancel");
+        this.searchText = "";
+        this.isTypingSearch = false;
+        this.deckCards.clear();
+        this.selectedRelics.clear();
+        this.selectedPotions.clear();
+        this.availableScrollY = 0.0f;
+        this.availableTargetScrollY = 0.0f;
+        this.selectedScrollY = 0.0f;
+        this.selectedTargetScrollY = 0.0f;
+
+        // Set character class from loadout
+        try {
+            this.selectedClass = AbstractPlayer.PlayerClass.valueOf(loadout.characterClass);
+        } catch (IllegalArgumentException e) {
+            this.selectedClass = AbstractPlayer.PlayerClass.IRONCLAD;
+        }
+
+        // Set HP and ascension from loadout
+        this.maxHp = loadout.maxHp;
+        this.currentHp = loadout.currentHp;
+        this.ascensionLevel = loadout.ascensionLevel;
+
+        // Parse and populate deck
+        try {
+            Type cardListType = new TypeToken<List<ArenaRepository.CardData>>(){}.getType();
+            List<ArenaRepository.CardData> cardDataList = gson.fromJson(loadout.deckJson, cardListType);
+            if (cardDataList != null) {
+                for (ArenaRepository.CardData cardData : cardDataList) {
+                    AbstractCard card = CardLibrary.getCard(cardData.id);
+                    if (card != null) {
+                        DeckCard dc = new DeckCard(card.makeCopy());
+                        dc.upgraded = cardData.upgrades > 0;
+                        deckCards.add(dc);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            STSArena.logger.error("Failed to parse deck from loadout", e);
+        }
+
+        // Parse and populate relics
+        try {
+            Type relicListType = new TypeToken<List<String>>(){}.getType();
+            List<String> relicIds = gson.fromJson(loadout.relicsJson, relicListType);
+            if (relicIds != null) {
+                for (String relicId : relicIds) {
+                    if (RelicLibrary.isARelic(relicId)) {
+                        AbstractRelic relic = RelicLibrary.getRelic(relicId);
+                        if (relic != null) {
+                            selectedRelics.add(relic.makeCopy());
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            STSArena.logger.error("Failed to parse relics from loadout", e);
+        }
+
+        // Parse and populate potions
+        try {
+            Type potionListType = new TypeToken<List<String>>(){}.getType();
+            List<String> potionIds = gson.fromJson(loadout.potionsJson, potionListType);
+            if (potionIds != null) {
+                for (String potionId : potionIds) {
+                    AbstractPotion potion = PotionHelper.getPotion(potionId);
+                    if (potion != null) {
+                        selectedPotions.add(potion.makeCopy());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            STSArena.logger.error("Failed to parse potions from loadout", e);
+        }
+
+        // Initialize potions for this class
+        PotionHelper.initialize(selectedClass);
+
+        // Build available items list
+        refreshAvailableItems();
+        refreshSelectedHitboxes();
     }
 
     private boolean hasPrismaticShard() {
