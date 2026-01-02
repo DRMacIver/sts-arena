@@ -53,18 +53,32 @@ fi
 echo "Build complete."
 echo ""
 
-# Auto-bump version if tag already exists
-while git rev-parse "${TAG}" >/dev/null 2>&1; do
-    echo "Tag ${TAG} already exists, bumping version..."
+# Check if tag already exists and points to HEAD
+TAG_EXISTS=false
+TAG_AT_HEAD=false
+if git rev-parse "${TAG}" >/dev/null 2>&1; then
+    TAG_EXISTS=true
+    TAG_COMMIT=$(git rev-parse "${TAG}^{commit}" 2>/dev/null || git rev-parse "${TAG}")
+    HEAD_COMMIT=$(git rev-parse HEAD)
+    if [ "${TAG_COMMIT}" = "${HEAD_COMMIT}" ]; then
+        TAG_AT_HEAD=true
+    fi
+fi
 
-    # Parse version components (handles X.Y.Z format)
-    IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION}"
-    MINOR=$((MINOR + 1))
-    PATCH=0
-    VERSION="${MAJOR}.${MINOR}.${PATCH}"
-    TAG="v${VERSION}"
-    RELEASE_JAR="STSArena-${VERSION}.jar"
-done
+if [ "${TAG_EXISTS}" = true ] && [ "${TAG_AT_HEAD}" = false ]; then
+    # Tag exists but not at HEAD - bump version
+    while git rev-parse "${TAG}" >/dev/null 2>&1; do
+        echo "Tag ${TAG} already exists (not at HEAD), bumping version..."
+
+        # Parse version components (handles X.Y.Z format)
+        IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION}"
+        MINOR=$((MINOR + 1))
+        PATCH=0
+        VERSION="${MAJOR}.${MINOR}.${PATCH}"
+        TAG="v${VERSION}"
+        RELEASE_JAR="STSArena-${VERSION}.jar"
+    done
+fi
 
 echo "Using version: ${VERSION}"
 echo ""
@@ -74,20 +88,29 @@ cp "${JAR_PATH}" "target/${RELEASE_JAR}"
 echo "Release JAR: target/${RELEASE_JAR}"
 echo ""
 
-# Create tag
-echo "Creating tag ${TAG}..."
-git tag -a "${TAG}" -m "Release ${VERSION}"
+# Create and push tag if needed
+if [ "${TAG_AT_HEAD}" = true ]; then
+    echo "Tag ${TAG} already exists at HEAD, skipping tag creation."
+else
+    echo "Creating tag ${TAG}..."
+    git tag -a "${TAG}" -m "Release ${VERSION}"
 
-# Push tag
-echo "Pushing tag..."
-git push origin "${TAG}"
+    echo "Pushing tag..."
+    git push origin "${TAG}"
+fi
 
-# Create GitHub release
-echo "Creating GitHub release..."
-gh release create "${TAG}" \
-    --title "STS Arena ${VERSION}" \
-    --notes "See [README](README.md) for installation and usage instructions." \
-    "target/${RELEASE_JAR}"
+# Check if GitHub release already exists
+if gh release view "${TAG}" >/dev/null 2>&1; then
+    echo "GitHub release ${TAG} already exists."
+    echo "Uploading JAR to existing release..."
+    gh release upload "${TAG}" "target/${RELEASE_JAR}" --clobber
+else
+    echo "Creating GitHub release..."
+    gh release create "${TAG}" \
+        --title "STS Arena ${VERSION}" \
+        --notes "See [README](README.md) for installation and usage instructions." \
+        "target/${RELEASE_JAR}"
+fi
 
 echo ""
 echo "=== Release ${VERSION} created successfully! ==="
