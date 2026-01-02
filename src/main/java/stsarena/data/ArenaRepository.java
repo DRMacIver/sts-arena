@@ -38,8 +38,8 @@ public class ArenaRepository {
     public long saveLoadout(RandomLoadoutGenerator.GeneratedLoadout loadout) {
         logger.info("saveLoadout called for: " + loadout.name + " (id=" + loadout.id + ")");
 
-        String sql = "INSERT INTO loadouts (uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, created_at, ascension_level) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO loadouts (uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, potion_slots, created_at, ascension_level) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         Connection conn = database.getConnection();
         if (conn == null) {
@@ -56,8 +56,9 @@ public class ArenaRepository {
             stmt.setString(6, serializeDeck(loadout.deck));
             stmt.setString(7, serializeRelics(loadout.relics));
             stmt.setString(8, serializePotions(loadout.potions));
-            stmt.setLong(9, loadout.createdAt);
-            stmt.setInt(10, loadout.ascensionLevel);
+            stmt.setInt(9, loadout.potionSlots);
+            stmt.setLong(10, loadout.createdAt);
+            stmt.setInt(11, loadout.ascensionLevel);
 
             logger.info("saveLoadout: Executing insert...");
             int rows = stmt.executeUpdate();
@@ -317,7 +318,7 @@ public class ArenaRepository {
      * Get a specific loadout by database ID.
      */
     public LoadoutRecord getLoadoutById(long loadoutId) {
-        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, created_at, ascension_level " +
+        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, potion_slots, created_at, ascension_level " +
                      "FROM loadouts WHERE id = ?";
 
         try (PreparedStatement stmt = database.getConnection().prepareStatement(sql)) {
@@ -335,6 +336,7 @@ public class ArenaRepository {
                     record.deckJson = rs.getString("deck_json");
                     record.relicsJson = rs.getString("relics_json");
                     record.potionsJson = rs.getString("potions_json");
+                    record.potionSlots = rs.getInt("potion_slots");
                     record.createdAt = rs.getLong("created_at");
                     record.ascensionLevel = rs.getInt("ascension_level");
                     return record;
@@ -351,7 +353,7 @@ public class ArenaRepository {
      * Get saved loadouts for selection.
      */
     public List<LoadoutRecord> getLoadouts(int limit) {
-        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, created_at, ascension_level " +
+        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, potion_slots, created_at, ascension_level " +
                      "FROM loadouts ORDER BY created_at DESC LIMIT ?";
 
         List<LoadoutRecord> results = new ArrayList<>();
@@ -371,6 +373,7 @@ public class ArenaRepository {
                     record.deckJson = rs.getString("deck_json");
                     record.relicsJson = rs.getString("relics_json");
                     record.potionsJson = rs.getString("potions_json");
+                    record.potionSlots = rs.getInt("potion_slots");
                     record.createdAt = rs.getLong("created_at");
                     record.ascensionLevel = rs.getInt("ascension_level");
                     results.add(record);
@@ -396,6 +399,7 @@ public class ArenaRepository {
         public String deckJson;
         public String relicsJson;
         public String potionsJson;
+        public int potionSlots;
         public long createdAt;
         public int ascensionLevel;
     }

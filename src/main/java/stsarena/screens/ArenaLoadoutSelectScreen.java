@@ -48,12 +48,14 @@ public class ArenaLoadoutSelectScreen {
         String text;
         boolean isNewRandom;
         boolean isHeader;
+        boolean isCustomCreate;
         ArenaRepository.LoadoutRecord savedLoadout;
 
-        ListItem(String text, boolean isNewRandom, boolean isHeader, ArenaRepository.LoadoutRecord savedLoadout) {
+        ListItem(String text, boolean isNewRandom, boolean isHeader, boolean isCustomCreate, ArenaRepository.LoadoutRecord savedLoadout) {
             this.text = text;
             this.isNewRandom = isNewRandom;
             this.isHeader = isHeader;
+            this.isCustomCreate = isCustomCreate;
             this.savedLoadout = savedLoadout;
         }
     }
@@ -88,8 +90,11 @@ public class ArenaLoadoutSelectScreen {
     private void buildItemList() {
         items.clear();
 
+        // Create custom loadout option
+        items.add(new ListItem("+ Create Custom Loadout", false, false, true, null));
+
         // New random loadout option
-        items.add(new ListItem("New Random Loadout", true, false, null));
+        items.add(new ListItem("New Random Loadout", true, false, false, null));
 
         // Load saved loadouts from database
         try {
@@ -98,11 +103,11 @@ public class ArenaLoadoutSelectScreen {
 
             if (!loadouts.isEmpty()) {
                 // Add header
-                items.add(new ListItem("--- Saved Loadouts ---", false, true, null));
+                items.add(new ListItem("--- Saved Loadouts ---", false, true, false, null));
 
                 for (ArenaRepository.LoadoutRecord loadout : loadouts) {
                     String label = loadout.name + " (" + loadout.characterClass + ", A" + loadout.ascensionLevel + ")";
-                    items.add(new ListItem(label, false, false, loadout));
+                    items.add(new ListItem(label, false, false, false, loadout));
                 }
             }
         } catch (Exception e) {
@@ -164,6 +169,13 @@ public class ArenaLoadoutSelectScreen {
     }
 
     private void selectLoadout(ListItem item) {
+        if (item.isCustomCreate) {
+            STSArena.logger.info("Opening custom loadout creator");
+            this.close();
+            STSArena.openLoadoutCreatorScreen();
+            return;
+        }
+
         if (item.isNewRandom) {
             STSArena.logger.info("New random loadout selected");
             useNewRandomLoadout = true;
@@ -202,7 +214,7 @@ public class ArenaLoadoutSelectScreen {
                 if (item.isHeader) {
                     renderHeader(sb, item.text, buttonY);
                 } else {
-                    renderOption(sb, item.text, buttonY, hitboxes[i], item.isNewRandom);
+                    renderOption(sb, item.text, buttonY, hitboxes[i], item.isNewRandom, item.isCustomCreate);
                 }
             }
         }
@@ -217,7 +229,7 @@ public class ArenaLoadoutSelectScreen {
             CENTER_X, y - BUTTON_HEIGHT / 2.0f, Settings.GOLD_COLOR);
     }
 
-    private void renderOption(SpriteBatch sb, String text, float y, Hitbox hb, boolean isNewRandom) {
+    private void renderOption(SpriteBatch sb, String text, float y, Hitbox hb, boolean isNewRandom, boolean isCustomCreate) {
         // Background for button
         Color bgColor;
         if (hb.hovered) {
@@ -235,7 +247,9 @@ public class ArenaLoadoutSelectScreen {
 
         // Text
         Color textColor;
-        if (isNewRandom) {
+        if (isCustomCreate) {
+            textColor = new Color(0.4f, 0.8f, 1.0f, 1.0f);  // Cyan for create custom
+        } else if (isNewRandom) {
             textColor = Settings.GREEN_TEXT_COLOR;
         } else if (hb.hovered) {
             textColor = Settings.GOLD_COLOR;

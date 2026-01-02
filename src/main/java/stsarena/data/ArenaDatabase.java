@@ -15,7 +15,7 @@ import java.sql.*;
 public class ArenaDatabase {
 
     private static final String DB_NAME = "arena.db";
-    private static final int SCHEMA_VERSION = 4;
+    private static final int SCHEMA_VERSION = 5;
     private static final Logger logger = LogManager.getLogger(ArenaDatabase.class.getName());
 
     private static ArenaDatabase instance;
@@ -103,114 +103,139 @@ public class ArenaDatabase {
                 ")"
             );
 
-            // Check if we need to recreate tables by checking if uuid column exists
-            boolean needsRecreate = false;
-            try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(loadouts)")) {
-                boolean hasUuid = false;
-                while (rs.next()) {
-                    if ("uuid".equals(rs.getString("name"))) {
-                        hasUuid = true;
-                        break;
-                    }
+            // Get current schema version
+            int currentVersion = 0;
+            try (ResultSet rs = stmt.executeQuery("SELECT version FROM schema_version")) {
+                if (rs.next()) {
+                    currentVersion = rs.getInt("version");
                 }
-                // If table exists but doesn't have uuid, we need to recreate
-                needsRecreate = !hasUuid;
-            } catch (SQLException e) {
-                // Table might not exist yet, which is fine
-                logger.info("loadouts table doesn't exist yet, will create it");
             }
 
-            if (needsRecreate) {
-                logger.info("Schema needs upgrade - dropping old tables");
-                stmt.execute("DROP TABLE IF EXISTS arena_runs");
-                stmt.execute("DROP TABLE IF EXISTS loadouts");
-                stmt.execute("DROP INDEX IF EXISTS idx_arena_runs_loadout");
-                stmt.execute("DROP INDEX IF EXISTS idx_arena_runs_started_at");
-                stmt.execute("DROP INDEX IF EXISTS idx_arena_runs_outcome");
-                stmt.execute("DROP INDEX IF EXISTS idx_loadouts_uuid");
-                stmt.execute("DROP INDEX IF EXISTS idx_loadouts_character");
+            logger.info("Current schema version: " + currentVersion + ", target: " + SCHEMA_VERSION);
+
+            // Run migrations incrementally
+            if (currentVersion < 1) {
+                migrateToV1(stmt);
             }
-
-            // Loadouts table - saved deck/relic/potion configurations
-            // uuid is the unique string identifier, id is for internal references
-            stmt.execute(
-                "CREATE TABLE IF NOT EXISTS loadouts (" +
-                "    id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "    uuid TEXT NOT NULL UNIQUE," +
-                "    name TEXT NOT NULL," +
-                "    character_class TEXT NOT NULL," +
-                "    max_hp INTEGER NOT NULL," +
-                "    current_hp INTEGER NOT NULL," +
-                "    deck_json TEXT NOT NULL," +
-                "    relics_json TEXT NOT NULL," +
-                "    created_at INTEGER NOT NULL," +
-                "    ascension_level INTEGER NOT NULL DEFAULT 0" +
-                ")"
-            );
-
-            // Add ascension_level column if it doesn't exist (migration)
-            try {
-                stmt.execute("ALTER TABLE loadouts ADD COLUMN ascension_level INTEGER NOT NULL DEFAULT 0");
-                logger.info("Added ascension_level column to loadouts table");
-            } catch (SQLException e) {
-                // Column already exists, ignore
+            if (currentVersion < 2) {
+                migrateToV2(stmt);
             }
-
-            // Add potions_json column if it doesn't exist (migration)
-            try {
-                stmt.execute("ALTER TABLE loadouts ADD COLUMN potions_json TEXT");
-                logger.info("Added potions_json column to loadouts table");
-            } catch (SQLException e) {
-                // Column already exists, ignore
+            if (currentVersion < 3) {
+                migrateToV3(stmt);
             }
-
-            // Arena runs table - records of arena fights with outcomes
-            stmt.execute(
-                "CREATE TABLE IF NOT EXISTS arena_runs (" +
-                "    id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "    loadout_id INTEGER NOT NULL," +
-                "    encounter_id TEXT NOT NULL," +
-                "    started_at INTEGER NOT NULL," +
-                "    ended_at INTEGER," +
-                "    outcome TEXT," +  // 'VICTORY', 'DEFEAT', 'ABANDONED', or NULL if in progress
-                "    starting_hp INTEGER NOT NULL," +
-                "    ending_hp INTEGER," +
-                "    potions_used_json TEXT," +  // JSON array of potion IDs used
-                "    damage_dealt INTEGER," +
-                "    damage_taken INTEGER," +
-                "    turns_taken INTEGER," +
-                "    cards_played INTEGER," +
-                "    relics_triggered_json TEXT," +  // JSON array of relic IDs that had effects
-                "    FOREIGN KEY (loadout_id) REFERENCES loadouts(id) ON DELETE CASCADE" +
-                ")"
-            );
-
-            // Indexes for common queries
-            stmt.execute(
-                "CREATE INDEX IF NOT EXISTS idx_arena_runs_loadout " +
-                "ON arena_runs(loadout_id)"
-            );
-            stmt.execute(
-                "CREATE INDEX IF NOT EXISTS idx_arena_runs_started_at " +
-                "ON arena_runs(started_at DESC)"
-            );
-            stmt.execute(
-                "CREATE INDEX IF NOT EXISTS idx_arena_runs_outcome " +
-                "ON arena_runs(outcome)"
-            );
-            stmt.execute(
-                "CREATE INDEX IF NOT EXISTS idx_loadouts_uuid " +
-                "ON loadouts(uuid)"
-            );
-            stmt.execute(
-                "CREATE INDEX IF NOT EXISTS idx_loadouts_character " +
-                "ON loadouts(character_class)"
-            );
+            if (currentVersion < 4) {
+                migrateToV4(stmt);
+            }
+            if (currentVersion < 5) {
+                migrateToV5(stmt);
+            }
 
             // Record schema version
             stmt.execute(
                 "INSERT OR REPLACE INTO schema_version (version) VALUES (" + SCHEMA_VERSION + ")"
             );
+        }
+    }
+
+    /**
+     * V1: Initial schema - loadouts and arena_runs tables
+     */
+    private void migrateToV1(Statement stmt) throws SQLException {
+        logger.info("Running migration to V1: creating base tables");
+
+        // Loadouts table
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS loadouts (" +
+            "    id INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "    uuid TEXT NOT NULL UNIQUE," +
+            "    name TEXT NOT NULL," +
+            "    character_class TEXT NOT NULL," +
+            "    max_hp INTEGER NOT NULL," +
+            "    current_hp INTEGER NOT NULL," +
+            "    deck_json TEXT NOT NULL," +
+            "    relics_json TEXT NOT NULL," +
+            "    created_at INTEGER NOT NULL" +
+            ")"
+        );
+
+        // Arena runs table
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS arena_runs (" +
+            "    id INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "    loadout_id INTEGER NOT NULL," +
+            "    encounter_id TEXT NOT NULL," +
+            "    started_at INTEGER NOT NULL," +
+            "    ended_at INTEGER," +
+            "    outcome TEXT," +
+            "    starting_hp INTEGER NOT NULL," +
+            "    ending_hp INTEGER," +
+            "    potions_used_json TEXT," +
+            "    damage_dealt INTEGER," +
+            "    damage_taken INTEGER," +
+            "    turns_taken INTEGER," +
+            "    cards_played INTEGER," +
+            "    relics_triggered_json TEXT," +
+            "    FOREIGN KEY (loadout_id) REFERENCES loadouts(id) ON DELETE CASCADE" +
+            ")"
+        );
+
+        // Indexes
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_arena_runs_loadout ON arena_runs(loadout_id)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_arena_runs_started_at ON arena_runs(started_at DESC)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_arena_runs_outcome ON arena_runs(outcome)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_loadouts_uuid ON loadouts(uuid)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_loadouts_character ON loadouts(character_class)");
+    }
+
+    /**
+     * V2: Add ascension_level column
+     */
+    private void migrateToV2(Statement stmt) throws SQLException {
+        logger.info("Running migration to V2: adding ascension_level");
+        addColumnIfNotExists(stmt, "loadouts", "ascension_level", "INTEGER NOT NULL DEFAULT 0");
+    }
+
+    /**
+     * V3: Reserved (was a failed migration attempt)
+     */
+    private void migrateToV3(Statement stmt) throws SQLException {
+        // No-op, kept for version continuity
+    }
+
+    /**
+     * V4: Add potions_json column
+     */
+    private void migrateToV4(Statement stmt) throws SQLException {
+        logger.info("Running migration to V4: adding potions_json");
+        addColumnIfNotExists(stmt, "loadouts", "potions_json", "TEXT");
+    }
+
+    /**
+     * V5: Add potion_slots column
+     */
+    private void migrateToV5(Statement stmt) throws SQLException {
+        logger.info("Running migration to V5: adding potion_slots");
+        addColumnIfNotExists(stmt, "loadouts", "potion_slots", "INTEGER NOT NULL DEFAULT 3");
+    }
+
+    /**
+     * Helper to add a column if it doesn't exist.
+     */
+    private void addColumnIfNotExists(Statement stmt, String table, String column, String definition) throws SQLException {
+        // Check if column exists
+        boolean exists = false;
+        try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(" + table + ")")) {
+            while (rs.next()) {
+                if (column.equals(rs.getString("name"))) {
+                    exists = true;
+                    break;
+                }
+            }
+        }
+
+        if (!exists) {
+            stmt.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
+            logger.info("Added column " + column + " to " + table);
         }
     }
 

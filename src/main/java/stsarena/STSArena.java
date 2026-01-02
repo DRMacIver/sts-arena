@@ -18,6 +18,7 @@ import stsarena.data.ArenaDatabase;
 import stsarena.screens.ArenaEncounterSelectScreen;
 import stsarena.screens.ArenaHistoryScreen;
 import stsarena.screens.ArenaLoadoutSelectScreen;
+import stsarena.screens.LoadoutCreatorScreen;
 
 /**
  * STS Arena - A Slay the Spire mod for playing isolated single fights as practice runs.
@@ -38,6 +39,7 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     public static ArenaHistoryScreen historyScreen;
     public static ArenaEncounterSelectScreen encounterSelectScreen;
     public static ArenaLoadoutSelectScreen loadoutSelectScreen;
+    public static LoadoutCreatorScreen loadoutCreatorScreen;
 
     // Flag to trigger fight start on next update (gives game time to initialize)
     private static boolean pendingFightStart = false;
@@ -73,6 +75,7 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         historyScreen = new ArenaHistoryScreen();
         encounterSelectScreen = new ArenaEncounterSelectScreen();
         loadoutSelectScreen = new ArenaLoadoutSelectScreen();
+        loadoutCreatorScreen = new LoadoutCreatorScreen();
 
         // Arena Mode button is added via patches/MainMenuArenaPatch
     }
@@ -111,6 +114,12 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         }
         if (loadoutSelectScreen != null && loadoutSelectScreen.isOpen) {
             loadoutSelectScreen.update();
+            // Consume remaining input to block main menu
+            InputHelper.justClickedLeft = false;
+            InputHelper.justClickedRight = false;
+        }
+        if (loadoutCreatorScreen != null && loadoutCreatorScreen.isOpen) {
+            loadoutCreatorScreen.update();
             // Consume remaining input to block main menu
             InputHelper.justClickedLeft = false;
             InputHelper.justClickedRight = false;
@@ -166,6 +175,9 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         if (loadoutSelectScreen != null && loadoutSelectScreen.isOpen) {
             loadoutSelectScreen.render(sb);
         }
+        if (loadoutCreatorScreen != null && loadoutCreatorScreen.isOpen) {
+            loadoutCreatorScreen.render(sb);
+        }
     }
 
     /**
@@ -193,6 +205,15 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     public static void openLoadoutSelectScreen() {
         if (loadoutSelectScreen != null) {
             loadoutSelectScreen.open();
+        }
+    }
+
+    /**
+     * Open the loadout creator screen.
+     */
+    public static void openLoadoutCreatorScreen() {
+        if (loadoutCreatorScreen != null) {
+            loadoutCreatorScreen.open();
         }
     }
 

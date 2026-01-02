@@ -133,7 +133,10 @@ public class NormalRunLoadoutSaver {
             // Use pre-combat potions
             List<AbstractPotion> potions = new ArrayList<>(combatStartPotions);
 
-            STSArena.logger.info("Saving defeat loadout with pre-combat HP: " + hp + "/" + maxHp + ", potions: " + potions.size());
+            // Get potion slots from player
+            int potionSlots = player.potionSlots;
+
+            STSArena.logger.info("Saving defeat loadout with pre-combat HP: " + hp + "/" + maxHp + ", potions: " + potions.size() + ", slots: " + potionSlots);
 
             // Create the loadout
             RandomLoadoutGenerator.GeneratedLoadout loadout = new RandomLoadoutGenerator.GeneratedLoadout(
@@ -144,6 +147,7 @@ public class NormalRunLoadoutSaver {
                 deck,
                 relics,
                 potions,
+                potionSlots,
                 hasPrismaticShard,
                 maxHp,
                 hp,
@@ -207,6 +211,9 @@ public class NormalRunLoadoutSaver {
                 }
             }
 
+            // Get potion slots from player
+            int potionSlots = player.potionSlots;
+
             // Create the loadout with current state
             RandomLoadoutGenerator.GeneratedLoadout loadout = new RandomLoadoutGenerator.GeneratedLoadout(
                 id,
@@ -216,6 +223,7 @@ public class NormalRunLoadoutSaver {
                 deck,
                 relics,
                 potions,
+                potionSlots,
                 hasPrismaticShard,
                 player.maxHealth,
                 player.currentHealth,

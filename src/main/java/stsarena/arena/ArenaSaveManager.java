@@ -73,7 +73,8 @@ public class ArenaSaveManager {
         save.put("max_health", loadout.maxHp);
         save.put("gold", 100);
         save.put("hand_size", 5);
-        save.put("potion_slots", 3);
+        // Use the stored potion slots (accounts for ascension and Potion Belt)
+        save.put("potion_slots", loadout.potionSlots);
         // Energy is stored in red field (all characters use this)
         save.put("red", 3);
         save.put("green", 0);
@@ -110,8 +111,7 @@ public class ArenaSaveManager {
 
         // Potions - use loadout potions, fill remaining slots with empty
         List<String> potions = new ArrayList<>();
-        int potionSlots = 3;
-        for (int i = 0; i < potionSlots; i++) {
+        for (int i = 0; i < loadout.potionSlots; i++) {
             if (i < loadout.potions.size()) {
                 potions.add(loadout.potions.get(i).ID);
             } else {

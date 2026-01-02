@@ -38,6 +38,7 @@ public class RandomLoadoutGenerator {
         public final List<AbstractCard> deck;
         public final List<AbstractRelic> relics;
         public final List<AbstractPotion> potions;
+        public final int potionSlots;     // Number of potion slots (affected by ascension and Potion Belt)
         public final boolean hasPrismaticShard;
         public final int maxHp;
         public final int currentHp;
@@ -46,6 +47,7 @@ public class RandomLoadoutGenerator {
         public GeneratedLoadout(String id, String name, long createdAt,
                                 AbstractPlayer.PlayerClass playerClass, List<AbstractCard> deck,
                                 List<AbstractRelic> relics, List<AbstractPotion> potions,
+                                int potionSlots,
                                 boolean hasPrismaticShard,
                                 int maxHp, int currentHp, int ascensionLevel) {
             this.id = id;
@@ -55,6 +57,7 @@ public class RandomLoadoutGenerator {
             this.deck = deck;
             this.relics = relics;
             this.potions = potions != null ? potions : new ArrayList<>();
+            this.potionSlots = potionSlots;
             this.hasPrismaticShard = hasPrismaticShard;
             this.maxHp = maxHp;
             this.currentHp = currentHp;
@@ -105,10 +108,20 @@ public class RandomLoadoutGenerator {
         // Random loadouts start with no potions
         List<AbstractPotion> potions = new ArrayList<>();
 
+        // Calculate potion slots based on ascension and relics
+        int potionSlots = ascensionLevel >= 11 ? 2 : 3;
+        // Check if we have Potion Belt
+        for (AbstractRelic relic : relics) {
+            if ("Potion Belt".equals(relic.relicId)) {
+                potionSlots += 2;
+                break;
+            }
+        }
+
         STSArena.logger.info("Generated loadout '" + name + "': " + deck.size() + " cards, " +
                             relics.size() + " relics, " + currentHp + "/" + maxHp + " HP, A" + ascensionLevel);
 
-        return new GeneratedLoadout(id, name, createdAt, playerClass, deck, relics, potions, hasPrismaticShard, maxHp, currentHp, ascensionLevel);
+        return new GeneratedLoadout(id, name, createdAt, playerClass, deck, relics, potions, potionSlots, hasPrismaticShard, maxHp, currentHp, ascensionLevel);
     }
 
     /**
@@ -379,8 +392,21 @@ public class RandomLoadoutGenerator {
             STSArena.logger.error("Failed to deserialize potions", e);
         }
 
+        // Use stored potionSlots, fall back to calculating from ascension/relics if not stored
+        int potionSlots = record.potionSlots;
+        if (potionSlots == 0) {
+            // Legacy records without potion_slots - calculate from ascension and relics
+            potionSlots = record.ascensionLevel >= 11 ? 2 : 3;
+            for (AbstractRelic relic : relics) {
+                if ("Potion Belt".equals(relic.relicId)) {
+                    potionSlots += 2;
+                    break;
+                }
+            }
+        }
+
         STSArena.logger.info("Reconstructed loadout: " + deck.size() + " cards, " + relics.size() + " relics, " +
-            potions.size() + " potions, A" + record.ascensionLevel);
+            potions.size() + " potions, " + potionSlots + " slots, A" + record.ascensionLevel);
 
         return new GeneratedLoadout(
             record.uuid,
@@ -390,6 +416,7 @@ public class RandomLoadoutGenerator {
             deck,
             relics,
             potions,
+            potionSlots,
             hasPrismaticShard,
             record.maxHp,
             record.currentHp,
