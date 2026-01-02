@@ -17,10 +17,10 @@ public class LoadoutConfigTest {
 
     @Test
     public void testPlayerClassesArray() {
-        assertEquals("Should have 4 player classes", 4, LoadoutConfig.PLAYER_CLASSES.length);
+        assertEquals("Should have 4 player classes", 4, LoadoutConfig.getPlayerClasses().length);
 
         boolean hasIronclad = false, hasSilent = false, hasDefect = false, hasWatcher = false;
-        for (AbstractPlayer.PlayerClass pc : LoadoutConfig.PLAYER_CLASSES) {
+        for (AbstractPlayer.PlayerClass pc : LoadoutConfig.getPlayerClasses()) {
             if (pc == AbstractPlayer.PlayerClass.IRONCLAD) hasIronclad = true;
             if (pc == AbstractPlayer.PlayerClass.THE_SILENT) hasSilent = true;
             if (pc == AbstractPlayer.PlayerClass.DEFECT) hasDefect = true;
@@ -148,7 +148,8 @@ public class LoadoutConfigTest {
 
     @Test
     public void testIsExcludedCardLessonLearned() {
-        assertTrue("Lesson Learned should be excluded",
+        // Lesson Learned is no longer excluded - it can still be useful in a single fight
+        assertFalse("Lesson Learned should not be excluded",
             LoadoutConfig.isExcludedCard("Lesson Learned"));
     }
 

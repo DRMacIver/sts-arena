@@ -15,13 +15,11 @@ import stsarena.data.ArenaRepository;
 
 import java.lang.reflect.Type;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Generates random but "vaguely sensible" loadouts for arena fights.
  *
- * Pure configuration logic is in LoadoutConfig for testability.
- * This class handles the StS-specific card/relic library interactions.
+ * Uses LoadoutBuilder for the core logic, then converts IDs to game objects.
  */
 public class RandomLoadoutGenerator {
 
@@ -70,10 +68,10 @@ public class RandomLoadoutGenerator {
      */
     public static GeneratedLoadout generate() {
         // Pick a random character
-        AbstractPlayer.PlayerClass[] classes = LoadoutConfig.PLAYER_CLASSES;
-        AbstractPlayer.PlayerClass playerClass = classes[random.nextInt(classes.length)];
+        String[] classes = LoadoutConfig.PLAYER_CLASS_NAMES;
+        String playerClassName = classes[random.nextInt(classes.length)];
 
-        return generateForClass(playerClass);
+        return generateForClass(AbstractPlayer.PlayerClass.valueOf(playerClassName));
     }
 
     /**
@@ -82,46 +80,82 @@ public class RandomLoadoutGenerator {
     public static GeneratedLoadout generateForClass(AbstractPlayer.PlayerClass playerClass) {
         STSArena.logger.info("Generating random loadout for: " + playerClass);
 
+        // Use the LoadoutBuilder to create the loadout
+        LoadoutBuilder.BuiltLoadout built = LoadoutBuilder.generateForClass(
+            playerClass.name(), random);
+
         // Generate unique ID and name
         String id = UUID.randomUUID().toString();
         long createdAt = System.currentTimeMillis();
         String name = generateLoadoutName(createdAt);
 
-        // Decide if we're using Prismatic Shard (allows any card color)
-        boolean hasPrismaticShard = random.nextDouble() < LoadoutConfig.PRISMATIC_SHARD_CHANCE;
+        // Convert card IDs to actual cards
+        List<AbstractCard> deck = new ArrayList<>();
+        for (LoadoutBuilder.CardEntry entry : built.deck) {
+            AbstractCard card = getCard(entry.cardId);
+            if (card != null) {
+                AbstractCard copy = card.makeCopy();
+                if (entry.upgraded && copy.canUpgrade()) {
+                    copy.upgrade();
+                }
+                deck.add(copy);
+            } else {
+                STSArena.logger.warn("Card not found: " + entry.cardId);
+            }
+        }
 
-        // Generate relics first (Prismatic Shard affects card selection)
-        List<AbstractRelic> relics = generateRelics(playerClass, hasPrismaticShard);
+        // Convert relic IDs to actual relics
+        List<AbstractRelic> relics = new ArrayList<>();
+        boolean hasPrismaticShard = false;
+        for (String relicId : built.relics) {
+            AbstractRelic relic = RelicLibrary.getRelic(relicId);
+            if (relic != null) {
+                relics.add(relic.makeCopy());
+                if ("PrismaticShard".equals(relicId)) {
+                    hasPrismaticShard = true;
+                }
+            } else {
+                STSArena.logger.warn("Relic not found: " + relicId);
+            }
+        }
 
-        // Generate deck
-        List<AbstractCard> deck = generateDeck(playerClass, hasPrismaticShard);
-
-        // Calculate HP based on character
-        int baseMaxHp = LoadoutConfig.getBaseMaxHp(playerClass);
-        // Add some variance and potential bonus from relics
-        int maxHp = baseMaxHp + random.nextInt(20);
-        int currentHp = (int) (maxHp * (0.7 + random.nextDouble() * 0.3)); // 70-100% HP
-
-        // Random ascension level (0-20)
-        int ascensionLevel = random.nextInt(21);
-
-        // Random loadouts start with no potions
+        // Convert potion IDs to actual potions
         List<AbstractPotion> potions = new ArrayList<>();
-
-        // Calculate potion slots based on ascension and relics
-        int potionSlots = ascensionLevel >= 11 ? 2 : 3;
-        // Check if we have Potion Belt
-        for (AbstractRelic relic : relics) {
-            if ("Potion Belt".equals(relic.relicId)) {
-                potionSlots += 2;
-                break;
+        for (String potionId : built.potions) {
+            AbstractPotion potion = PotionHelper.getPotion(potionId);
+            if (potion != null) {
+                potions.add(potion.makeCopy());
+            } else {
+                STSArena.logger.warn("Potion not found: " + potionId);
             }
         }
 
         STSArena.logger.info("Generated loadout '" + name + "': " + deck.size() + " cards, " +
-                            relics.size() + " relics, " + currentHp + "/" + maxHp + " HP, A" + ascensionLevel);
+                            relics.size() + " relics, " + potions.size() + " potions, " +
+                            built.currentHp + "/" + built.maxHp + " HP, A" + built.ascension);
 
-        return new GeneratedLoadout(id, name, createdAt, playerClass, deck, relics, potions, potionSlots, hasPrismaticShard, maxHp, currentHp, ascensionLevel);
+        return new GeneratedLoadout(id, name, createdAt, playerClass, deck, relics, potions,
+            built.potionSlots, hasPrismaticShard, built.maxHp, built.currentHp, built.ascension);
+    }
+
+    /**
+     * Get a card by ID, handling the Strike/Defend color variants.
+     */
+    private static AbstractCard getCard(String cardId) {
+        // First try direct lookup
+        AbstractCard card = CardLibrary.getCard(cardId);
+        if (card != null) return card;
+
+        // Handle legacy Strike/Defend IDs without color suffix
+        if (cardId.equals("Strike") || cardId.equals("Defend")) {
+            // Try each color variant
+            for (String suffix : new String[]{"_R", "_G", "_B", "_P"}) {
+                card = CardLibrary.getCard(cardId + suffix);
+                if (card != null) return card;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -152,170 +186,6 @@ public class RandomLoadoutGenerator {
         }
         // Fallback to random number if database query fails
         return random.nextInt(9999) + 1;
-    }
-
-    private static List<AbstractRelic> generateRelics(AbstractPlayer.PlayerClass playerClass,
-                                                       boolean includePrismaticShard) {
-        List<AbstractRelic> result = new ArrayList<>();
-
-        // Get character's starting relic
-        AbstractRelic starterRelic = getStarterRelic(playerClass);
-        if (starterRelic != null) {
-            result.add(starterRelic);
-        }
-
-        // Add Prismatic Shard if selected
-        if (includePrismaticShard) {
-            AbstractRelic prismatic = RelicLibrary.getRelic("PrismaticShard");
-            if (prismatic != null) {
-                result.add(prismatic.makeCopy());
-            }
-        }
-
-        // Gather available relics
-        List<AbstractRelic> availableRelics = new ArrayList<>();
-
-        // Add common, uncommon, rare relics from the library
-        for (AbstractRelic relic : RelicLibrary.commonList) {
-            if (!LoadoutConfig.isExcludedRelic(relic.relicId)) {
-                availableRelics.add(relic);
-            }
-        }
-        for (AbstractRelic relic : RelicLibrary.uncommonList) {
-            if (!LoadoutConfig.isExcludedRelic(relic.relicId)) {
-                availableRelics.add(relic);
-            }
-        }
-        for (AbstractRelic relic : RelicLibrary.rareList) {
-            if (!LoadoutConfig.isExcludedRelic(relic.relicId)) {
-                availableRelics.add(relic);
-            }
-        }
-        for (AbstractRelic relic : RelicLibrary.shopList) {
-            if (!LoadoutConfig.isExcludedRelic(relic.relicId)) {
-                availableRelics.add(relic);
-            }
-        }
-
-        // Shuffle and pick
-        Collections.shuffle(availableRelics, random);
-        int numRelics = LoadoutConfig.MIN_RELICS +
-            random.nextInt(LoadoutConfig.MAX_RELICS - LoadoutConfig.MIN_RELICS + 1);
-
-        Set<String> addedRelicIds = result.stream()
-            .map(r -> r.relicId)
-            .collect(Collectors.toSet());
-
-        for (AbstractRelic relic : availableRelics) {
-            if (result.size() >= numRelics) break;
-            if (!addedRelicIds.contains(relic.relicId)) {
-                result.add(relic.makeCopy());
-                addedRelicIds.add(relic.relicId);
-            }
-        }
-
-        return result;
-    }
-
-    private static List<AbstractCard> generateDeck(AbstractPlayer.PlayerClass playerClass,
-                                                    boolean prismaticShard) {
-        List<AbstractCard> result = new ArrayList<>();
-
-        // Get available cards
-        List<AbstractCard> availableCards = new ArrayList<>();
-        AbstractCard.CardColor primaryColor = LoadoutConfig.getCardColor(playerClass);
-
-        // Always include colorless cards
-        addCardsOfColor(availableCards, AbstractCard.CardColor.COLORLESS);
-
-        if (prismaticShard) {
-            // Include all colors
-            addCardsOfColor(availableCards, AbstractCard.CardColor.RED);
-            addCardsOfColor(availableCards, AbstractCard.CardColor.GREEN);
-            addCardsOfColor(availableCards, AbstractCard.CardColor.BLUE);
-            addCardsOfColor(availableCards, AbstractCard.CardColor.PURPLE);
-        } else {
-            // Only the character's color
-            addCardsOfColor(availableCards, primaryColor);
-        }
-
-        // Filter out cards that are problematic for arena
-        availableCards = availableCards.stream()
-            .filter(c -> !isProblematicCard(c))
-            .collect(Collectors.toList());
-
-        // Build a deck with some balance
-        int deckSize = LoadoutConfig.MIN_DECK_SIZE +
-            random.nextInt(LoadoutConfig.MAX_DECK_SIZE - LoadoutConfig.MIN_DECK_SIZE + 1);
-
-        // Separate by type for balance
-        List<AbstractCard> attacks = availableCards.stream()
-            .filter(c -> c.type == AbstractCard.CardType.ATTACK)
-            .collect(Collectors.toList());
-        List<AbstractCard> skills = availableCards.stream()
-            .filter(c -> c.type == AbstractCard.CardType.SKILL)
-            .collect(Collectors.toList());
-        List<AbstractCard> powers = availableCards.stream()
-            .filter(c -> c.type == AbstractCard.CardType.POWER)
-            .collect(Collectors.toList());
-
-        Collections.shuffle(attacks, random);
-        Collections.shuffle(skills, random);
-        Collections.shuffle(powers, random);
-
-        // Aim for roughly: 40-50% attacks, 35-45% skills, 10-20% powers
-        int numAttacks = LoadoutConfig.calculateAttackCount(deckSize, random.nextDouble());
-        int numPowers = LoadoutConfig.calculatePowerCount(powers.size(), random.nextInt(100));
-        int numSkills = deckSize - numAttacks - numPowers;
-
-        // Add cards
-        addCardsFromList(result, attacks, numAttacks);
-        addCardsFromList(result, skills, numSkills);
-        addCardsFromList(result, powers, numPowers);
-
-        // Upgrade some cards
-        for (AbstractCard card : result) {
-            if (card.canUpgrade() && random.nextDouble() < LoadoutConfig.UPGRADE_CHANCE) {
-                card.upgrade();
-            }
-        }
-
-        return result;
-    }
-
-    private static void addCardsOfColor(List<AbstractCard> list, AbstractCard.CardColor color) {
-        // Use CardLibrary to get cards of this color
-        HashMap<String, AbstractCard> library = CardLibrary.cards;
-        for (AbstractCard card : library.values()) {
-            if (card.color == color && card.rarity != AbstractCard.CardRarity.BASIC &&
-                card.rarity != AbstractCard.CardRarity.SPECIAL) {
-                list.add(card);
-            }
-        }
-    }
-
-    private static void addCardsFromList(List<AbstractCard> deck, List<AbstractCard> source, int count) {
-        for (int i = 0; i < count && i < source.size(); i++) {
-            deck.add(source.get(i).makeCopy());
-        }
-    }
-
-    private static boolean isProblematicCard(AbstractCard card) {
-        // Skip cards that require specific setup or are status/curse
-        if (card.type == AbstractCard.CardType.STATUS || card.type == AbstractCard.CardType.CURSE) {
-            return true;
-        }
-        // Use config for card-specific exclusions
-        return LoadoutConfig.isExcludedCard(card.cardID);
-    }
-
-    private static AbstractRelic getStarterRelic(AbstractPlayer.PlayerClass playerClass) {
-        String relicId = LoadoutConfig.getStarterRelicId(playerClass);
-        if (relicId == null) {
-            return null;
-        }
-        AbstractRelic relic = RelicLibrary.getRelic(relicId);
-        return relic != null ? relic.makeCopy() : null;
     }
 
     /**

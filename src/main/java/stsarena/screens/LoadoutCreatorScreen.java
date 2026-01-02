@@ -431,7 +431,7 @@ public class LoadoutCreatorScreen {
             characterTabHitboxes[i].update();
 
             if (characterTabHitboxes[i].hovered && InputHelper.justClickedLeft) {
-                AbstractPlayer.PlayerClass newClass = LoadoutConfig.PLAYER_CLASSES[i];
+                AbstractPlayer.PlayerClass newClass = LoadoutConfig.getPlayerClasses()[i];
                 if (newClass != selectedClass) {
                     selectedClass = newClass;
                     // Update HP for new class
@@ -998,7 +998,7 @@ public class LoadoutCreatorScreen {
 
         for (int i = 0; i < 4; i++) {
             float tabX = CHAR_TAB_START_X + i * CHAR_TAB_WIDTH;
-            boolean isSelected = LoadoutConfig.PLAYER_CLASSES[i] == selectedClass;
+            boolean isSelected = LoadoutConfig.getPlayerClasses()[i] == selectedClass;
             boolean isHovered = characterTabHitboxes[i].hovered;
 
             Color bgColor;
