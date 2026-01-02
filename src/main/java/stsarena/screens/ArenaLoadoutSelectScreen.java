@@ -474,9 +474,9 @@ public class ArenaLoadoutSelectScreen {
                 y -= 25.0f * Settings.scale;
 
                 // Render cards in columns
-                float lineHeight = 22.0f * Settings.scale;
+                float lineHeight = 28.0f * Settings.scale;
                 float columnWidth = 180.0f * Settings.scale;
-                int cardsPerColumn = 20;
+                int cardsPerColumn = 16;
                 int column = 0;
                 int row = 0;
                 float startY = y;
