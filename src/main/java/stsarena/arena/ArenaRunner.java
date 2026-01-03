@@ -7,6 +7,8 @@ import com.megacrit.cardcrawl.map.MapRoomNode;
 import com.megacrit.cardcrawl.rooms.AbstractRoom;
 import com.megacrit.cardcrawl.rooms.MonsterRoom;
 import com.megacrit.cardcrawl.rooms.MonsterRoomElite;
+import com.megacrit.cardcrawl.saveAndContinue.SaveAndContinue;
+import com.megacrit.cardcrawl.saveAndContinue.SaveFile;
 import com.megacrit.cardcrawl.screens.GameOverScreen;
 import stsarena.STSArena;
 import stsarena.data.ArenaDatabase;
@@ -646,6 +648,19 @@ public class ArenaRunner {
 
         // Convert saved loadout to GeneratedLoadout
         RandomLoadoutGenerator.GeneratedLoadout loadout = RandomLoadoutGenerator.fromSavedLoadout(savedLoadout);
+
+        // If starting from a normal run, force a save first to ensure any pending
+        // changes (like shop purchases) are persisted before we back up the save file.
+        // IMPORTANT: This must happen BEFORE setting isArenaRun=true, or DisableArenaSavePatch will block it.
+        if (startedFromNormalRun && AbstractDungeon.player != null) {
+            STSArena.logger.info("ARENA: Forcing save before backup to preserve pending changes (e.g., shop purchases)");
+            try {
+                SaveFile saveFile = new SaveFile(SaveFile.SaveType.POST_COMBAT);
+                SaveAndContinue.save(saveFile);
+            } catch (Exception e) {
+                STSArena.logger.error("ARENA: Failed to force save before backup", e);
+            }
+        }
 
         // Use the existing dbId for the loadout instead of saving a new one
         pendingLoadout = loadout;

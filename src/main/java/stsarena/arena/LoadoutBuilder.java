@@ -34,6 +34,11 @@ public class LoadoutBuilder {
     private int mantraCount = 0;
     private int retainCount = 0;
 
+    // Egg relic tracking - auto-upgrade cards of matching type
+    private boolean hasMoltenEgg = false;   // Upgrades Attacks
+    private boolean hasToxicEgg = false;    // Upgrades Skills
+    private boolean hasFrozenEgg = false;   // Upgrades Powers
+
     public static class CardEntry {
         public final String cardId;
         public boolean upgraded;
@@ -363,7 +368,19 @@ public class LoadoutBuilder {
     }
 
     private void addCard(String cardId, boolean upgraded) {
-        deck.add(new CardEntry(cardId, upgraded));
+        // Check if egg relic should auto-upgrade this card
+        boolean shouldUpgrade = upgraded;
+        if (!shouldUpgrade) {
+            String cardType = LoadoutConfig.getCardType(cardId);
+            if ("ATTACK".equals(cardType) && hasMoltenEgg) {
+                shouldUpgrade = true;
+            } else if ("SKILL".equals(cardType) && hasToxicEgg) {
+                shouldUpgrade = true;
+            } else if ("POWER".equals(cardType) && hasFrozenEgg) {
+                shouldUpgrade = true;
+            }
+        }
+        deck.add(new CardEntry(cardId, shouldUpgrade));
         updateSynergyTracking(cardId);
     }
 
@@ -530,6 +547,26 @@ public class LoadoutBuilder {
         }
         if ("Snecko Eye".equals(relicId) || "Runic Pyramid".equals(relicId)) {
             // These are powerful but change how the deck plays
+        }
+
+        // Egg relics - upgrade all existing cards of matching type and track for future cards
+        if ("Molten Egg 2".equals(relicId)) {
+            hasMoltenEgg = true;
+            upgradeAllCardsOfType("ATTACK");
+        } else if ("Toxic Egg 2".equals(relicId)) {
+            hasToxicEgg = true;
+            upgradeAllCardsOfType("SKILL");
+        } else if ("Frozen Egg 2".equals(relicId)) {
+            hasFrozenEgg = true;
+            upgradeAllCardsOfType("POWER");
+        }
+    }
+
+    private void upgradeAllCardsOfType(String cardType) {
+        for (CardEntry card : deck) {
+            if (!card.upgraded && cardType.equals(LoadoutConfig.getCardType(card.cardId))) {
+                card.upgraded = true;
+            }
         }
     }
 

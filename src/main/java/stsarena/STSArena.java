@@ -20,6 +20,7 @@ import stsarena.data.ArenaRepository;
 import stsarena.screens.ArenaEncounterSelectScreen;
 import stsarena.screens.ArenaHistoryScreen;
 import stsarena.screens.ArenaLoadoutSelectScreen;
+import stsarena.screens.ArenaStatsScreen;
 import stsarena.screens.LoadoutCreatorScreen;
 
 /**
@@ -42,6 +43,7 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     public static ArenaEncounterSelectScreen encounterSelectScreen;
     public static ArenaLoadoutSelectScreen loadoutSelectScreen;
     public static LoadoutCreatorScreen loadoutCreatorScreen;
+    public static ArenaStatsScreen statsScreen;
 
     // Flag to trigger fight start on next update (gives game time to initialize)
     private static boolean pendingFightStart = false;
@@ -81,6 +83,7 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         encounterSelectScreen = new ArenaEncounterSelectScreen();
         loadoutSelectScreen = new ArenaLoadoutSelectScreen();
         loadoutCreatorScreen = new LoadoutCreatorScreen();
+        statsScreen = new ArenaStatsScreen();
 
         // Arena Mode button is added via patches/MainMenuArenaPatch
     }
@@ -125,6 +128,12 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         }
         if (loadoutCreatorScreen != null && loadoutCreatorScreen.isOpen) {
             loadoutCreatorScreen.update();
+            // Consume remaining input to block main menu
+            InputHelper.justClickedLeft = false;
+            InputHelper.justClickedRight = false;
+        }
+        if (statsScreen != null && statsScreen.isOpen) {
+            statsScreen.update();
             // Consume remaining input to block main menu
             InputHelper.justClickedLeft = false;
             InputHelper.justClickedRight = false;
@@ -182,6 +191,9 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         }
         if (loadoutCreatorScreen != null && loadoutCreatorScreen.isOpen) {
             loadoutCreatorScreen.render(sb);
+        }
+        if (statsScreen != null && statsScreen.isOpen) {
+            statsScreen.render(sb);
         }
     }
 
@@ -261,6 +273,15 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     }
 
     /**
+     * Open the arena stats screen showing loadout+encounter statistics and Pareto-best victories.
+     */
+    public static void openStatsScreen() {
+        if (statsScreen != null) {
+            statsScreen.open();
+        }
+    }
+
+    /**
      * Set flag to return to arena selection when main menu is reached.
      * Called when an arena fight ends.
      */
@@ -277,6 +298,7 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         return (historyScreen != null && historyScreen.isOpen) ||
                (encounterSelectScreen != null && encounterSelectScreen.isOpen) ||
                (loadoutSelectScreen != null && loadoutSelectScreen.isOpen) ||
-               (loadoutCreatorScreen != null && loadoutCreatorScreen.isOpen);
+               (loadoutCreatorScreen != null && loadoutCreatorScreen.isOpen) ||
+               (statsScreen != null && statsScreen.isOpen);
     }
 }

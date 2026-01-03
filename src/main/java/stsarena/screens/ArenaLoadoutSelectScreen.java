@@ -43,11 +43,12 @@ public class ArenaLoadoutSelectScreen {
     private static final float RIGHT_PANEL_WIDTH = Settings.WIDTH - RIGHT_PANEL_X - 80.0f * Settings.scale;
     private static final float PREVIEW_TITLE_Y = TITLE_Y;
 
-    // History button
+    // History and Stats buttons
     private static final float HISTORY_BUTTON_WIDTH = 120.0f * Settings.scale;
     private static final float HISTORY_BUTTON_HEIGHT = 40.0f * Settings.scale;
     private static final float HISTORY_BUTTON_X = Settings.WIDTH - HISTORY_BUTTON_WIDTH - 40.0f * Settings.scale;
     private static final float HISTORY_BUTTON_Y = 50.0f * Settings.scale;
+    private static final float STATS_BUTTON_X = HISTORY_BUTTON_X - HISTORY_BUTTON_WIDTH - 20.0f * Settings.scale;
 
     private MenuCancelButton cancelButton;
     public boolean isOpen = false;
@@ -60,8 +61,9 @@ public class ArenaLoadoutSelectScreen {
     private List<ListItem> items;
     private Hitbox[] hitboxes;
 
-    // History button
+    // History and Stats buttons
     private Hitbox historyButtonHitbox;
+    private Hitbox statsButtonHitbox;
 
     // Currently hovered item for preview
     private ListItem hoveredItem = null;
@@ -117,6 +119,7 @@ public class ArenaLoadoutSelectScreen {
         this.items = new ArrayList<>();
         this.hitboxes = new Hitbox[0];
         this.historyButtonHitbox = new Hitbox(HISTORY_BUTTON_WIDTH, HISTORY_BUTTON_HEIGHT);
+        this.statsButtonHitbox = new Hitbox(HISTORY_BUTTON_WIDTH, HISTORY_BUTTON_HEIGHT);
 
         // Action buttons
         fightButtonHb = new Hitbox(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT);
@@ -225,6 +228,16 @@ public class ArenaLoadoutSelectScreen {
             InputHelper.justClickedLeft = false;
             this.close();
             STSArena.openHistoryScreen();
+            return;
+        }
+
+        // Stats button (global)
+        statsButtonHitbox.move(STATS_BUTTON_X + HISTORY_BUTTON_WIDTH / 2.0f, HISTORY_BUTTON_Y + HISTORY_BUTTON_HEIGHT / 2.0f);
+        statsButtonHitbox.update();
+        if (statsButtonHitbox.hovered && InputHelper.justClickedLeft && !isRenaming && !isConfirmingDelete) {
+            InputHelper.justClickedLeft = false;
+            this.close();
+            STSArena.openStatsScreen();
             return;
         }
 
@@ -558,8 +571,9 @@ public class ArenaLoadoutSelectScreen {
         // Render preview panel (right side)
         renderPreviewPanel(sb);
 
-        // Render history button
+        // Render history and stats buttons
         renderHistoryButton(sb);
+        renderStatsButton(sb);
 
         // Cancel button
         this.cancelButton.render(sb);
@@ -1043,5 +1057,29 @@ public class ArenaLoadoutSelectScreen {
             "History",
             HISTORY_BUTTON_X + HISTORY_BUTTON_WIDTH / 2.0f, HISTORY_BUTTON_Y + HISTORY_BUTTON_HEIGHT / 2.0f,
             historyButtonHitbox.hovered ? Settings.GOLD_COLOR : Settings.CREAM_COLOR);
+    }
+
+    private void renderStatsButton(SpriteBatch sb) {
+        // Background
+        Color bgColor = statsButtonHitbox.hovered ?
+            new Color(0.3f, 0.4f, 0.3f, 0.9f) : new Color(0.15f, 0.2f, 0.15f, 0.8f);
+        sb.setColor(bgColor);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+            STATS_BUTTON_X, HISTORY_BUTTON_Y,
+            HISTORY_BUTTON_WIDTH, HISTORY_BUTTON_HEIGHT);
+
+        // Border
+        sb.setColor(statsButtonHitbox.hovered ? Settings.GREEN_TEXT_COLOR : new Color(0.4f, 0.5f, 0.4f, 1.0f));
+        float borderWidth = 2.0f * Settings.scale;
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, STATS_BUTTON_X, HISTORY_BUTTON_Y, HISTORY_BUTTON_WIDTH, borderWidth);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, STATS_BUTTON_X, HISTORY_BUTTON_Y + HISTORY_BUTTON_HEIGHT - borderWidth, HISTORY_BUTTON_WIDTH, borderWidth);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, STATS_BUTTON_X, HISTORY_BUTTON_Y, borderWidth, HISTORY_BUTTON_HEIGHT);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, STATS_BUTTON_X + HISTORY_BUTTON_WIDTH - borderWidth, HISTORY_BUTTON_Y, borderWidth, HISTORY_BUTTON_HEIGHT);
+
+        // Text
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            "Stats",
+            STATS_BUTTON_X + HISTORY_BUTTON_WIDTH / 2.0f, HISTORY_BUTTON_Y + HISTORY_BUTTON_HEIGHT / 2.0f,
+            statsButtonHitbox.hovered ? Settings.GREEN_TEXT_COLOR : Settings.CREAM_COLOR);
     }
 }

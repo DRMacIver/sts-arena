@@ -1112,8 +1112,39 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
 
     private void addCardToDeck(AbstractCard card) {
         DeckCard dc = new DeckCard(card.makeCopy());
+        // Auto-upgrade if matching egg relic is present
+        if (shouldAutoUpgrade(card.type)) {
+            dc.upgraded = true;
+        }
         deckCards.add(dc);
         refreshSelectedHitboxes();
+    }
+
+    /**
+     * Check if a card type should be auto-upgraded based on egg relics.
+     */
+    private boolean shouldAutoUpgrade(AbstractCard.CardType type) {
+        for (AbstractRelic r : selectedRelics) {
+            if (type == AbstractCard.CardType.ATTACK && "Molten Egg 2".equals(r.relicId)) {
+                return true;
+            } else if (type == AbstractCard.CardType.SKILL && "Toxic Egg 2".equals(r.relicId)) {
+                return true;
+            } else if (type == AbstractCard.CardType.POWER && "Frozen Egg 2".equals(r.relicId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Upgrade all cards in deck matching the given type.
+     */
+    private void upgradeAllCardsOfType(AbstractCard.CardType type) {
+        for (DeckCard dc : deckCards) {
+            if (dc.card.type == type && !dc.upgraded) {
+                dc.upgraded = true;
+            }
+        }
     }
 
     private void removeCardFromDeck(int index) {
@@ -1142,6 +1173,14 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         // If Prismatic Shard was added, refresh cards
         if (relic.relicId.equals("PrismaticShard") && activeTab == ContentTab.CARDS) {
             refreshAvailableCards();
+        }
+        // Egg relics auto-upgrade all existing cards of matching type
+        if ("Molten Egg 2".equals(relic.relicId)) {
+            upgradeAllCardsOfType(AbstractCard.CardType.ATTACK);
+        } else if ("Toxic Egg 2".equals(relic.relicId)) {
+            upgradeAllCardsOfType(AbstractCard.CardType.SKILL);
+        } else if ("Frozen Egg 2".equals(relic.relicId)) {
+            upgradeAllCardsOfType(AbstractCard.CardType.POWER);
         }
     }
 

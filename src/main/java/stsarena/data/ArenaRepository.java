@@ -524,6 +524,143 @@ public class ArenaRepository {
     }
 
     /**
+     * Get all loadout+encounter combinations with aggregated statistics.
+     * Used for the stats screen to show Pareto-best victories.
+     */
+    public List<LoadoutEncounterStats> getLoadoutEncounterStats() {
+        String sql = "SELECT l.id as loadout_id, l.name as loadout_name, l.character_class, " +
+                     "r.encounter_id, " +
+                     "COUNT(*) as total_runs, " +
+                     "SUM(CASE WHEN r.outcome = 'VICTORY' THEN 1 ELSE 0 END) as wins, " +
+                     "SUM(CASE WHEN r.outcome = 'DEFEAT' THEN 1 ELSE 0 END) as losses " +
+                     "FROM arena_runs r " +
+                     "JOIN loadouts l ON r.loadout_id = l.id " +
+                     "WHERE r.outcome IS NOT NULL " +
+                     "GROUP BY l.id, r.encounter_id " +
+                     "ORDER BY l.name, r.encounter_id";
+
+        List<LoadoutEncounterStats> results = new ArrayList<>();
+
+        try (PreparedStatement stmt = database.getConnection().prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                LoadoutEncounterStats stats = new LoadoutEncounterStats();
+                stats.loadoutId = rs.getLong("loadout_id");
+                stats.loadoutName = rs.getString("loadout_name");
+                stats.characterClass = rs.getString("character_class");
+                stats.encounterId = rs.getString("encounter_id");
+                stats.totalRuns = rs.getInt("total_runs");
+                stats.wins = rs.getInt("wins");
+                stats.losses = rs.getInt("losses");
+                results.add(stats);
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to get loadout encounter stats", e);
+        }
+
+        return results;
+    }
+
+    /**
+     * Get all victories for a specific loadout+encounter combination.
+     * Used to calculate Pareto-best victories.
+     */
+    public List<VictoryRecord> getVictoriesForLoadoutEncounter(long loadoutId, String encounterId) {
+        String sql = "SELECT r.id, r.turns_taken, r.damage_taken, r.damage_dealt, r.ending_hp, r.starting_hp, " +
+                     "r.potions_used_json, r.started_at " +
+                     "FROM arena_runs r " +
+                     "WHERE r.loadout_id = ? AND r.encounter_id = ? AND r.outcome = 'VICTORY' " +
+                     "ORDER BY r.started_at DESC";
+
+        List<VictoryRecord> results = new ArrayList<>();
+
+        try (PreparedStatement stmt = database.getConnection().prepareStatement(sql)) {
+            stmt.setLong(1, loadoutId);
+            stmt.setString(2, encounterId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    VictoryRecord record = new VictoryRecord();
+                    record.runId = rs.getLong("id");
+                    record.turnsTaken = rs.getInt("turns_taken");
+                    record.damageTaken = rs.getInt("damage_taken");
+                    record.damageDealt = rs.getInt("damage_dealt");
+                    record.endingHp = rs.getInt("ending_hp");
+                    record.startingHp = rs.getInt("starting_hp");
+                    record.startedAt = rs.getLong("started_at");
+
+                    String potionsJson = rs.getString("potions_used_json");
+                    if (potionsJson != null && !potionsJson.isEmpty()) {
+                        Type listType = new TypeToken<List<String>>(){}.getType();
+                        List<String> potions = gson.fromJson(potionsJson, listType);
+                        record.potionsUsed = potions != null ? potions.size() : 0;
+                    } else {
+                        record.potionsUsed = 0;
+                    }
+
+                    results.add(record);
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to get victories for loadout encounter", e);
+        }
+
+        return results;
+    }
+
+    /**
+     * Stats for a loadout+encounter combination.
+     */
+    public static class LoadoutEncounterStats {
+        public long loadoutId;
+        public String loadoutName;
+        public String characterClass;
+        public String encounterId;
+        public int totalRuns;
+        public int wins;
+        public int losses;
+
+        public double getWinRate() {
+            return totalRuns > 0 ? (double) wins / totalRuns : 0;
+        }
+    }
+
+    /**
+     * Record of a single victory with metrics for Pareto comparison.
+     */
+    public static class VictoryRecord {
+        public long runId;
+        public int turnsTaken;
+        public int damageTaken;
+        public int damageDealt;
+        public int endingHp;
+        public int startingHp;
+        public int potionsUsed;
+        public long startedAt;
+
+        /**
+         * Check if this victory is dominated by another (other is strictly better in all metrics).
+         * A victory is dominated if another victory has:
+         * - Same or fewer turns
+         * - Same or less damage taken
+         * - Same or fewer potions used
+         * - AND is strictly better in at least one of these
+         */
+        public boolean isDominatedBy(VictoryRecord other) {
+            boolean sameOrBetterTurns = other.turnsTaken <= this.turnsTaken;
+            boolean sameOrBetterDamage = other.damageTaken <= this.damageTaken;
+            boolean sameOrBetterPotions = other.potionsUsed <= this.potionsUsed;
+
+            boolean strictlyBetterSomewhere =
+                other.turnsTaken < this.turnsTaken ||
+                other.damageTaken < this.damageTaken ||
+                other.potionsUsed < this.potionsUsed;
+
+            return sameOrBetterTurns && sameOrBetterDamage && sameOrBetterPotions && strictlyBetterSomewhere;
+        }
+    }
+
+    /**
      * Get encounter outcomes for a specific loadout.
      * Returns a map of encounter ID to outcome (VICTORY or DEFEAT).
      * If an encounter was faced multiple times, returns the most recent outcome.
