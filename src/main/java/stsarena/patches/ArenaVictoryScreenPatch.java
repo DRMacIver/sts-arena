@@ -249,20 +249,4 @@ public class ArenaVictoryScreenPatch {
             hb.render(sb);
         }
     }
-
-    /**
-     * Hide the default "Continue" button in arena mode for imperfect victories.
-     */
-    @SpirePatch(clz = VictoryScreen.class, method = "renderArenaResults")
-    public static class HideDefaultButtonPatch {
-        @SpirePrefixPatch
-        public static SpireReturn<Void> Prefix(VictoryScreen __instance, SpriteBatch sb) {
-            // Only hide when we're in arena mode with imperfect victory
-            if (ArenaRunner.isArenaRun() && buttonsVisible) {
-                // Skip the default arena results rendering
-                return SpireReturn.Return(null);
-            }
-            return SpireReturn.Continue();
-        }
-    }
 }
