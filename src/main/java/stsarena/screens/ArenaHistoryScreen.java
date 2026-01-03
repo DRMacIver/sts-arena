@@ -218,16 +218,18 @@ public class ArenaHistoryScreen {
         scrollY = MathHelper.scrollSnapLerpSpeed(scrollY, targetScrollY);
 
         // Update column header hitboxes for sorting
+        // Positions must match render positions - hitbox X is left edge, not center
         float headerY = HISTORY_START_Y + 30.0f * Settings.scale - HEADER_HB_HEIGHT / 2.0f;
-        float col1 = LEFT_X + 150.0f * Settings.scale;
-        float col2 = LEFT_X + 460.0f * Settings.scale;
-        float col3 = LEFT_X + 690.0f * Settings.scale;
-        float col4 = LEFT_X + 880.0f * Settings.scale;
+        float col1 = LEFT_X;                           // Loadout
+        float col2 = LEFT_X + 320.0f * Settings.scale; // Encounter
+        float col3 = LEFT_X + 620.0f * Settings.scale; // Outcome
+        float col4 = LEFT_X + 780.0f * Settings.scale; // Date
 
-        loadoutHeaderHb.move(col1, headerY);
-        encounterHeaderHb.move(col2, headerY);
-        outcomeHeaderHb.move(col3, headerY);
-        dateHeaderHb.move(col4, headerY);
+        // Move hitboxes - use left edge + half width for center
+        loadoutHeaderHb.move(col1 + loadoutHeaderHb.width / 2.0f, headerY);
+        encounterHeaderHb.move(col2 + encounterHeaderHb.width / 2.0f, headerY);
+        outcomeHeaderHb.move(col3 + outcomeHeaderHb.width / 2.0f, headerY);
+        dateHeaderHb.move(col4 + dateHeaderHb.width / 2.0f, headerY);
 
         loadoutHeaderHb.update();
         encounterHeaderHb.update();
@@ -296,6 +298,7 @@ public class ArenaHistoryScreen {
         // Darken background
         sb.setColor(new Color(0, 0, 0, 0.8f));
         sb.draw(com.megacrit.cardcrawl.helpers.ImageMaster.WHITE_SQUARE_IMG, 0, 0, Settings.WIDTH, Settings.HEIGHT);
+        sb.setColor(Color.WHITE); // Reset color for subsequent rendering
 
         // Title
         String title = filterLoadoutName != null ?
@@ -381,11 +384,15 @@ public class ArenaHistoryScreen {
             outcomeColor = Settings.RED_TEXT_COLOR;
         }
 
-        // Show loadout name with wrapping for long names
+        // Show loadout name - truncate if too long instead of wrapping
         String loadoutName = run.loadoutName != null ? run.loadoutName : "Unknown";
-        float loadoutColWidth = 300.0f * Settings.scale;
-        FontHelper.renderSmartText(sb, FontHelper.cardDescFont_N,
-            loadoutName, col1, y, loadoutColWidth, 20.0f * Settings.scale, textColor);
+        // Simple truncation - limit to ~25 chars to fit column
+        String displayName = loadoutName;
+        if (loadoutName.length() > 25) {
+            displayName = loadoutName.substring(0, 22) + "...";
+        }
+        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+            displayName, col1, y, textColor);
 
         // Encounter
         String encounter = run.encounterId != null ? run.encounterId : "Unknown";
