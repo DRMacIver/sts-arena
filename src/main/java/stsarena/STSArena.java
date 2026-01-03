@@ -214,6 +214,16 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     }
 
     /**
+     * Open the arena encounter select screen with a pre-selected loadout and current encounter.
+     * Used when entering arena from a fight (Practice in Arena button during combat).
+     */
+    public static void openEncounterSelectScreenWithLoadout(long loadoutId, String currentEncounter) {
+        if (encounterSelectScreen != null) {
+            encounterSelectScreen.openWithLoadout(loadoutId, currentEncounter);
+        }
+    }
+
+    /**
      * Open the arena loadout select screen.
      * This is the entry point for arena mode.
      */

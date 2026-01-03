@@ -25,6 +25,7 @@ public class LoadoutBuilder {
 
     // Tracking for synergies
     private int orbGenerationCount = 0;
+    private int frostOrbGenerationCount = 0;
     private int shivGenerationCount = 0;
     private int poisonCount = 0;
     private int blockGenerationCount = 0;
@@ -277,6 +278,10 @@ public class LoadoutBuilder {
                     // Need orb generation before adding orb slot cards
                     if (orbGenerationCount == 0) return false;
                     break;
+                case REQUIRES_FROST_ORBS:
+                    // Blizzard needs frost orb generation specifically
+                    if (frostOrbGenerationCount == 0) return false;
+                    break;
                 case REQUIRES_SHIVS:
                     // Need shiv generation for shiv synergy cards
                     if (shivGenerationCount == 0 && !isShivGenerator(cardId)) return false;
@@ -364,6 +369,7 @@ public class LoadoutBuilder {
 
     private void updateSynergyTracking(String cardId) {
         if (isOrbGenerator(cardId)) orbGenerationCount++;
+        if (isFrostOrbGenerator(cardId)) frostOrbGenerationCount++;
         if (isShivGenerator(cardId)) shivGenerationCount++;
         if (isPoisonCard(cardId)) poisonCount++;
         if (isBlockCard(cardId)) blockGenerationCount++;
@@ -375,6 +381,10 @@ public class LoadoutBuilder {
 
     private boolean isOrbGenerator(String cardId) {
         return LoadoutConfig.ORB_GENERATORS.contains(cardId);
+    }
+
+    private boolean isFrostOrbGenerator(String cardId) {
+        return LoadoutConfig.FROST_ORB_GENERATORS.contains(cardId);
     }
 
     private boolean isShivGenerator(String cardId) {
@@ -589,6 +599,7 @@ public class LoadoutBuilder {
 
     public enum CardSynergy {
         REQUIRES_ORBS,
+        REQUIRES_FROST_ORBS,
         REQUIRES_SHIVS,
         REQUIRES_POISON,
         REQUIRES_BLOCK,

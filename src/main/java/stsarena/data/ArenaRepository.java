@@ -233,11 +233,11 @@ public class ArenaRepository {
     }
 
     private String serializeRelics(List<AbstractRelic> relics) {
-        List<String> relicIds = new ArrayList<>();
+        List<RelicData> relicData = new ArrayList<>();
         for (AbstractRelic relic : relics) {
-            relicIds.add(relic.relicId);
+            relicData.add(new RelicData(relic.relicId, relic.counter));
         }
-        return gson.toJson(relicIds);
+        return gson.toJson(relicData);
     }
 
     private String serializePotions(List<AbstractPotion> potions) {
@@ -260,6 +260,21 @@ public class ArenaRepository {
         public CardData(String id, int upgrades) {
             this.id = id;
             this.upgrades = upgrades;
+        }
+    }
+
+    /**
+     * Simple relic data for JSON serialization (includes counter).
+     */
+    public static class RelicData {
+        public String id;
+        public int counter;
+
+        public RelicData() {} // For Gson
+
+        public RelicData(String id, int counter) {
+            this.id = id;
+            this.counter = counter;
         }
     }
 

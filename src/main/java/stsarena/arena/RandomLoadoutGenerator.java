@@ -373,25 +373,52 @@ public class RandomLoadoutGenerator {
         // Deserialize relics
         // NOTE: RelicLibrary.getRelic() returns Circlet if ID not found (never null)
         // Also filter out any Circlets that might have been saved in older loadouts
+        // Handle both new format (RelicData with counter) and old format (just strings)
         List<AbstractRelic> relics = new ArrayList<>();
         boolean hasPrismaticShard = false;
         try {
-            Type relicListType = new TypeToken<List<String>>(){}.getType();
-            List<String> relicIds = gson.fromJson(record.relicsJson, relicListType);
-            for (String relicId : relicIds) {
-                // Skip Circlets (placeholder relics that shouldn't appear in arena)
-                if ("Circlet".equals(relicId) || "Red Circlet".equals(relicId)) {
-                    STSArena.logger.warn("Skipping Circlet from saved loadout (likely a bug in previous save)");
-                    continue;
-                }
-                if (RelicLibrary.isARelic(relicId)) {
-                    AbstractRelic relic = RelicLibrary.getRelic(relicId);
-                    relics.add(relic.makeCopy());
-                    if ("PrismaticShard".equals(relicId)) {
-                        hasPrismaticShard = true;
+            // Try new format first (RelicData with id and counter)
+            Type relicDataListType = new TypeToken<List<ArenaRepository.RelicData>>(){}.getType();
+            List<ArenaRepository.RelicData> relicDataList = gson.fromJson(record.relicsJson, relicDataListType);
+
+            // Check if it's actually the new format by looking at the first element
+            boolean isNewFormat = !relicDataList.isEmpty() && relicDataList.get(0).id != null;
+
+            if (isNewFormat) {
+                for (ArenaRepository.RelicData relicData : relicDataList) {
+                    String relicId = relicData.id;
+                    // Skip Circlets (placeholder relics that shouldn't appear in arena)
+                    if ("Circlet".equals(relicId) || "Red Circlet".equals(relicId)) {
+                        STSArena.logger.warn("Skipping Circlet from saved loadout (likely a bug in previous save)");
+                        continue;
                     }
-                } else {
-                    STSArena.logger.warn("Relic ID not found in saved loadout: " + relicId);
+                    if (RelicLibrary.isARelic(relicId)) {
+                        AbstractRelic relic = RelicLibrary.getRelic(relicId);
+                        AbstractRelic copy = relic.makeCopy();
+                        copy.counter = relicData.counter;  // Restore counter
+                        relics.add(copy);
+                        if ("PrismaticShard".equals(relicId)) {
+                            hasPrismaticShard = true;
+                        }
+                    } else {
+                        STSArena.logger.warn("Relic ID not found in saved loadout: " + relicId);
+                    }
+                }
+            } else {
+                // Fall back to old format (just list of strings)
+                Type relicListType = new TypeToken<List<String>>(){}.getType();
+                List<String> relicIds = gson.fromJson(record.relicsJson, relicListType);
+                for (String relicId : relicIds) {
+                    if ("Circlet".equals(relicId) || "Red Circlet".equals(relicId)) {
+                        continue;
+                    }
+                    if (RelicLibrary.isARelic(relicId)) {
+                        AbstractRelic relic = RelicLibrary.getRelic(relicId);
+                        relics.add(relic.makeCopy());
+                        if ("PrismaticShard".equals(relicId)) {
+                            hasPrismaticShard = true;
+                        }
+                    }
                 }
             }
         } catch (Exception e) {

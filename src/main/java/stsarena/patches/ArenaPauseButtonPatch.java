@@ -4,6 +4,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.evacipated.cardcrawl.modthespire.lib.SpirePatch;
 import com.evacipated.cardcrawl.modthespire.lib.SpirePostfixPatch;
+import com.evacipated.cardcrawl.modthespire.lib.SpirePrefixPatch;
 import com.megacrit.cardcrawl.cards.AbstractCard;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
 import com.megacrit.cardcrawl.core.CardCrawlGame;
@@ -16,6 +17,7 @@ import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import com.megacrit.cardcrawl.potions.AbstractPotion;
 import com.megacrit.cardcrawl.potions.PotionSlot;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
+import com.megacrit.cardcrawl.screens.options.AbandonRunButton;
 import com.megacrit.cardcrawl.screens.options.OptionsPanel;
 import stsarena.STSArena;
 import stsarena.arena.ArenaRunner;
@@ -23,10 +25,12 @@ import stsarena.arena.RandomLoadoutGenerator;
 import stsarena.data.ArenaDatabase;
 import stsarena.data.ArenaRepository;
 
+import java.lang.reflect.Field;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -46,11 +50,34 @@ public class ArenaPauseButtonPatch {
     private static final float HB_WIDTH = 340.0f * Settings.scale;
     private static final float HB_HEIGHT = 70.0f * Settings.scale;
 
-    // Position right below the Abandon Run button (which is at y = OPTION_Y + 340)
+    // Calculate panel center Y (same formula as OptionsPanel.SCREEN_CENTER_Y)
+    // SCREEN_CENTER_Y = Settings.HEIGHT / 2.0f - 64.0f * Settings.scale
+    private static final float PANEL_CENTER_Y = Settings.HEIGHT / 2.0f - 64.0f * Settings.scale;
+
+    // The options panel has a visual top boundary approximately 270 pixels above its center
+    private static final float PANEL_TOP_Y = PANEL_CENTER_Y + 270.0f * Settings.scale;
+
+    // Button height after scaling
+    private static final float BUTTON_HEIGHT = H * Settings.scale;
+
+    // Visual button height (hitbox height, not image height - the image has padding)
+    private static final float VISUAL_BUTTON_HEIGHT = 70.0f * Settings.scale;
+
+    // Spacing between button centers - slightly less than visual height for overlap
+    // Set to 62 for optimal visual alignment
+    private static final float BUTTON_SPACING = 62.0f * Settings.scale;
+
+    // Position of Practice in Arena button (BOTTOM edge near panel top, adjusted down slightly)
+    private static final float BUTTON_Y = PANEL_TOP_Y + BUTTON_HEIGHT / 2.0f - 5.0f * Settings.scale;
+
+    // Position of Abandon Run button (slightly overlapping - Practice in Arena draws on top)
     private static final float BUTTON_X = 1430.0f * Settings.xScale;
-    private static final float BUTTON_Y = Settings.OPTION_Y + 240.0f * Settings.scale;  // 100 pixels below Abandon
+    private static final float ABANDON_BUTTON_Y = BUTTON_Y + BUTTON_SPACING;
 
     private static Hitbox arenaButtonHb = new Hitbox(HB_WIDTH, HB_HEIGHT);
+
+    // Track if run is being abandoned (to prevent loadout creation)
+    public static boolean isAbandoning = false;
 
     /**
      * Update the arena practice button during pause menu update.
@@ -162,8 +189,12 @@ public class ArenaPauseButtonPatch {
                 // Close the settings screen
                 AbstractDungeon.closeCurrentScreen();
 
-                // Open the encounter selection screen with this loadout
-                STSArena.openEncounterSelectScreenWithLoadout(loadoutId);
+                // Get the current encounter (if in combat)
+                String currentEncounter = NormalRunLoadoutSaver.getCurrentCombatEncounterId();
+                STSArena.logger.info("Current combat encounter: " + currentEncounter);
+
+                // Open the encounter selection screen with this loadout and current encounter
+                STSArena.openEncounterSelectScreenWithLoadout(loadoutId, currentEncounter);
             }
         } catch (Exception e) {
             STSArena.logger.error("Error handling arena practice button", e);
@@ -185,11 +216,15 @@ public class ArenaPauseButtonPatch {
             deck.add(card.makeCopy());
         }
 
-        // Copy the relics (preserving counters)
+        // Copy the relics, using pre-combat counters if available
+        // This ensures relics like Neow's Lament have their charges from before the fight
+        Map<String, Integer> preCombatCounters = NormalRunLoadoutSaver.getCombatStartRelicCounters();
         List<AbstractRelic> relics = new ArrayList<>();
         for (AbstractRelic relic : player.relics) {
             AbstractRelic copy = relic.makeCopy();
-            copy.counter = relic.counter;
+            // Use pre-combat counter if available, otherwise use current
+            Integer preCombatCounter = preCombatCounters.get(relic.relicId);
+            copy.counter = preCombatCounter != null ? preCombatCounter : relic.counter;
             relics.add(copy);
         }
 
@@ -247,6 +282,98 @@ public class ArenaPauseButtonPatch {
             return className + " A" + ascension + " F" + floor + " Practice (" + timestamp + ")";
         } else {
             return className + " F" + floor + " Practice (" + timestamp + ")";
+        }
+    }
+
+    /**
+     * Move the Abandon Run button up to make room and avoid overlapping settings.
+     * Also track when it's clicked to prevent loadout creation.
+     */
+    @SpirePatch(clz = AbandonRunButton.class, method = "update")
+    public static class AbandonRunButtonUpdatePatch {
+        private static Field yField = null;
+        private static Field hbField = null;
+        private static boolean fieldsInitialized = false;
+
+        @SpirePostfixPatch
+        public static void Postfix(AbandonRunButton __instance) {
+            // Initialize reflection fields once
+            if (!fieldsInitialized) {
+                try {
+                    yField = AbandonRunButton.class.getDeclaredField("y");
+                    yField.setAccessible(true);
+                    hbField = AbandonRunButton.class.getDeclaredField("hb");
+                    hbField.setAccessible(true);
+                    fieldsInitialized = true;
+                } catch (Exception e) {
+                    STSArena.logger.error("Failed to access AbandonRunButton fields", e);
+                }
+            }
+
+            // Move the button up
+            if (yField != null && hbField != null) {
+                try {
+                    float currentY = yField.getFloat(__instance);
+                    if (Math.abs(currentY - ABANDON_BUTTON_Y) > 1.0f) {
+                        yField.setFloat(__instance, ABANDON_BUTTON_Y);
+                        // Also move the hitbox
+                        Hitbox hb = (Hitbox) hbField.get(__instance);
+                        if (hb != null) {
+                            hb.move(hb.cX, ABANDON_BUTTON_Y);
+                        }
+                    }
+                } catch (Exception e) {
+                    // Ignore
+                }
+            }
+
+            // Check if Abandon was clicked - set flag to prevent loadout save
+            // Check for clickStarted (mouse down) or clicked (mouse up) on the hitbox
+            try {
+                if (hbField != null) {
+                    Hitbox hb = (Hitbox) hbField.get(__instance);
+                    if (hb != null && (hb.clicked || hb.clickStarted)) {
+                        if (!isAbandoning) {
+                            isAbandoning = true;
+                            STSArena.logger.info("Abandon Run clicked - will not save loadout");
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
+    }
+
+    /**
+     * Move the Abandon Run button rendering up.
+     */
+    @SpirePatch(clz = AbandonRunButton.class, method = "render")
+    public static class AbandonRunButtonRenderPatch {
+        private static Field yField = null;
+        private static boolean fieldInitialized = false;
+
+        @SpirePrefixPatch
+        public static void Prefix(AbandonRunButton __instance, SpriteBatch sb) {
+            // Initialize reflection field once
+            if (!fieldInitialized) {
+                try {
+                    yField = AbandonRunButton.class.getDeclaredField("y");
+                    yField.setAccessible(true);
+                    fieldInitialized = true;
+                } catch (Exception e) {
+                    // Ignore
+                }
+            }
+
+            // Ensure Y position is set for rendering
+            if (yField != null) {
+                try {
+                    yField.setFloat(__instance, ABANDON_BUTTON_Y);
+                } catch (Exception e) {
+                    // Ignore
+                }
+            }
         }
     }
 }

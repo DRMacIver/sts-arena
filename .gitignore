@@ -47,3 +47,6 @@ sendToDevs/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Devcontainer config hash (machine-specific)
+.devcontainer/.config-hash

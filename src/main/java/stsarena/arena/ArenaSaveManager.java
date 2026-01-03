@@ -24,23 +24,61 @@ public class ArenaSaveManager {
 
     /**
      * Get the save file path for a character class.
+     * Handles Windows, macOS, and Linux Steam installations.
      */
     public static String getSavePath(AbstractPlayer.PlayerClass playerClass) {
-        // Get the actual saves directory used by the game
-        // The game runs from the Resources folder, saves are relative to that
-        String userHome = System.getProperty("user.home");
-        String savesDir = userHome + "/Library/Application Support/Steam/steamapps/common/SlayTheSpire/SlayTheSpire.app/Contents/Resources/saves/";
-
-        // Fallback for non-Mac or different install locations
-        File savesDirFile = new File(savesDir);
-        if (!savesDirFile.exists()) {
-            savesDir = "saves" + File.separator;
-        }
-
+        String savesDir = getSavesDirectory();
         // Use .autosave (not .autosaveBETA) - this is what SaveAndContinue.loadSaveFile reads
         String path = savesDir + playerClass.name() + ".autosave";
         STSArena.logger.info("ARENA: Save path: " + path);
         return path;
+    }
+
+    /**
+     * Get the saves directory for the current platform.
+     */
+    private static String getSavesDirectory() {
+        String os = System.getProperty("os.name").toLowerCase();
+        String userHome = System.getProperty("user.home");
+        String savesDir = null;
+
+        if (os.contains("win")) {
+            // Windows: Check common Steam locations
+            String[] windowsPaths = {
+                System.getenv("PROGRAMFILES(X86)") + "\\Steam\\steamapps\\common\\SlayTheSpire\\saves\\",
+                System.getenv("PROGRAMFILES") + "\\Steam\\steamapps\\common\\SlayTheSpire\\saves\\",
+                userHome + "\\Steam\\steamapps\\common\\SlayTheSpire\\saves\\"
+            };
+            for (String path : windowsPaths) {
+                if (path != null && new File(path).exists()) {
+                    savesDir = path;
+                    break;
+                }
+            }
+        } else if (os.contains("mac")) {
+            // macOS
+            savesDir = userHome + "/Library/Application Support/Steam/steamapps/common/SlayTheSpire/SlayTheSpire.app/Contents/Resources/saves/";
+        } else {
+            // Linux: Check common Steam locations
+            String[] linuxPaths = {
+                userHome + "/.steam/steam/steamapps/common/SlayTheSpire/saves/",
+                userHome + "/.local/share/Steam/steamapps/common/SlayTheSpire/saves/",
+                userHome + "/.steam/debian-installation/steamapps/common/SlayTheSpire/saves/"
+            };
+            for (String path : linuxPaths) {
+                if (new File(path).exists()) {
+                    savesDir = path;
+                    break;
+                }
+            }
+        }
+
+        // Fallback: relative saves directory (game runs from its install dir)
+        if (savesDir == null || !new File(savesDir).exists()) {
+            savesDir = "saves" + File.separator;
+        }
+
+        return savesDir;
     }
 
     /**

@@ -107,17 +107,33 @@ public class SaveFileManager {
 
     /**
      * Get save path for a class name string.
+     * Uses the cross-platform saves directory from ArenaSaveManager.
      */
     private static String getSavePathForClassName(String className) {
-        String userHome = System.getProperty("user.home");
-        String savesDir = userHome + "/Library/Application Support/Steam/steamapps/common/SlayTheSpire/SlayTheSpire.app/Contents/Resources/saves/";
+        // Reuse the cross-platform logic from ArenaSaveManager
+        // by constructing a temporary PlayerClass to get the path
+        try {
+            AbstractPlayer.PlayerClass playerClass = AbstractPlayer.PlayerClass.valueOf(className);
+            return ArenaSaveManager.getSavePath(playerClass);
+        } catch (IllegalArgumentException e) {
+            // Fallback for unknown class names (modded characters)
+            String os = System.getProperty("os.name").toLowerCase();
+            String userHome = System.getProperty("user.home");
+            String savesDir;
 
-        File savesDirFile = new File(savesDir);
-        if (!savesDirFile.exists()) {
-            savesDir = "saves" + File.separator;
+            if (os.contains("win")) {
+                savesDir = "saves\\";
+            } else if (os.contains("mac")) {
+                savesDir = userHome + "/Library/Application Support/Steam/steamapps/common/SlayTheSpire/SlayTheSpire.app/Contents/Resources/saves/";
+                if (!new File(savesDir).exists()) {
+                    savesDir = "saves/";
+                }
+            } else {
+                savesDir = "saves/";
+            }
+
+            return savesDir + className + ".autosave";
         }
-
-        return savesDir + className + ".autosave";
     }
 
     /**

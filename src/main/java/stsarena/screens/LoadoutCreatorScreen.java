@@ -19,6 +19,8 @@ import com.megacrit.cardcrawl.potions.PotionSlot;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.relics.PrismaticShard;
 import com.megacrit.cardcrawl.screens.mainMenu.MenuCancelButton;
+import com.megacrit.cardcrawl.screens.mainMenu.ScrollBar;
+import com.megacrit.cardcrawl.screens.mainMenu.ScrollBarListener;
 import stsarena.STSArena;
 import stsarena.arena.LoadoutConfig;
 import stsarena.arena.RandomLoadoutGenerator;
@@ -38,7 +40,7 @@ import java.util.UUID;
  * Screen for creating a custom loadout.
  * Allows selecting character, cards, relics, potions, HP, and ascension.
  */
-public class LoadoutCreatorScreen {
+public class LoadoutCreatorScreen implements ScrollBarListener {
 
     // Layout constants
     private static final float TITLE_Y = Settings.HEIGHT - 60.0f * Settings.scale;
@@ -124,6 +126,11 @@ public class LoadoutCreatorScreen {
     private float selectedScrollY = 0.0f;
     private float selectedTargetScrollY = 0.0f;
 
+    // Scroll bars
+    private ScrollBar leftScrollBar;
+    private ScrollBar rightScrollBar;
+    private boolean scrollingLeft = false;  // Track which bar is being dragged
+
     // Save button
     private Hitbox saveButtonHitbox;
 
@@ -184,6 +191,10 @@ public class LoadoutCreatorScreen {
         maxHpValueHitbox = new Hitbox(valueWidth, smallBtn);
         ascMinusHitbox = new Hitbox(smallBtn, smallBtn);
         ascPlusHitbox = new Hitbox(smallBtn, smallBtn);
+
+        // Initialize scroll bars
+        leftScrollBar = new ScrollBar(this);
+        rightScrollBar = new ScrollBar(this);
     }
 
     public void open() {
@@ -235,6 +246,22 @@ public class LoadoutCreatorScreen {
         this.isOpen = false;
         this.cancelButton.hide();
         this.isTypingSearch = false;
+    }
+
+    /**
+     * ScrollBarListener implementation - called when scroll bar is dragged.
+     */
+    @Override
+    public void scrolledUsingBar(float newPercent) {
+        if (scrollingLeft) {
+            int availableCount = getAvailableCount();
+            float availableMaxScroll = Math.max(0, availableCount * ROW_HEIGHT - LIST_HEIGHT);
+            availableTargetScrollY = newPercent * availableMaxScroll;
+        } else {
+            int selectedCount = deckCards.size() + selectedRelics.size() + selectedPotions.size() + 3;
+            float selectedMaxScroll = Math.max(0, selectedCount * ROW_HEIGHT - LIST_HEIGHT);
+            selectedTargetScrollY = newPercent * selectedMaxScroll;
+        }
     }
 
     /**
@@ -646,6 +673,41 @@ public class LoadoutCreatorScreen {
         selectedTargetScrollY = Math.max(0, Math.min(selectedMaxScroll, selectedTargetScrollY));
         selectedScrollY = MathHelper.scrollSnapLerpSpeed(selectedScrollY, selectedTargetScrollY);
 
+        // Update scroll bars
+        float panelWidth = COLUMN_WIDTH - 10.0f * Settings.scale;
+        float scrollBarX_left = LEFT_COLUMN_X + panelWidth / 2.0f + 16.0f * Settings.scale;
+        float scrollBarX_right = RIGHT_COLUMN_X + panelWidth / 2.0f + 16.0f * Settings.scale;
+        float scrollBarY = LIST_START_Y - LIST_HEIGHT / 2.0f;
+
+        // Track which scroll bar is being interacted with based on mouse position
+        if (InputHelper.mX < Settings.WIDTH / 2.0f) {
+            scrollingLeft = true;
+        } else {
+            scrollingLeft = false;
+        }
+
+        // Update left scroll bar (only if there's content to scroll)
+        if (availableMaxScroll > 0) {
+            leftScrollBar.setCenter(scrollBarX_left, scrollBarY);
+            leftScrollBar.changeHeight(LIST_HEIGHT);
+            if (leftScrollBar.update()) {
+                // ScrollBar consumed input, update scroll position
+            }
+            float leftPercent = availableScrollY / availableMaxScroll;
+            leftScrollBar.parentScrolledToPercent(leftPercent);
+        }
+
+        // Update right scroll bar (only if there's content to scroll)
+        if (selectedMaxScroll > 0) {
+            rightScrollBar.setCenter(scrollBarX_right, scrollBarY);
+            rightScrollBar.changeHeight(LIST_HEIGHT);
+            if (rightScrollBar.update()) {
+                // ScrollBar consumed input, update scroll position
+            }
+            float rightPercent = selectedScrollY / selectedMaxScroll;
+            rightScrollBar.parentScrolledToPercent(rightPercent);
+        }
+
         // Update available item hitboxes and check for clicks
         updateAvailableItems();
 
@@ -693,8 +755,8 @@ public class LoadoutCreatorScreen {
             finishHpEdit(true);
         }
 
-        // Max HP controls
-        float maxHpX = statsX + 200.0f * Settings.scale;
+        // Max HP controls - increased spacing from HP
+        float maxHpX = statsX + 280.0f * Settings.scale;
         maxHpMinusHitbox.move(maxHpX, STATS_Y);
         maxHpValueHitbox.move(maxHpX + 40.0f * Settings.scale, STATS_Y);
         maxHpPlusHitbox.move(maxHpX + 80.0f * Settings.scale, STATS_Y);
@@ -722,8 +784,8 @@ public class LoadoutCreatorScreen {
             finishHpEdit(false);
         }
 
-        // Ascension controls
-        float ascX = statsX + 380.0f * Settings.scale;
+        // Ascension controls - increased spacing from Max HP
+        float ascX = statsX + 520.0f * Settings.scale;
         ascMinusHitbox.move(ascX, STATS_Y);
         ascPlusHitbox.move(ascX + 60.0f * Settings.scale, STATS_Y);
         ascMinusHitbox.update();
@@ -1251,6 +1313,19 @@ public class LoadoutCreatorScreen {
         // Render selected items (right panel)
         renderSelectedItems(sb);
 
+        // Render scroll bars (only if there's content to scroll)
+        int availableCount = getAvailableCount();
+        float availableMaxScroll = Math.max(0, availableCount * ROW_HEIGHT - LIST_HEIGHT);
+        if (availableMaxScroll > 0) {
+            leftScrollBar.render(sb);
+        }
+
+        int selectedCount = deckCards.size() + selectedRelics.size() + selectedPotions.size() + 3;
+        float selectedMaxScroll = Math.max(0, selectedCount * ROW_HEIGHT - LIST_HEIGHT);
+        if (selectedMaxScroll > 0) {
+            rightScrollBar.render(sb);
+        }
+
         // Cancel button
         this.cancelButton.render(sb);
 
@@ -1369,20 +1444,20 @@ public class LoadoutCreatorScreen {
         renderHpValue(sb, hpValueHitbox, isEditingHp, isEditingHp ? hpEditText : String.valueOf(currentHp));
         renderStatButton(sb, hpPlusHitbox, "+");
 
-        // Max HP
-        float maxHpX = statsX + 200.0f * Settings.scale;
+        // Max HP - increased spacing from HP
+        float maxHpX = statsX + 280.0f * Settings.scale;
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            "Max:",
-            maxHpX - 55.0f * Settings.scale, STATS_Y + 10.0f * Settings.scale, Settings.CREAM_COLOR);
+            "Max HP:",
+            maxHpX - 80.0f * Settings.scale, STATS_Y + 10.0f * Settings.scale, Settings.CREAM_COLOR);
         renderStatButton(sb, maxHpMinusHitbox, "-");
         renderHpValue(sb, maxHpValueHitbox, isEditingMaxHp, isEditingMaxHp ? maxHpEditText : String.valueOf(maxHp));
         renderStatButton(sb, maxHpPlusHitbox, "+");
 
-        // Ascension
-        float ascX = statsX + 380.0f * Settings.scale;
+        // Ascension - increased spacing from Max HP
+        float ascX = statsX + 520.0f * Settings.scale;
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            "A:",
-            ascX - 30.0f * Settings.scale, STATS_Y + 10.0f * Settings.scale, Settings.CREAM_COLOR);
+            "Asc:",
+            ascX - 50.0f * Settings.scale, STATS_Y + 10.0f * Settings.scale, Settings.CREAM_COLOR);
         renderStatButton(sb, ascMinusHitbox, "-");
         FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
             String.valueOf(ascensionLevel),

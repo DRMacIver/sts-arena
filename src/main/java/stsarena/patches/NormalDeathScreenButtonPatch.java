@@ -38,7 +38,15 @@ public class NormalDeathScreenButtonPatch {
         @SpirePostfixPatch
         public static void Postfix(DeathScreen __instance) {
             // Only show in normal runs (not arena) and when we have retry data
+            // Don't show if the run was abandoned
             if (ArenaRunner.isArenaRun()) {
+                buttonVisible = false;
+                return;
+            }
+
+            // Don't show if the run was abandoned
+            // CardCrawlGame.startOver is true when abandoning
+            if (ArenaPauseButtonPatch.isAbandoning || CardCrawlGame.startOver) {
                 buttonVisible = false;
                 return;
             }

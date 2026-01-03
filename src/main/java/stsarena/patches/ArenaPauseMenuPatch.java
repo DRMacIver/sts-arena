@@ -46,8 +46,12 @@ public class ArenaPauseMenuPatch {
     public static class ChangePopupDescription {
         public static void Postfix(SettingsScreen __instance, ConfirmPopup.ConfirmType type) {
             if (type == ConfirmPopup.ConfirmType.EXIT && ArenaRunner.isArenaRun()) {
-                // Change description to not mention saving
-                __instance.exitPopup.desc = "Return to the main menu?";
+                // Change description based on whether we came from a normal run
+                if (ArenaRunner.wasStartedFromNormalRun()) {
+                    __instance.exitPopup.desc = "Return to your game?";
+                } else {
+                    __instance.exitPopup.desc = "Return to the main menu?";
+                }
             }
         }
     }
@@ -86,6 +90,7 @@ public class ArenaPauseMenuPatch {
 
     /**
      * When exiting during arena mode, clean up properly instead of saving.
+     * If we came from a normal run (Practice in Arena), resume that run.
      */
     @SpirePatch(
         clz = ConfirmPopup.class,
@@ -96,15 +101,14 @@ public class ArenaPauseMenuPatch {
             if (__instance.type == ConfirmPopup.ConfirmType.EXIT && ArenaRunner.isArenaRun()) {
                 STSArena.logger.info("Leaving arena mode via pause menu");
 
-                // Clean up arena run (restores original save)
-                ArenaRunner.clearArenaRun();
+                // Check if we should return to a normal run
+                boolean resumeNormalRun = ArenaRunner.wasStartedFromNormalRun();
 
-                // Do the normal exit logic without saving
+                // Stop sounds
                 CardCrawlGame.music.fadeAll();
                 __instance.hide();
                 AbstractDungeon.getCurrRoom().clearEvent();
                 AbstractDungeon.closeCurrentScreen();
-                CardCrawlGame.startOver();
 
                 if (RestRoom.lastFireSoundId != 0L) {
                     CardCrawlGame.sound.fadeOut("REST_FIRE_WET", RestRoom.lastFireSoundId);
@@ -112,6 +116,16 @@ public class ArenaPauseMenuPatch {
                 if (AbstractDungeon.player.stance != null &&
                     !AbstractDungeon.player.stance.ID.equals("Neutral")) {
                     AbstractDungeon.player.stance.stopIdleSfx();
+                }
+
+                if (resumeNormalRun) {
+                    // Resume the normal run we came from
+                    STSArena.logger.info("Resuming normal run after arena practice");
+                    ArenaRunner.resumeNormalRun();
+                } else {
+                    // Clean up arena run and go to main menu
+                    ArenaRunner.clearArenaRun();
+                    CardCrawlGame.startOver();
                 }
 
                 return SpireReturn.Return(null);

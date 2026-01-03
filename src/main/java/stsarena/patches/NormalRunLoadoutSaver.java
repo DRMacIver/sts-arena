@@ -10,6 +10,7 @@ import com.megacrit.cardcrawl.monsters.MonsterGroup;
 import com.megacrit.cardcrawl.potions.AbstractPotion;
 import com.megacrit.cardcrawl.potions.PotionSlot;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
+import com.megacrit.cardcrawl.rooms.AbstractRoom;
 import com.megacrit.cardcrawl.rooms.MonsterRoom;
 import com.megacrit.cardcrawl.rooms.MonsterRoomBoss;
 import com.megacrit.cardcrawl.rooms.MonsterRoomElite;
@@ -448,17 +449,22 @@ public class NormalRunLoadoutSaver {
 
     /**
      * Get the current combat encounter ID (captured when entering the fight).
-     * Returns null if not currently in a combat room or encounter wasn't captured.
+     * Returns null if not currently in combat or encounter wasn't captured.
      */
     public static String getCurrentCombatEncounterId() {
-        // Only return encounter ID if we're actually in a combat room
+        // Only return encounter ID if we're actually in combat
         if (AbstractDungeon.getCurrRoom() == null) {
             return null;
         }
-        if (!(AbstractDungeon.getCurrRoom() instanceof MonsterRoom)) {
-            // Not in a combat room (shop, rest site, event, etc.)
+
+        // Check if there's active combat by looking at room phase
+        // COMBAT phase means we're fighting, COMPLETE means fight is over
+        AbstractRoom room = AbstractDungeon.getCurrRoom();
+        if (room.phase != AbstractRoom.RoomPhase.COMBAT) {
+            // Not currently in combat - could be in shop, rest site, or post-combat
             return null;
         }
+
         return combatEncounterId;
     }
 

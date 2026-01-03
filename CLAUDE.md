@@ -109,6 +109,42 @@ UI-related:
 - `AbstractScreen` - Base for custom screens
 - `MainMenuScreen` - Main menu
 - `CustomModeScreen` - Custom run configuration
+- `OptionsPanel` - Pause menu settings panel
+- `AbandonRunButton` - The abandon run button in pause menu
+
+## UI Positioning Notes
+
+### Key Settings Fields
+- `Settings.WIDTH`, `Settings.HEIGHT` - Screen dimensions
+- `Settings.scale` - General UI scale factor
+- `Settings.xScale`, `Settings.yScale` - Directional scale factors
+- `Settings.OPTION_Y` = `HEIGHT / 2.0f - 32.0f * yScale` - Options panel reference Y
+
+### OptionsPanel Layout
+- Panel center Y: `Settings.HEIGHT / 2.0f - 64.0f * Settings.scale`
+- Panel top boundary: approximately 250 pixels above center (scaled)
+- AbandonRunButton original position: approximately `OPTION_Y + 340 * scale`
+
+### Button Dimensions (OPTION_ABANDON style)
+- Image dimensions: W=440, H=100 (raw pixels)
+- Hitbox dimensions: 340x70 (scaled)
+- **Visual height is ~70 pixels** (hitbox height), not 100 - the image has padding
+- When positioning buttons to touch, use the visual/hitbox height (70), not image height (100)
+
+### Button Positioning Pattern
+```java
+// Button positions are at CENTER, not edge
+// To place button with bottom edge at Y:
+float buttonCenterY = Y + buttonHeight / 2.0f;
+
+// To stack buttons touching (use visual height for spacing):
+float button1Y = baseY;
+float button2Y = button1Y + visualButtonHeight;  // 70 * scale, not 100
+```
+
+### Detecting Run Abandonment
+- `CardCrawlGame.startOver` is `true` when player confirms abandoning a run
+- Use this to skip saving loadouts or showing arena retry buttons on abandon
 
 ## Development Tips
 

@@ -165,3 +165,57 @@ Defined in com.megacrit.cardcrawl.saveAndContinue.SaveFile:
 - In practice, game stores all energy in "red" field
 - cards uses CardSave class with fields: id, upgrades, misc
 - Gson deserializes Map<String,Object> to CardSave if field names match
+
+## UI Positioning and Scaling
+
+### Key Settings Fields
+- Settings.WIDTH, Settings.HEIGHT - Screen dimensions in pixels
+- Settings.scale - General UI scale factor (1.0 at 1080p)
+- Settings.xScale, Settings.yScale - Directional scale factors
+- Settings.OPTION_Y = HEIGHT / 2.0f - 32.0f * yScale - Options panel reference Y
+
+### OptionsPanel Layout
+- Panel center Y: Settings.HEIGHT / 2.0f - 64.0f * Settings.scale
+- Panel top boundary: approximately 250 pixels above center (scaled)
+- AbandonRunButton original position: approximately OPTION_Y + 340 * scale
+
+### Button Dimensions (OPTION_ABANDON image style)
+- Image dimensions: W=440, H=100 (raw pixels before scaling)
+- Hitbox dimensions: 340x70 (before scaling)
+- **IMPORTANT: Visual height is ~70 pixels, not 100!** The image has transparent padding
+- When positioning buttons to visually touch, use hitbox height (70), not image height (100)
+
+### Button Positioning Pattern
+```java
+// Button positions are at CENTER, not edge
+// To place button with bottom edge at Y:
+float buttonCenterY = Y + buttonHeight / 2.0f;
+
+// To stack buttons visually touching (use VISUAL height for spacing):
+float visualButtonHeight = 70.0f * Settings.scale;  // NOT 100!
+float button1Y = baseY;
+float button2Y = button1Y + visualButtonHeight;
+```
+
+### Detecting Run Abandonment
+- CardCrawlGame.startOver is set to true when player confirms abandoning a run
+- Check this flag in DeathScreen patches to skip saving loadouts on abandon
+- Also useful for hiding "Try Again in Arena Mode" button when run was abandoned
+
+## Relic Counter Preservation
+
+When copying relics, relic.makeCopy() does NOT preserve the counter value.
+Must manually copy it:
+```java
+AbstractRelic copy = relic.makeCopy();
+copy.counter = relic.counter;  // Preserve counter for Pen Nib, Ink Bottle, etc.
+```
+
+## ScrollBar Usage
+
+ScrollBar from com.megacrit.cardcrawl.screens.mainMenu.ScrollBar:
+- Constructor: new ScrollBar(ScrollBarListener listener)
+- Position with setCenter(x, y) and changeHeight(height)
+- Call update() (returns boolean) and render(sb) each frame
+- Implement scrolledUsingBar(float percent) in listener to handle drag
+- Call parentScrolledToPercent(float) to sync bar position with scroll state
