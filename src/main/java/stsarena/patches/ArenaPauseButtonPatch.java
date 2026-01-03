@@ -184,10 +184,12 @@ public class ArenaPauseButtonPatch {
             deck.add(card.makeCopy());
         }
 
-        // Copy the relics
+        // Copy the relics (preserving counters)
         List<AbstractRelic> relics = new ArrayList<>();
         for (AbstractRelic relic : player.relics) {
-            relics.add(relic.makeCopy());
+            AbstractRelic copy = relic.makeCopy();
+            copy.counter = relic.counter;
+            relics.add(copy);
         }
 
         // Copy current potions
