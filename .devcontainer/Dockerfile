@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     git \
     # X11 and graphics libraries for headless game testing with Xvfb
     xvfb \
+    x11-xserver-utils \
     libfreetype6 \
     libfontconfig1 \
     libgl1 \
@@ -13,6 +14,9 @@ RUN apt-get update && apt-get install -y \
     libxtst6 \
     libxi6 \
     libxrender1 \
+    # Audio libraries (OpenAL for LWJGL)
+    libopenal1 \
+    libopenal-dev \
     # Python for acceptance tests
     python3 \
     && rm -rf /var/lib/apt/lists/*

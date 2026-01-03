@@ -15,6 +15,20 @@
 
 set -e
 
+# Safety check: only run in Linux devcontainer
+if [ "$(uname)" != "Linux" ]; then
+    echo "ERROR: This script only runs on Linux."
+    echo "On macOS, run acceptance tests against your native Steam installation."
+    exit 1
+fi
+
+if [ ! -f "/.dockerenv" ] && [ -z "$REMOTE_CONTAINERS" ] && [ -z "$CODESPACES" ]; then
+    echo "ERROR: This script should only be run in a devcontainer."
+    echo "Running on the host could damage your Steam installation."
+    echo "If you really want to run this, set REMOTE_CONTAINERS=1"
+    exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 ACCEPTANCE_DIR="$PROJECT_DIR/acceptance_tests"
@@ -30,13 +44,16 @@ ARCH=$(uname -m)
 echo "Architecture: $ARCH"
 echo
 
-# Check for ARM64 Linux and warn about known issues
+# Check for ARM64 Linux - not supported
 if [ "$ARCH" = "aarch64" ] && [ "$(uname)" = "Linux" ]; then
-    echo "WARNING: Running on ARM64 Linux."
-    echo "The game requires ARM64 native libraries for libGDX and LWJGL."
-    echo "OpenAL may have compatibility issues. If the game fails to start,"
-    echo "consider running tests on x86_64 Linux or macOS."
-    echo
+    echo "ERROR: ARM64 Linux is not supported for acceptance tests."
+    echo "The game's native libraries (libGDX, LWJGL) crash on ARM64 Linux."
+    echo ""
+    echo "Options:"
+    echo "  - Run on x86_64 Linux (e.g., GitHub Actions)"
+    echo "  - Run on macOS with native Steam installation"
+    echo "  - Use the devcontainer on an x86_64 host"
+    exit 1
 fi
 
 # Cleanup function
@@ -74,6 +91,7 @@ echo
 # Set up mock Steam installation (to bypass Steam detection in ModTheSpire)
 echo "Setting up mock Steam installation..."
 STEAM_DIR="$HOME/.steam/steam/steamapps"
+rm -rf "$STEAM_DIR/common/SlayTheSpire/mods"
 mkdir -p "$STEAM_DIR/common/SlayTheSpire/mods"
 mkdir -p "$STEAM_DIR/common/SlayTheSpire/jre/bin"
 
@@ -98,6 +116,7 @@ cp "$PROJECT_DIR/lib/CommunicationMod.jar" "$STEAM_DIR/common/SlayTheSpire/mods/
 cp "$PROJECT_DIR/target/STSArena.jar" "$STEAM_DIR/common/SlayTheSpire/mods/"
 
 # Also copy mods to lib/mods (MTS relative path)
+rm -rf "$PROJECT_DIR/lib/mods"
 mkdir -p "$PROJECT_DIR/lib/mods"
 cp "$PROJECT_DIR/lib/BaseMod.jar" "$PROJECT_DIR/lib/mods/"
 cp "$PROJECT_DIR/lib/CommunicationMod.jar" "$PROJECT_DIR/lib/mods/"

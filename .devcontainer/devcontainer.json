@@ -1,8 +1,10 @@
 {
-  "name": "STS Arena Dev",
+  "name": "STS Arena Dev (x86_64)",
   "build": {
-    "dockerfile": "Dockerfile"
+    "dockerfile": "Dockerfile",
+    "options": ["--platform=linux/amd64"]
   },
+  "runArgs": ["--platform=linux/amd64"],
   "features": {
     "ghcr.io/devcontainers/features/java:1": {
       "version": "8",
