@@ -154,6 +154,33 @@ public class ArenaEncounterSelectScreen {
         }
     }
 
+    /**
+     * Open the encounter selection screen with a pre-selected loadout.
+     * Used when entering arena from a normal run (F10 keybind).
+     */
+    public void openWithLoadout(long loadoutId) {
+        STSArena.logger.info("Opening Arena Encounter Select Screen with loadout ID: " + loadoutId);
+
+        // Load the loadout from the database
+        try {
+            ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+            ArenaRepository.LoadoutRecord loadout = repo.getLoadoutById(loadoutId);
+            if (loadout != null) {
+                // Set it as the selected loadout
+                ArenaLoadoutSelectScreen.selectedSavedLoadout = loadout;
+                ArenaLoadoutSelectScreen.useNewRandomLoadout = false;
+                STSArena.logger.info("Loaded loadout: " + loadout.name);
+            } else {
+                STSArena.logger.warn("Could not find loadout with ID: " + loadoutId);
+            }
+        } catch (Exception e) {
+            STSArena.logger.error("Failed to load loadout by ID", e);
+        }
+
+        // Now open normally
+        open();
+    }
+
     public void close() {
         this.isOpen = false;
         this.cancelButton.hide();

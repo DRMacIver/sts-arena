@@ -204,6 +204,16 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     }
 
     /**
+     * Open the arena encounter select screen with a pre-selected loadout.
+     * Used when entering arena from a normal run (F10 keybind).
+     */
+    public static void openEncounterSelectScreenWithLoadout(long loadoutId) {
+        if (encounterSelectScreen != null) {
+            encounterSelectScreen.openWithLoadout(loadoutId);
+        }
+    }
+
+    /**
      * Open the arena loadout select screen.
      * This is the entry point for arena mode.
      */
