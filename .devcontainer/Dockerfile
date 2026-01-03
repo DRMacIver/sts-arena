@@ -13,6 +13,12 @@ RUN apt-get update && apt-get install -y \
     libxtst6 \
     libxi6 \
     libxrender1 \
+    # Python for acceptance tests
+    python3 \
     && rm -rf /var/lib/apt/lists/*
+
+# Install uv for Python package management
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
 
 # Java 8 and Maven will be installed via the java feature in devcontainer.json

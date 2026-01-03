@@ -55,3 +55,8 @@ sendToDevs/
 
 # Devcontainer config hash (machine-specific)
 .devcontainer/.config-hash
+
+# Python virtual environments
+.venv/
+__pycache__/
+*.pyc
