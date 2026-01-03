@@ -37,15 +37,19 @@ public class ArenaPauseButtonPatch {
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MM-dd HH:mm");
 
-    // Button dimensions and position - positioned to the left of the Exit button
-    private static final float BUTTON_WIDTH = 280.0f * Settings.scale;
-    private static final float BUTTON_HEIGHT = 80.0f * Settings.scale;
-    // Position to the left of the exit button (exit is at ~1490)
-    private static final float BUTTON_X = 1100.0f * Settings.xScale;
-    private static final float BUTTON_Y = Settings.OPTION_Y - 375.0f * Settings.scale;
+    // Button image dimensions (same as ExitGameButton)
+    private static final int W = 635;
+    private static final int H = 488;
 
-    private static Hitbox arenaButtonHb = new Hitbox(BUTTON_WIDTH, BUTTON_HEIGHT);
-    private static boolean initialized = false;
+    // Hitbox size (same as ExitGameButton)
+    private static final float HB_WIDTH = 280.0f * Settings.scale;
+    private static final float HB_HEIGHT = 80.0f * Settings.scale;
+
+    // Position to the left of the exit button (exit is at x=1490, we go to x=1100)
+    private static final float BUTTON_X = 1100.0f * Settings.xScale;
+    private static final float BUTTON_Y = Settings.OPTION_Y - 202.0f * Settings.scale;
+
+    private static Hitbox arenaButtonHb = new Hitbox(HB_WIDTH, HB_HEIGHT);
 
     /**
      * Update the arena practice button during pause menu update.
@@ -59,12 +63,8 @@ public class ArenaPauseButtonPatch {
                 return;
             }
 
-            // Initialize hitbox position
-            if (!initialized) {
-                arenaButtonHb.move(BUTTON_X, BUTTON_Y);
-                initialized = true;
-            }
-
+            // Position hitbox same way as ExitGameButton (offset from button center)
+            arenaButtonHb.move(BUTTON_X + 50.0f * Settings.xScale, BUTTON_Y - 173.0f * Settings.scale);
             arenaButtonHb.update();
 
             if (arenaButtonHb.justHovered) {
@@ -86,6 +86,7 @@ public class ArenaPauseButtonPatch {
 
     /**
      * Render the arena practice button during pause menu render.
+     * Styled to match the ExitGameButton.
      */
     @SpirePatch(clz = OptionsPanel.class, method = "render")
     public static class RenderPatch {
@@ -96,39 +97,44 @@ public class ArenaPauseButtonPatch {
                 return;
             }
 
-            float x = arenaButtonHb.cX;
-            float y = arenaButtonHb.cY;
-
-            // Button background color
-            Color buttonColor;
-            if (arenaButtonHb.clickStarted) {
-                buttonColor = new Color(0.6f, 0.6f, 0.6f, 1.0f);
-            } else if (arenaButtonHb.hovered) {
-                buttonColor = Color.WHITE;
-            } else {
-                buttonColor = new Color(0.8f, 0.8f, 0.8f, 1.0f);
-            }
-
-            // Draw a simple button background using the same style as other buttons
-            sb.setColor(buttonColor);
-            // Use a generic button image
-            sb.draw(ImageMaster.OPTION_ABANDON,
-                x - 317.5f, y - 244.0f,
-                317.5f, 244.0f,
-                635.0f, 488.0f,
-                Settings.scale * 0.5f, Settings.scale * 0.5f,
+            // Draw button image (same style as ExitGameButton)
+            sb.setColor(Color.WHITE);
+            sb.draw(ImageMaster.OPTION_EXIT,
+                BUTTON_X - (float) W / 2.0f,
+                BUTTON_Y - (float) H / 2.0f,
+                (float) W / 2.0f,
+                (float) H / 2.0f,
+                W, H,
+                Settings.scale, Settings.scale,
                 0.0f,
-                0, 0, 635, 488,
+                0, 0, W, H,
                 false, false);
 
-            // Draw button label
-            Color textColor = arenaButtonHb.hovered ? Settings.GOLD_COLOR : Settings.CREAM_COLOR;
-            FontHelper.renderFontCentered(sb, FontHelper.buttonLabelFont,
+            // Draw button label (same font and position style as ExitGameButton)
+            FontHelper.renderFontCentered(sb, FontHelper.losePowerFont,
                 "Practice in Arena",
-                x, y,
-                textColor);
+                BUTTON_X + 50.0f * Settings.scale,
+                BUTTON_Y - 170.0f * Settings.scale,
+                Settings.GOLD_COLOR, 1.0f);
 
-            // Debug: render hitbox
+            // Draw hover highlight (same as ExitGameButton)
+            if (arenaButtonHb.hovered) {
+                sb.setBlendFunction(770, 1);
+                sb.setColor(new Color(1.0f, 1.0f, 1.0f, 0.2f));
+                sb.draw(ImageMaster.OPTION_EXIT,
+                    BUTTON_X - (float) W / 2.0f,
+                    BUTTON_Y - (float) H / 2.0f,
+                    (float) W / 2.0f,
+                    (float) H / 2.0f,
+                    W, H,
+                    Settings.scale, Settings.scale,
+                    0.0f,
+                    0, 0, W, H,
+                    false, false);
+                sb.setBlendFunction(770, 771);
+            }
+
+            // Render hitbox for click detection
             arenaButtonHb.render(sb);
         }
     }
