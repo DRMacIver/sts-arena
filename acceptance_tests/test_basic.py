@@ -1,46 +1,85 @@
 """
 Basic acceptance tests for Slay the Spire with CommunicationMod.
 
-These tests verify that:
-1. The game can be started
-2. Basic communication works
-3. Runs can be abandoned
-
-To run:
-    uv run pytest acceptance_tests/ -v
-
-Note: These tests require the game to be running with CommunicationMod.
+These tests verify:
+- Basic communication works
+- Games can be started
+- Runs can be abandoned
 """
 
+import time
 import pytest
-import logging
 
-logger = logging.getLogger(__name__)
+from communicator import GameCommunicator
 
 
-@pytest.mark.requires_game
-class TestBasicCommunication:
+class TestCommunication:
     """Test basic communication with the game."""
 
-    def test_game_process_running(self, game_process):
-        """Verify the game process is running."""
-        assert game_process.is_running, "Game process should be running"
+    def test_state_command(self, game: GameCommunicator):
+        """Verify the state command returns valid data."""
+        state = game.execute("state")
 
-    def test_at_main_menu(self, at_main_menu, game_process):
-        """Verify we can get to the main menu."""
-        # The at_main_menu fixture should ensure we're at main menu
-        assert game_process.is_running, "Game should still be running"
+        assert state.error is None, f"State command returned error: {state.error}"
+        assert state.ready_for_command, "Game should be ready for commands"
+
+    def test_available_commands_at_main_menu(self, at_main_menu: GameCommunicator):
+        """Verify expected commands are available at main menu."""
+        state = at_main_menu.execute("state")
+
+        assert "start" in state.available_commands, \
+            f"Expected 'start' command at main menu, got: {state.available_commands}"
+        assert "state" in state.available_commands
 
 
-@pytest.mark.requires_game
+class TestGameLifecycle:
+    """Test starting and abandoning games."""
+
+    def test_start_game(self, at_main_menu: GameCommunicator):
+        """Verify we can start a new game."""
+        game = at_main_menu
+
+        # Start a game as Ironclad
+        state = game.execute("start ironclad 0")
+        assert state.error is None, f"Start command failed: {state.error}"
+
+        # Wait for game to initialize
+        time.sleep(2.0)
+
+        # Verify we're in a game
+        state = game.execute("state")
+        assert state.in_game, "Should be in game after start command"
+        assert state.current_hp > 0, "Player should have HP"
+        assert state.max_hp > 0, "Player should have max HP"
+
+    def test_abandon_command(self, at_main_menu: GameCommunicator):
+        """Verify we can abandon a run and return to main menu."""
+        game = at_main_menu
+
+        # Start a game
+        game.execute("start ironclad 0")
+        time.sleep(2.0)
+
+        state = game.execute("state")
+        assert state.in_game, "Should be in game"
+
+        # Abandon the run
+        assert game.abandon_run(), "Abandon should succeed"
+
+        # Verify we're back at main menu
+        state = game.execute("state")
+        assert not state.in_game, "Should be at main menu after abandon"
+
+
 class TestArenaMode:
-    """Test arena mode functionality (placeholder for future tests)."""
+    """Placeholder tests for arena mode functionality."""
 
-    def test_placeholder(self, at_main_menu):
-        """Placeholder test for arena mode."""
-        # TODO: Implement arena mode tests
-        # - Navigate to arena menu
-        # - Start a fight
-        # - Verify fight state
-        # - Complete or abandon fight
+    @pytest.mark.skip(reason="Arena mode tests not yet implemented")
+    def test_navigate_to_arena(self, at_main_menu: GameCommunicator):
+        """Test navigating to arena mode from main menu."""
+        pass
+
+    @pytest.mark.skip(reason="Arena mode tests not yet implemented")
+    def test_start_arena_fight(self, at_main_menu: GameCommunicator):
+        """Test starting an arena fight."""
         pass
