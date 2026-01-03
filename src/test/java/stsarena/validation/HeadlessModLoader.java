@@ -3,8 +3,8 @@ package stsarena.validation;
 import java.io.*;
 import java.lang.reflect.*;
 import java.net.*;
-import java.nio.file.*;
 import java.util.*;
+import java.util.logging.*;
 
 /**
  * Headless mod loader that runs ModTheSpire's full loading pipeline without starting the game.
@@ -14,7 +14,6 @@ import java.util.*;
  * - Dependency resolution
  * - Annotation scanning for patches
  * - Actual patch application via Javassist
- * - Mod initialization (@SpireInitializer methods)
  *
  * Unlike the simpler HeadlessPatchTest, this actually runs ModTheSpire's code.
  */
@@ -26,13 +25,11 @@ public class HeadlessModLoader {
         "lib/BaseMod.jar"
     };
 
-    private List<String> errors = new ArrayList<>();
-    private List<String> warnings = new ArrayList<>();
     private boolean verbose = false;
     private boolean skipCompile = false;
     private boolean stsArenaOnly = false;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         HeadlessModLoader loader = new HeadlessModLoader();
 
         // Parse args
@@ -46,18 +43,36 @@ public class HeadlessModLoader {
             }
         }
 
-        int exitCode = loader.run();
-        System.exit(exitCode);
+        loader.run();
     }
 
-    public int run() {
+    public void run() throws Exception {
+        // Configure java.util.logging to stderr
+        Logger rootLogger = Logger.getLogger("");
+        rootLogger.setLevel(Level.ALL);
+        for (Handler h : rootLogger.getHandlers()) {
+            rootLogger.removeHandler(h);
+        }
+        ConsoleHandler handler = new ConsoleHandler() {
+            @Override
+            protected synchronized void setOutputStream(OutputStream out) throws SecurityException {
+                super.setOutputStream(System.err);
+            }
+        };
+        handler.setLevel(Level.ALL);
+        rootLogger.addHandler(handler);
+
+        // Configure Log4j2 (used by BaseMod) to stderr
+        // Set system properties before Log4j2 initializes
+        System.setProperty("log4j2.level", "DEBUG");
+        System.setProperty("log4j.configurationFile", "");  // Disable file config
+
         System.out.println("=== STS Arena Headless Mod Loader ===\n");
 
         // Check prerequisites
         for (String jar : REQUIRED_JARS) {
             if (!new File(jar).exists()) {
-                System.err.println("ERROR: Required JAR not found: " + jar);
-                return 1;
+                throw new FileNotFoundException("Required JAR not found: " + jar);
             }
             System.out.println("Found: " + jar);
         }
@@ -66,42 +81,31 @@ public class HeadlessModLoader {
         File modJar = new File("target/STSArena.jar");
         if (!modJar.exists()) {
             System.out.println("\nMod JAR not found, building...");
-            try {
-                ProcessBuilder pb = new ProcessBuilder("mvn", "package", "-DskipTests", "-q");
-                pb.inheritIO();
-                Process p = pb.start();
-                int result = p.waitFor();
-                if (result != 0) {
-                    System.err.println("ERROR: Maven build failed");
-                    return 1;
-                }
-            } catch (Exception e) {
-                System.err.println("ERROR: Failed to build mod: " + e.getMessage());
-                return 1;
+            ProcessBuilder pb = new ProcessBuilder("mvn", "package", "-DskipTests", "-q");
+            pb.inheritIO();
+            Process p = pb.start();
+            int result = p.waitFor();
+            if (result != 0) {
+                throw new RuntimeException("Maven build failed");
             }
         }
 
         if (!modJar.exists()) {
-            System.err.println("ERROR: Mod JAR not found after build");
-            return 1;
+            throw new FileNotFoundException("Mod JAR not found after build");
         }
         System.out.println("Found: " + modJar);
 
         System.out.println("\nLoading mods through ModTheSpire pipeline...\n");
+        runModLoading();
 
-        try {
-            return runModLoading() ? 0 : 1;
-        } catch (Exception e) {
-            System.err.println("\nERROR: Mod loading failed with exception:");
-            e.printStackTrace();
-            errors.add("Exception: " + e.getMessage());
-            return 1;
-        }
+        System.out.println("\n=== MOD LOADING PASSED ===");
     }
 
-    private boolean runModLoading() throws Exception {
+    private void runModLoading() throws Exception {
         // Set up classpath with all dependencies
+        // Include test resources for log4j2.xml config
         URL[] urls = new URL[] {
+            new File("src/test/resources").toURI().toURL(),
             new File("lib/desktop-1.0.jar").toURI().toURL(),
             new File("lib/ModTheSpire.jar").toURI().toURL(),
             new File("lib/BaseMod.jar").toURI().toURL(),
@@ -115,6 +119,12 @@ public class HeadlessModLoader {
             System.out.println("Step 1: Loading ModTheSpire classes...");
             Class<?> loaderClass = mainLoader.loadClass("com.evacipated.cardcrawl.modthespire.Loader");
             Class<?> modInfoClass = mainLoader.loadClass("com.evacipated.cardcrawl.modthespire.ModInfo");
+
+            // Enable debug logging
+            Field debugField = loaderClass.getDeclaredField("DEBUG");
+            debugField.setAccessible(true);
+            debugField.set(null, true);
+            System.out.println("  Debug logging enabled");
 
             // Initialize MTS version
             Method loadMTSVersion = loaderClass.getDeclaredMethod("loadMTSVersion");
@@ -130,12 +140,10 @@ public class HeadlessModLoader {
             Object stsArena = readModInfo.invoke(null, new File("target/STSArena.jar"));
 
             if (baseMod == null) {
-                errors.add("Failed to read BaseMod.jar ModInfo");
-                return false;
+                throw new RuntimeException("Failed to read BaseMod.jar ModInfo");
             }
             if (stsArena == null) {
-                errors.add("Failed to read STSArena.jar ModInfo");
-                return false;
+                throw new RuntimeException("Failed to read STSArena.jar ModInfo");
             }
 
             printModInfo(modInfoClass, baseMod, "BaseMod");
@@ -145,12 +153,6 @@ public class HeadlessModLoader {
             System.out.println("\nStep 3: Setting up class pool...");
             Class<?> mtsClassPoolClass = mainLoader.loadClass("com.evacipated.cardcrawl.modthespire.MTSClassPool");
             Class<?> mtsClassLoaderClass = mainLoader.loadClass("com.evacipated.cardcrawl.modthespire.MTSClassLoader");
-
-            // Get the corepatches resource
-            InputStream corePatches = loaderClass.getResourceAsStream("/corepatches.jar");
-            if (corePatches == null) {
-                warnings.add("Could not find corepatches.jar in ModTheSpire");
-            }
 
             // Create MTSClassLoader
             Constructor<?> mtsLoaderCtor = mtsClassLoaderClass.getConstructor(
@@ -207,54 +209,28 @@ public class HeadlessModLoader {
 
             // Step 5: Inject patches (this is where most errors would occur)
             System.out.println("\nStep 5: Injecting patches...");
-            try {
-                Class<?> classPoolClass = mainLoader.loadClass("javassist.ClassPool");
-                Method injectPatches = patcherClass.getDeclaredMethod("injectPatches",
-                    ClassLoader.class, classPoolClass, List.class);
-                injectPatches.invoke(null, mtsLoader, pool, patchSets);
-                System.out.println("  Patches injected successfully");
-            } catch (InvocationTargetException e) {
-                Throwable cause = e.getCause();
-                errors.add("Patch injection failed: " + cause.getMessage());
-                if (verbose) {
-                    cause.printStackTrace();
-                }
-                return false;
-            }
+            System.out.flush();
+            Class<?> classPoolClass = mainLoader.loadClass("javassist.ClassPool");
+            Method injectPatches = patcherClass.getDeclaredMethod("injectPatches",
+                ClassLoader.class, classPoolClass, List.class);
+            injectPatches.invoke(null, mtsLoader, pool, patchSets);
+            System.out.println("  Patches injected successfully");
 
             // Step 6: Finalize patches
             System.out.println("\nStep 6: Finalizing patches...");
-            try {
-                Method finalizePatches = patcherClass.getDeclaredMethod("finalizePatches", ClassLoader.class);
-                finalizePatches.invoke(null, mtsLoader);
-                System.out.println("  Patches finalized");
-            } catch (InvocationTargetException e) {
-                Throwable cause = e.getCause();
-                errors.add("Patch finalization failed: " + cause.getMessage());
-                if (verbose) {
-                    cause.printStackTrace();
-                }
-                return false;
-            }
+            Method finalizePatches = patcherClass.getDeclaredMethod("finalizePatches", ClassLoader.class);
+            finalizePatches.invoke(null, mtsLoader);
+            System.out.println("  Patches finalized");
 
             // Step 7: Compile patched classes
             if (skipCompile) {
                 System.out.println("\nStep 7: Compiling patched classes... SKIPPED (--skip-compile)");
             } else {
                 System.out.println("\nStep 7: Compiling patched classes...");
-                try {
-                    Method compilePatches = patcherClass.getDeclaredMethod("compilePatches",
-                        mtsClassLoaderClass, mtsClassPoolClass);
-                    compilePatches.invoke(null, mtsLoader, pool);
-                    System.out.println("  Classes compiled");
-                } catch (InvocationTargetException e) {
-                    Throwable cause = e.getCause();
-                    errors.add("Class compilation failed: " + cause.getMessage());
-                    if (verbose) {
-                        cause.printStackTrace();
-                    }
-                    return false;
-                }
+                Method compilePatches = patcherClass.getDeclaredMethod("compilePatches",
+                    mtsClassLoaderClass, mtsClassPoolClass);
+                compilePatches.invoke(null, mtsLoader, pool);
+                System.out.println("  Classes compiled");
             }
 
             // Step 8: Test that we can load a patched class
@@ -262,22 +238,24 @@ public class HeadlessModLoader {
                 System.out.println("\nStep 8: Testing patched class loading... SKIPPED (depends on Step 7)");
             } else {
                 System.out.println("\nStep 8: Testing patched class loading...");
-                try {
-                    // Try to load a class we know we patch
-                    Class<?> menuButtonClass = Class.forName(
-                        "com.megacrit.cardcrawl.screens.mainMenu.MenuButton",
-                        true,
-                        (ClassLoader) mtsLoader);
-                    System.out.println("  Loaded MenuButton class: " + menuButtonClass.getName());
-                    System.out.println("  Class loader: " + menuButtonClass.getClassLoader().getClass().getSimpleName());
-                } catch (ClassNotFoundException e) {
-                    warnings.add("Could not load patched MenuButton class: " + e.getMessage());
-                }
+                Class<?> menuButtonClass = Class.forName(
+                    "com.megacrit.cardcrawl.screens.mainMenu.MenuButton",
+                    true,
+                    (ClassLoader) mtsLoader);
+                System.out.println("  Loaded MenuButton class: " + menuButtonClass.getName());
+                System.out.println("  Class loader: " + menuButtonClass.getClassLoader().getClass().getSimpleName());
             }
 
-            // Print final report
-            printReport();
-            return errors.isEmpty();
+            // Step 9: Initialize mods (runs @SpireInitializer methods - this is where logging happens)
+            if (skipCompile) {
+                System.out.println("\nStep 9: Initializing mods... SKIPPED (depends on Step 7)");
+            } else {
+                System.out.println("\nStep 9: Initializing mods...");
+                System.out.flush();
+                Method initializeMods = patcherClass.getDeclaredMethod("initializeMods", ClassLoader.class);
+                initializeMods.invoke(null, mtsLoader);
+                System.out.println("  Mods initialized");
+            }
 
         } finally {
             mainLoader.close();
@@ -297,27 +275,5 @@ public class HeadlessModLoader {
         System.out.println("    Name: " + name);
         System.out.println("    ID: " + id);
         System.out.println("    Version: " + version);
-    }
-
-    private void printReport() {
-        System.out.println("\n=== Mod Loading Report ===");
-        System.out.println("Errors: " + errors.size());
-        System.out.println("Warnings: " + warnings.size());
-
-        if (!errors.isEmpty()) {
-            System.out.println("\n--- ERRORS ---");
-            for (String error : errors) {
-                System.out.println("  ERROR: " + error);
-            }
-        }
-
-        if (!warnings.isEmpty()) {
-            System.out.println("\n--- WARNINGS ---");
-            for (String warning : warnings) {
-                System.out.println("  WARN: " + warning);
-            }
-        }
-
-        System.out.println("\n" + (errors.isEmpty() ? "MOD LOADING PASSED" : "MOD LOADING FAILED"));
     }
 }

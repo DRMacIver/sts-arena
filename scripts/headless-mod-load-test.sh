@@ -52,7 +52,8 @@ echo "Build successful"
 echo
 
 # Build classpath for the test
-CLASSPATH="target/test-classes"
+CLASSPATH="src/test/resources"
+CLASSPATH="$CLASSPATH:target/test-classes"
 CLASSPATH="$CLASSPATH:target/classes"
 CLASSPATH="$CLASSPATH:lib/desktop-1.0.jar"
 CLASSPATH="$CLASSPATH:lib/ModTheSpire.jar"
