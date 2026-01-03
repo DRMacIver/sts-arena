@@ -113,10 +113,31 @@ public class ArenaSaveManager {
         save.put("hand_size", 5);
         // Use the stored potion slots (accounts for ascension and Potion Belt)
         save.put("potion_slots", loadout.potionSlots);
-        // Energy is stored in red field (all characters use this)
-        save.put("red", 3);
-        save.put("green", 0);
-        save.put("blue", 0);
+        // Calculate energy: base 3 plus any energy-granting relics
+        int baseEnergy = 3;
+        int bonusEnergy = 0;
+        for (AbstractRelic relic : loadout.relics) {
+            String id = relic.relicId;
+            // Relics that grant +1 energy at the cost of something else
+            if ("Busted Crown".equals(id) ||
+                "Coffee Dripper".equals(id) ||
+                "Cursed Key".equals(id) ||
+                "Fusion Hammer".equals(id) ||
+                "Ectoplasm".equals(id) ||
+                "Sozu".equals(id) ||
+                "Runic Dome".equals(id) ||
+                "Philosopher's Stone".equals(id) ||
+                "Velvet Choker".equals(id) ||
+                "Mark of Pain".equals(id)) {
+                bonusEnergy++;
+            }
+        }
+        // Energy is stored in red/green/blue fields based on character
+        int totalEnergy = baseEnergy + bonusEnergy;
+        save.put("red", loadout.playerClass == AbstractPlayer.PlayerClass.IRONCLAD ||
+                        loadout.playerClass == AbstractPlayer.PlayerClass.WATCHER ? totalEnergy : 0);
+        save.put("green", loadout.playerClass == AbstractPlayer.PlayerClass.THE_SILENT ? totalEnergy : 0);
+        save.put("blue", loadout.playerClass == AbstractPlayer.PlayerClass.DEFECT ? totalEnergy : 0);
 
         // Room state - set to empty room, we'll transition to fight
         save.put("current_room", "com.megacrit.cardcrawl.rooms.EmptyRoom");

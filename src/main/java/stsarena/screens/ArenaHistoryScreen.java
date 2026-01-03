@@ -370,6 +370,13 @@ public class ArenaHistoryScreen {
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             "Action", col5, headerY, Settings.GOLD_COLOR);
 
+        // Separator line below headers
+        float separatorY = headerY - 25.0f * Settings.scale;
+        sb.setColor(new Color(0.4f, 0.4f, 0.5f, 0.8f));
+        sb.draw(com.megacrit.cardcrawl.helpers.ImageMaster.WHITE_SQUARE_IMG,
+            col1 - 10.0f * Settings.scale, separatorY,
+            (col5 + 120.0f * Settings.scale) - col1 + 20.0f * Settings.scale, 2.0f * Settings.scale);
+
         // History rows
         if (recentRuns != null && !recentRuns.isEmpty()) {
             float y = HISTORY_START_Y - scrollY;

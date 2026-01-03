@@ -150,8 +150,8 @@ public class ArenaDeathScreenButtonsPatch {
             // Render Modify Deck button
             renderButton(sb, modifyDeckHb, "Modify Deck", modifyDeckClickStarted);
 
-            // Render Try Again button
-            renderButton(sb, tryAgainHb, "Try Again", tryAgainClickStarted);
+            // Render Rematch button
+            renderButton(sb, tryAgainHb, "Rematch", tryAgainClickStarted);
         }
 
         private static void renderButton(SpriteBatch sb, Hitbox hb, String label, boolean clickStarted) {
@@ -160,27 +160,36 @@ public class ArenaDeathScreenButtonsPatch {
 
             // Determine color based on state
             Color buttonColor;
+            Color textColor;
             if (clickStarted) {
-                buttonColor = Color.LIGHT_GRAY;
+                buttonColor = new Color(0.5f, 0.5f, 0.5f, 1.0f);
+                textColor = Settings.CREAM_COLOR;
             } else if (hb.hovered) {
-                buttonColor = Color.WHITE;
+                buttonColor = new Color(1.0f, 1.0f, 0.9f, 1.0f);
+                textColor = Settings.GOLD_COLOR;
             } else {
-                buttonColor = new Color(0.7f, 0.7f, 0.7f, 1.0f);
+                buttonColor = new Color(0.8f, 0.8f, 0.8f, 1.0f);
+                textColor = Settings.CREAM_COLOR;
             }
 
-            // Draw button background
+            // Draw button background with slightly larger scale for more padding
             sb.setColor(buttonColor);
+            float btnScale = Settings.scale * 0.55f;
             sb.draw(ImageMaster.DYNAMIC_BTN_IMG2,
-                x - 256.0f, y - 256.0f,
-                256.0f, 256.0f,
+                x - 256.0f * btnScale, y - 256.0f * btnScale,
+                256.0f * btnScale, 256.0f * btnScale,
                 512.0f, 512.0f,
-                Settings.scale, Settings.scale,
+                btnScale, btnScale,
                 0.0f,
                 0, 0, 512, 512,
                 false, false);
 
+            // Draw text shadow for better readability
+            FontHelper.renderFontCentered(sb, FontHelper.buttonLabelFont, label,
+                x + 2.0f * Settings.scale, y - 2.0f * Settings.scale, Color.BLACK);
+
             // Draw button label
-            FontHelper.renderFontCentered(sb, FontHelper.panelEndTurnFont, label, x, y, buttonColor);
+            FontHelper.renderFontCentered(sb, FontHelper.buttonLabelFont, label, x, y, textColor);
 
             // Draw hitbox for debugging (optional)
             hb.render(sb);

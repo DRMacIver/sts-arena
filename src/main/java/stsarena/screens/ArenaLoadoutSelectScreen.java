@@ -1,5 +1,7 @@
 package stsarena.screens;
 
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -72,10 +74,12 @@ public class ArenaLoadoutSelectScreen {
     // Persistently selected item (for action buttons)
     private ListItem selectedItem = null;
 
-    // Action buttons (shown when a saved loadout is selected)
-    private static final float ACTION_BUTTON_WIDTH = 180.0f * Settings.scale;
-    private static final float ACTION_BUTTON_HEIGHT = 40.0f * Settings.scale;
-    private static final float ACTION_BUTTON_SPACING = 50.0f * Settings.scale;
+    // Action buttons (shown when a saved loadout is selected) - two rows at bottom
+    private static final float ACTION_BUTTON_WIDTH = 120.0f * Settings.scale;
+    private static final float ACTION_BUTTON_HEIGHT = 35.0f * Settings.scale;
+    private static final float ACTION_BUTTON_GAP = 10.0f * Settings.scale;
+    private static final float ACTION_BUTTONS_Y_ROW1 = 140.0f * Settings.scale;  // Top row
+    private static final float ACTION_BUTTONS_Y_ROW2 = 95.0f * Settings.scale;   // Bottom row
     private Hitbox fightButtonHb, favoriteButtonHb, editButtonHb, copyButtonHb, renameButtonHb, deleteButtonHb, loadoutHistoryButtonHb;
 
     // Rename state
@@ -376,24 +380,13 @@ public class ArenaLoadoutSelectScreen {
             return;  // Block other interaction while confirming
         }
 
-        // Multi-select toggle button (bottom left of list area)
-        float multiSelectY = 100.0f * Settings.scale;
-        multiSelectToggleHb.move(LEFT_PANEL_X + BULK_BUTTON_WIDTH / 2.0f + 10.0f * Settings.scale, multiSelectY);
-        multiSelectToggleHb.update();
-        if (multiSelectToggleHb.hovered && InputHelper.justClickedLeft && !isRenaming && !isConfirmingDelete && !isTypingSearch) {
-            isMultiSelectMode = !isMultiSelectMode;
-            selectedLoadoutIds.clear();
-            selectedItem = null;  // Clear single selection when entering multi-select
-            InputHelper.justClickedLeft = false;
-        }
-
-        // Update bulk operation buttons when in multi-select mode
-        if (isMultiSelectMode && !selectedLoadoutIds.isEmpty()) {
+        // Update bulk operation buttons when items are selected via shift/ctrl-click
+        if (!selectedLoadoutIds.isEmpty()) {
             updateBulkOperations();
         }
 
-        // Update action buttons when a saved loadout is selected (not in multi-select mode)
-        if (!isMultiSelectMode && selectedItem != null && selectedItem.savedLoadout != null && !isRenaming) {
+        // Update action buttons when a saved loadout is selected (and no multi-selection active)
+        if (selectedLoadoutIds.isEmpty() && selectedItem != null && selectedItem.savedLoadout != null && !isRenaming) {
             updateActionButtons();
         }
 
@@ -666,16 +659,23 @@ public class ArenaLoadoutSelectScreen {
     }
 
     private void updateActionButtons() {
-        float buttonX = RIGHT_PANEL_X + RIGHT_PANEL_WIDTH / 2.0f;
-        float buttonStartY = 350.0f * Settings.scale;
+        // Two rows of buttons at the bottom of the preview panel
+        float panelCenterX = RIGHT_PANEL_X + RIGHT_PANEL_WIDTH / 2.0f;
+        float totalRow1Width = ACTION_BUTTON_WIDTH * 4 + ACTION_BUTTON_GAP * 3;
+        float totalRow2Width = ACTION_BUTTON_WIDTH * 3 + ACTION_BUTTON_GAP * 2;
+        float row1StartX = panelCenterX - totalRow1Width / 2.0f + ACTION_BUTTON_WIDTH / 2.0f;
+        float row2StartX = panelCenterX - totalRow2Width / 2.0f + ACTION_BUTTON_WIDTH / 2.0f;
 
-        fightButtonHb.move(buttonX, buttonStartY);
-        favoriteButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING);
-        editButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 2);
-        copyButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 3);
-        renameButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 4);
-        loadoutHistoryButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 5);
-        deleteButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 6);
+        // Row 1: Fight, Favorite, Edit, Copy
+        fightButtonHb.move(row1StartX, ACTION_BUTTONS_Y_ROW1);
+        favoriteButtonHb.move(row1StartX + ACTION_BUTTON_WIDTH + ACTION_BUTTON_GAP, ACTION_BUTTONS_Y_ROW1);
+        editButtonHb.move(row1StartX + (ACTION_BUTTON_WIDTH + ACTION_BUTTON_GAP) * 2, ACTION_BUTTONS_Y_ROW1);
+        copyButtonHb.move(row1StartX + (ACTION_BUTTON_WIDTH + ACTION_BUTTON_GAP) * 3, ACTION_BUTTONS_Y_ROW1);
+
+        // Row 2: Rename, History, Delete
+        renameButtonHb.move(row2StartX, ACTION_BUTTONS_Y_ROW2);
+        loadoutHistoryButtonHb.move(row2StartX + ACTION_BUTTON_WIDTH + ACTION_BUTTON_GAP, ACTION_BUTTONS_Y_ROW2);
+        deleteButtonHb.move(row2StartX + (ACTION_BUTTON_WIDTH + ACTION_BUTTON_GAP) * 2, ACTION_BUTTONS_Y_ROW2);
 
         fightButtonHb.update();
         favoriteButtonHb.update();
@@ -735,8 +735,13 @@ public class ArenaLoadoutSelectScreen {
     }
 
     private void handleItemClick(ListItem item) {
-        // For Create Custom and New Random, navigate immediately (not in multi-select mode)
-        if (!isMultiSelectMode) {
+        // Check if shift or ctrl is held for multi-select
+        boolean isShiftHeld = Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT) || Gdx.input.isKeyPressed(Input.Keys.SHIFT_RIGHT);
+        boolean isCtrlHeld = Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT) || Gdx.input.isKeyPressed(Input.Keys.CONTROL_RIGHT);
+        boolean isMultiSelectClick = isShiftHeld || isCtrlHeld;
+
+        // For Create Custom and New Random, navigate immediately (unless multi-selecting)
+        if (!isMultiSelectClick) {
             if (item.isCustomCreate) {
                 STSArena.logger.info("Opening custom loadout creator");
                 this.close();
@@ -756,8 +761,8 @@ public class ArenaLoadoutSelectScreen {
 
         // For saved loadouts
         if (item.savedLoadout != null) {
-            if (isMultiSelectMode) {
-                // Toggle selection in multi-select mode
+            if (isMultiSelectClick) {
+                // Shift/Ctrl-click: toggle selection for bulk operations
                 Long id = item.savedLoadout.dbId;
                 if (selectedLoadoutIds.contains(id)) {
                     selectedLoadoutIds.remove(id);
@@ -765,7 +770,8 @@ public class ArenaLoadoutSelectScreen {
                     selectedLoadoutIds.add(id);
                 }
             } else {
-                // Single select mode
+                // Normal click: single select, clear any multi-selection
+                selectedLoadoutIds.clear();
                 selectedItem = item;
                 isRenaming = false;
                 isConfirmingDelete = false;
@@ -774,8 +780,11 @@ public class ArenaLoadoutSelectScreen {
     }
 
     private void updateBulkOperations() {
-        float buttonsY = 100.0f * Settings.scale;
-        float startX = LEFT_PANEL_X + BULK_BUTTON_WIDTH + 30.0f * Settings.scale;
+        // Only show bulk operations when items are selected
+        if (selectedLoadoutIds.isEmpty()) return;
+
+        float buttonsY = 60.0f * Settings.scale;
+        float startX = LEFT_PANEL_X + 10.0f * Settings.scale;
 
         bulkDeleteHb.move(startX + BULK_BUTTON_WIDTH / 2.0f, buttonsY);
         bulkUnfavoriteHb.move(startX + BULK_BUTTON_WIDTH * 1.5f + 10.0f * Settings.scale, buttonsY);
@@ -786,7 +795,7 @@ public class ArenaLoadoutSelectScreen {
         cancelMultiSelectHb.update();
 
         if (InputHelper.justClickedLeft) {
-            if (bulkDeleteHb.hovered && !selectedLoadoutIds.isEmpty()) {
+            if (bulkDeleteHb.hovered) {
                 // Delete all selected loadouts
                 ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
                 for (Long id : selectedLoadoutIds) {
@@ -794,13 +803,11 @@ public class ArenaLoadoutSelectScreen {
                     STSArena.logger.info("Bulk deleted loadout: " + id);
                 }
                 selectedLoadoutIds.clear();
-                isMultiSelectMode = false;
                 loadAllLoadouts();
                 buildItemList();
                 InputHelper.justClickedLeft = false;
-            } else if (bulkUnfavoriteHb.hovered && !selectedLoadoutIds.isEmpty()) {
+            } else if (bulkUnfavoriteHb.hovered) {
                 // Unfavorite all selected loadouts
-                ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
                 for (Long id : selectedLoadoutIds) {
                     // Set favorite to false directly
                     String sql = "UPDATE loadouts SET is_favorite = 0 WHERE id = ?";
@@ -812,12 +819,11 @@ public class ArenaLoadoutSelectScreen {
                     }
                 }
                 selectedLoadoutIds.clear();
-                isMultiSelectMode = false;
                 loadAllLoadouts();
                 buildItemList();
                 InputHelper.justClickedLeft = false;
             } else if (cancelMultiSelectHb.hovered) {
-                isMultiSelectMode = false;
+                // Clear selection
                 selectedLoadoutIds.clear();
                 InputHelper.justClickedLeft = false;
             }
@@ -862,8 +868,7 @@ public class ArenaLoadoutSelectScreen {
         renderHistoryButton(sb);
         renderStatsButton(sb);
 
-        // Render multi-select toggle and bulk operations
-        renderMultiSelectToggle(sb);
+        // Render bulk operations when items are selected
         renderBulkOperations(sb);
 
         // Cancel button
@@ -898,7 +903,7 @@ public class ArenaLoadoutSelectScreen {
 
     private void renderOption(SpriteBatch sb, ListItem item, float y, Hitbox hb) {
         boolean isSelected = (selectedItem == item);
-        boolean isMultiSelected = isMultiSelectMode && item.savedLoadout != null &&
+        boolean isMultiSelected = item.savedLoadout != null &&
                                   selectedLoadoutIds.contains(item.savedLoadout.dbId);
 
         // Background
@@ -921,9 +926,9 @@ public class ArenaLoadoutSelectScreen {
             rowWidth,
             BUTTON_HEIGHT);
 
-        // In multi-select mode, render checkbox for saved loadouts
+        // When items are selected, render checkbox indicator for saved loadouts
         float textOffset = 0;
-        if (isMultiSelectMode && item.savedLoadout != null) {
+        if (!selectedLoadoutIds.isEmpty() && item.savedLoadout != null) {
             float checkboxSize = 18.0f * Settings.scale;
             float checkboxX = LEFT_PANEL_X + 8.0f * Settings.scale;
             float checkboxY = y - BUTTON_HEIGHT / 2.0f - checkboxSize / 2.0f;
@@ -1056,44 +1061,36 @@ public class ArenaLoadoutSelectScreen {
     }
 
     private void renderActionButtons(SpriteBatch sb) {
-        float buttonX = RIGHT_PANEL_X + RIGHT_PANEL_WIDTH / 2.0f;
-        float buttonStartY = 350.0f * Settings.scale;
-
-        // Fight button (green)
-        renderActionButton(sb, fightButtonHb, "Fight", buttonStartY,
+        // Row 1: Fight, Favorite, Edit, Copy
+        renderActionButton(sb, fightButtonHb, "Fight",
             new Color(0.2f, 0.5f, 0.2f, 0.9f), Settings.GREEN_TEXT_COLOR);
 
-        // Favorite button (gold when favorited, gray otherwise)
         boolean isFav = selectedItem != null && selectedItem.savedLoadout != null && selectedItem.savedLoadout.isFavorite;
-        String favLabel = isFav ? "* Unfavorite" : "* Favorite";
+        String favLabel = isFav ? "Unfav" : "Fav";
         Color favBgColor = isFav ? new Color(0.5f, 0.45f, 0.2f, 0.9f) : new Color(0.25f, 0.25f, 0.3f, 0.9f);
         Color favTextColor = isFav ? Settings.GOLD_COLOR : Settings.CREAM_COLOR;
-        renderActionButton(sb, favoriteButtonHb, favLabel, buttonStartY - ACTION_BUTTON_SPACING,
-            favBgColor, favTextColor);
+        renderActionButton(sb, favoriteButtonHb, favLabel, favBgColor, favTextColor);
 
-        // Edit button (orange/yellow)
-        renderActionButton(sb, editButtonHb, "Edit", buttonStartY - ACTION_BUTTON_SPACING * 2,
+        renderActionButton(sb, editButtonHb, "Edit",
             new Color(0.5f, 0.4f, 0.2f, 0.9f), new Color(1.0f, 0.8f, 0.4f, 1.0f));
 
-        // Copy button (blue)
-        renderActionButton(sb, copyButtonHb, "Copy", buttonStartY - ACTION_BUTTON_SPACING * 3,
+        renderActionButton(sb, copyButtonHb, "Copy",
             new Color(0.2f, 0.3f, 0.5f, 0.9f), new Color(0.5f, 0.7f, 1.0f, 1.0f));
 
-        // Rename button (gray)
-        renderActionButton(sb, renameButtonHb, "Rename", buttonStartY - ACTION_BUTTON_SPACING * 4,
+        // Row 2: Rename, History, Delete
+        renderActionButton(sb, renameButtonHb, "Rename",
             new Color(0.25f, 0.25f, 0.3f, 0.9f), Settings.CREAM_COLOR);
 
-        // History button (gray)
-        renderActionButton(sb, loadoutHistoryButtonHb, "History", buttonStartY - ACTION_BUTTON_SPACING * 5,
+        renderActionButton(sb, loadoutHistoryButtonHb, "History",
             new Color(0.25f, 0.25f, 0.3f, 0.9f), Settings.CREAM_COLOR);
 
-        // Delete button (red)
-        renderActionButton(sb, deleteButtonHb, "Delete", buttonStartY - ACTION_BUTTON_SPACING * 6,
+        renderActionButton(sb, deleteButtonHb, "Delete",
             new Color(0.5f, 0.2f, 0.2f, 0.9f), new Color(1.0f, 0.5f, 0.5f, 1.0f));
     }
 
-    private void renderActionButton(SpriteBatch sb, Hitbox hb, String text, float y, Color bgColor, Color textColor) {
-        float buttonX = RIGHT_PANEL_X + RIGHT_PANEL_WIDTH / 2.0f;
+    private void renderActionButton(SpriteBatch sb, Hitbox hb, String text, Color bgColor, Color textColor) {
+        float x = hb.cX;
+        float y = hb.cY;
 
         // Darken or lighten on hover
         Color finalBgColor = hb.hovered ?
@@ -1102,7 +1099,7 @@ public class ArenaLoadoutSelectScreen {
 
         sb.setColor(finalBgColor);
         sb.draw(ImageMaster.WHITE_SQUARE_IMG,
-            buttonX - ACTION_BUTTON_WIDTH / 2.0f,
+            x - ACTION_BUTTON_WIDTH / 2.0f,
             y - ACTION_BUTTON_HEIGHT / 2.0f,
             ACTION_BUTTON_WIDTH,
             ACTION_BUTTON_HEIGHT);
@@ -1110,12 +1107,12 @@ public class ArenaLoadoutSelectScreen {
         // Border
         sb.setColor(hb.hovered ? Settings.GOLD_COLOR : new Color(0.4f, 0.4f, 0.5f, 1.0f));
         float bw = 2.0f * Settings.scale;
-        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - ACTION_BUTTON_WIDTH / 2.0f, y - ACTION_BUTTON_HEIGHT / 2.0f, ACTION_BUTTON_WIDTH, bw);
-        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - ACTION_BUTTON_WIDTH / 2.0f, y + ACTION_BUTTON_HEIGHT / 2.0f - bw, ACTION_BUTTON_WIDTH, bw);
-        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - ACTION_BUTTON_WIDTH / 2.0f, y - ACTION_BUTTON_HEIGHT / 2.0f, bw, ACTION_BUTTON_HEIGHT);
-        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX + ACTION_BUTTON_WIDTH / 2.0f - bw, y - ACTION_BUTTON_HEIGHT / 2.0f, bw, ACTION_BUTTON_HEIGHT);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, x - ACTION_BUTTON_WIDTH / 2.0f, y - ACTION_BUTTON_HEIGHT / 2.0f, ACTION_BUTTON_WIDTH, bw);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, x - ACTION_BUTTON_WIDTH / 2.0f, y + ACTION_BUTTON_HEIGHT / 2.0f - bw, ACTION_BUTTON_WIDTH, bw);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, x - ACTION_BUTTON_WIDTH / 2.0f, y - ACTION_BUTTON_HEIGHT / 2.0f, bw, ACTION_BUTTON_HEIGHT);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, x + ACTION_BUTTON_WIDTH / 2.0f - bw, y - ACTION_BUTTON_HEIGHT / 2.0f, bw, ACTION_BUTTON_HEIGHT);
 
-        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N, text, buttonX, y, finalTextColor);
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N, text, x, y, finalTextColor);
     }
 
     private void renderRenameInput(SpriteBatch sb) {
@@ -1512,39 +1509,11 @@ public class ArenaLoadoutSelectScreen {
         }
     }
 
-    private void renderMultiSelectToggle(SpriteBatch sb) {
-        float buttonX = LEFT_PANEL_X + BULK_BUTTON_WIDTH / 2.0f + 10.0f * Settings.scale;
-        float buttonY = 100.0f * Settings.scale;
-
-        String label = isMultiSelectMode ? "Cancel Select" : "Select Multiple";
-        Color bgColor = isMultiSelectMode ?
-            (multiSelectToggleHb.hovered ? new Color(0.5f, 0.3f, 0.3f, 0.9f) : new Color(0.4f, 0.25f, 0.25f, 0.8f)) :
-            (multiSelectToggleHb.hovered ? new Color(0.3f, 0.35f, 0.45f, 0.9f) : new Color(0.2f, 0.25f, 0.35f, 0.8f));
-        Color textColor = multiSelectToggleHb.hovered ? Settings.GOLD_COLOR : Settings.CREAM_COLOR;
-
-        // Background
-        sb.setColor(bgColor);
-        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
-            buttonX - BULK_BUTTON_WIDTH / 2.0f, buttonY - BULK_BUTTON_HEIGHT / 2.0f,
-            BULK_BUTTON_WIDTH, BULK_BUTTON_HEIGHT);
-
-        // Border
-        sb.setColor(multiSelectToggleHb.hovered ? Settings.GOLD_COLOR : new Color(0.4f, 0.4f, 0.5f, 1.0f));
-        float bw = 2.0f * Settings.scale;
-        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - BULK_BUTTON_WIDTH / 2.0f, buttonY - BULK_BUTTON_HEIGHT / 2.0f, BULK_BUTTON_WIDTH, bw);
-        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - BULK_BUTTON_WIDTH / 2.0f, buttonY + BULK_BUTTON_HEIGHT / 2.0f - bw, BULK_BUTTON_WIDTH, bw);
-        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - BULK_BUTTON_WIDTH / 2.0f, buttonY - BULK_BUTTON_HEIGHT / 2.0f, bw, BULK_BUTTON_HEIGHT);
-        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX + BULK_BUTTON_WIDTH / 2.0f - bw, buttonY - BULK_BUTTON_HEIGHT / 2.0f, bw, BULK_BUTTON_HEIGHT);
-
-        // Text
-        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N, label, buttonX, buttonY, textColor);
-    }
-
     private void renderBulkOperations(SpriteBatch sb) {
-        if (!isMultiSelectMode || selectedLoadoutIds.isEmpty()) return;
+        if (selectedLoadoutIds.isEmpty()) return;
 
-        float buttonsY = 100.0f * Settings.scale;
-        float startX = LEFT_PANEL_X + BULK_BUTTON_WIDTH + 30.0f * Settings.scale;
+        float buttonsY = 60.0f * Settings.scale;
+        float startX = LEFT_PANEL_X + 10.0f * Settings.scale;
 
         // Selection count
         String countLabel = selectedLoadoutIds.size() + " selected";

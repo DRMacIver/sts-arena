@@ -47,8 +47,8 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
     private static final float CHAR_TAB_Y = TITLE_Y - 50.0f * Settings.scale;
     private static final float STATS_Y = CHAR_TAB_Y - 45.0f * Settings.scale;
     private static final float CONTENT_TAB_Y = STATS_Y - 45.0f * Settings.scale;
-    private static final float SEARCH_Y = CONTENT_TAB_Y - 40.0f * Settings.scale;
-    private static final float LIST_START_Y = SEARCH_Y - 50.0f * Settings.scale;
+    private static final float SEARCH_Y = CONTENT_TAB_Y - 50.0f * Settings.scale;
+    private static final float LIST_START_Y = SEARCH_Y - 60.0f * Settings.scale;
 
     private static final float ROW_HEIGHT = 32.0f * Settings.scale;
     private static final float COLUMN_WIDTH = 380.0f * Settings.scale;
@@ -66,7 +66,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
     private static final float SMALL_BUTTON_WIDTH = 28.0f * Settings.scale;
 
     // List heights - use more vertical space (extends closer to cancel button)
-    private static final float LIST_HEIGHT = 580.0f * Settings.scale;
+    private static final float LIST_HEIGHT = 644.0f * Settings.scale;
 
     // Content tab enum
     private enum ContentTab { CARDS, RELICS, POTIONS }
@@ -179,7 +179,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         }
 
         // Name box hitbox
-        nameBoxHitbox = new Hitbox(280.0f * Settings.scale, 28.0f * Settings.scale);
+        nameBoxHitbox = new Hitbox(360.0f * Settings.scale, 28.0f * Settings.scale);
 
         // Search box hitbox
         searchBoxHitbox = new Hitbox(280.0f * Settings.scale, 28.0f * Settings.scale);
@@ -692,7 +692,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         }
 
         // Update name box hitbox (top right, near save button)
-        float nameBoxX = Settings.WIDTH - 320.0f * Settings.scale;
+        float nameBoxX = Settings.WIDTH - 400.0f * Settings.scale;
         nameBoxHitbox.move(nameBoxX, TITLE_Y);
         nameBoxHitbox.update();
         if (nameBoxHitbox.hovered && InputHelper.justClickedLeft) {
@@ -721,18 +721,21 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
             characterTabHitboxes[i].update();
 
             if (characterTabHitboxes[i].hovered && InputHelper.justClickedLeft) {
-                AbstractPlayer.PlayerClass newClass = LoadoutConfig.getPlayerClasses()[i];
-                if (newClass != selectedClass) {
-                    selectedClass = newClass;
-                    // Update HP for new class
-                    maxHp = LoadoutConfig.getBaseMaxHp(selectedClass);
-                    currentHp = Math.min(currentHp, maxHp);
-                    // Update starter relic and deck
-                    updateStarterRelic();
-                    addStarterDeck();
-                    // Reinitialize potions for new class
-                    PotionHelper.initialize(selectedClass);
-                    refreshAvailableItems();
+                // Don't allow character change in edit mode (would reset the loadout)
+                if (!isEditMode) {
+                    AbstractPlayer.PlayerClass newClass = LoadoutConfig.getPlayerClasses()[i];
+                    if (newClass != selectedClass) {
+                        selectedClass = newClass;
+                        // Update HP for new class
+                        maxHp = LoadoutConfig.getBaseMaxHp(selectedClass);
+                        currentHp = Math.min(currentHp, maxHp);
+                        // Update starter relic and deck
+                        updateStarterRelic();
+                        addStarterDeck();
+                        // Reinitialize potions for new class
+                        PotionHelper.initialize(selectedClass);
+                        refreshAvailableItems();
+                    }
                 }
                 InputHelper.justClickedLeft = false;
             }
@@ -841,7 +844,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
     }
 
     private void updateStatsControls() {
-        float statsX = Settings.WIDTH / 2.0f + 80.0f * Settings.scale;
+        float statsX = Settings.WIDTH / 2.0f - 245.0f * Settings.scale;
         float btnSize = 30.0f * Settings.scale;
 
         // Handle HP editing input
@@ -1007,7 +1010,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         for (int i = 0; i < count; i++) {
             float itemY = y - i * ROW_HEIGHT;
 
-            if (itemY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && itemY < LIST_START_Y) {
+            if (itemY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && itemY <= LIST_START_Y) {
                 if (i < availableItemHitboxes.length) {
                     availableItemHitboxes[i].move(LEFT_COLUMN_X, itemY - BUTTON_HEIGHT / 2.0f);
                     availableItemHitboxes[i].update();
@@ -1053,7 +1056,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
             float cardY = y - row * ROW_HEIGHT;
             row++;
 
-            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y) {
+            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY <= LIST_START_Y) {
                 float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 70.0f * Settings.scale;
 
                 // Upgrade button
@@ -1084,7 +1087,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
             float relicY = y - row * ROW_HEIGHT;
             row++;
 
-            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY < LIST_START_Y) {
+            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY <= LIST_START_Y) {
                 if (i < relicRemoveHitboxes.length) {
                     float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 35.0f * Settings.scale;
                     relicRemoveHitboxes[i].move(buttonX, relicY - BUTTON_HEIGHT / 2.0f);
@@ -1103,7 +1106,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
             float potionY = y - row * ROW_HEIGHT;
             row++;
 
-            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY < LIST_START_Y) {
+            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY <= LIST_START_Y) {
                 if (i < potionRemoveHitboxes.length) {
                     float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 35.0f * Settings.scale;
                     potionRemoveHitboxes[i].move(buttonX, potionY - BUTTON_HEIGHT / 2.0f);
@@ -1428,6 +1431,12 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
                     }
                     return;
                 }
+
+                // Set the edited loadout as selected so it's highlighted when returning
+                ArenaRepository.LoadoutRecord updatedRecord = repo.getLoadoutById(editLoadoutId);
+                if (updatedRecord != null) {
+                    ArenaLoadoutSelectScreen.selectedSavedLoadout = updatedRecord;
+                }
             }
         } else {
             // Create new loadout
@@ -1602,11 +1611,14 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         for (int i = 0; i < 4; i++) {
             float tabX = CHAR_TAB_START_X + i * CHAR_TAB_WIDTH;
             boolean isSelected = LoadoutConfig.getPlayerClasses()[i] == selectedClass;
-            boolean isHovered = characterTabHitboxes[i].hovered;
+            boolean isHovered = characterTabHitboxes[i].hovered && !isEditMode;
 
             Color bgColor;
             if (isSelected) {
                 bgColor = new Color(0.3f, 0.4f, 0.5f, 0.9f);
+            } else if (isEditMode) {
+                // Gray out non-selected tabs in edit mode (can't change character)
+                bgColor = new Color(0.08f, 0.1f, 0.12f, 0.4f);
             } else if (isHovered) {
                 bgColor = new Color(0.2f, 0.3f, 0.4f, 0.7f);
             } else {
@@ -1615,7 +1627,14 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
             sb.setColor(bgColor);
             sb.draw(ImageMaster.WHITE_SQUARE_IMG, tabX, CHAR_TAB_Y - CHAR_TAB_HEIGHT / 2.0f, CHAR_TAB_WIDTH, CHAR_TAB_HEIGHT);
 
-            Color textColor = isSelected ? Settings.GOLD_COLOR : Settings.CREAM_COLOR;
+            Color textColor;
+            if (isSelected) {
+                textColor = Settings.GOLD_COLOR;
+            } else if (isEditMode) {
+                textColor = new Color(0.4f, 0.4f, 0.4f, 1.0f);  // Grayed out
+            } else {
+                textColor = Settings.CREAM_COLOR;
+            }
             FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
                 tabNames[i],
                 tabX + CHAR_TAB_WIDTH / 2.0f, CHAR_TAB_Y, textColor);
@@ -1623,7 +1642,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
     }
 
     private void renderStats(SpriteBatch sb) {
-        float statsX = Settings.WIDTH / 2.0f + 80.0f * Settings.scale;
+        float statsX = Settings.WIDTH / 2.0f - 245.0f * Settings.scale;
         float btnSize = 30.0f * Settings.scale;
 
         // HP
@@ -1766,7 +1785,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         for (int i = 0; i < availableCards.size(); i++) {
             float cardY = startY - i * ROW_HEIGHT;
 
-            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y) {
+            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY <= LIST_START_Y) {
                 AbstractCard card = availableCards.get(i);
                 boolean hovered = i < availableItemHitboxes.length && availableItemHitboxes[i].hovered;
 
@@ -1797,7 +1816,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         for (int i = 0; i < availableRelics.size(); i++) {
             float relicY = startY - i * ROW_HEIGHT;
 
-            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY < LIST_START_Y) {
+            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY <= LIST_START_Y) {
                 AbstractRelic relic = availableRelics.get(i);
                 boolean hovered = i < availableItemHitboxes.length && availableItemHitboxes[i].hovered;
 
@@ -1830,7 +1849,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         for (int i = 0; i < availablePotions.size(); i++) {
             float potionY = startY - i * ROW_HEIGHT;
 
-            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY < LIST_START_Y) {
+            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY <= LIST_START_Y) {
                 AbstractPotion potion = availablePotions.get(i);
                 boolean hovered = i < availableItemHitboxes.length && availableItemHitboxes[i].hovered && canAddMore;
 
