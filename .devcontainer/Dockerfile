@@ -21,8 +21,10 @@ RUN apt-get update && apt-get install -y \
     python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv for Python package management
+# Install uv for Python package management (as vscode user)
+USER vscode
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:$PATH"
+ENV PATH="/home/vscode/.local/bin:$PATH"
+USER root
 
 # Java 8 and Maven will be installed via the java feature in devcontainer.json

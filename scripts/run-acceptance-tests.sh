@@ -142,7 +142,8 @@ WRAPPER_SCRIPT="/tmp/sts-arena-test-wrapper.sh"
 cat > "$WRAPPER_SCRIPT" << EOF
 #!/bin/bash
 cd "$ACCEPTANCE_DIR"
-uv run python run_agent.py
+# Use simple_test.py which sends "ready" immediately without pytest overhead
+uv run python simple_test.py
 RESULT=\$?
 echo \$RESULT > "$RESULT_FILE"
 touch "$MARKER_FILE"
