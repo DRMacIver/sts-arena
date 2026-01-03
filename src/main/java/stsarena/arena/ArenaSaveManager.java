@@ -285,7 +285,8 @@ public class ArenaSaveManager {
         save.put("overkill", false);
         save.put("mystery_machine", 0);
         save.put("spirit_count", 0);
-        save.put("max_orbs", 3);
+        // Only Defect should have orb slots
+        save.put("max_orbs", loadout.playerClass == AbstractPlayer.PlayerClass.DEFECT ? 3 : 0);
         save.put("play_time", 0);
         save.put("daily_date", 0);
 
