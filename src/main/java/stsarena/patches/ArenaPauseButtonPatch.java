@@ -32,22 +32,23 @@ import java.util.UUID;
 /**
  * Adds a "Practice in Arena" button to the pause menu during normal runs.
  * This allows players to save their current deck and practice with it in arena mode.
+ * Styled to match the "Abandon Run" button and placed right below it.
  */
 public class ArenaPauseButtonPatch {
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MM-dd HH:mm");
 
-    // Button image dimensions (same as ExitGameButton)
-    private static final int W = 635;
-    private static final int H = 488;
+    // Button image dimensions (same as AbandonRunButton)
+    private static final int W = 440;
+    private static final int H = 100;
 
-    // Hitbox size (same as ExitGameButton)
-    private static final float HB_WIDTH = 280.0f * Settings.scale;
-    private static final float HB_HEIGHT = 80.0f * Settings.scale;
+    // Hitbox size (same as AbandonRunButton)
+    private static final float HB_WIDTH = 340.0f * Settings.scale;
+    private static final float HB_HEIGHT = 70.0f * Settings.scale;
 
-    // Position to the left of the exit button (exit is at x=1490, we go to x=1100)
-    private static final float BUTTON_X = 1100.0f * Settings.xScale;
-    private static final float BUTTON_Y = Settings.OPTION_Y - 202.0f * Settings.scale;
+    // Position right below the Abandon Run button (which is at y = OPTION_Y + 340)
+    private static final float BUTTON_X = 1430.0f * Settings.xScale;
+    private static final float BUTTON_Y = Settings.OPTION_Y + 240.0f * Settings.scale;  // 100 pixels below Abandon
 
     private static Hitbox arenaButtonHb = new Hitbox(HB_WIDTH, HB_HEIGHT);
 
@@ -63,8 +64,8 @@ public class ArenaPauseButtonPatch {
                 return;
             }
 
-            // Position hitbox same way as ExitGameButton (offset from button center)
-            arenaButtonHb.move(BUTTON_X + 50.0f * Settings.xScale, BUTTON_Y - 173.0f * Settings.scale);
+            // Position hitbox at button center (same as AbandonRunButton)
+            arenaButtonHb.move(BUTTON_X, BUTTON_Y);
             arenaButtonHb.update();
 
             if (arenaButtonHb.justHovered) {
@@ -86,7 +87,7 @@ public class ArenaPauseButtonPatch {
 
     /**
      * Render the arena practice button during pause menu render.
-     * Styled to match the ExitGameButton.
+     * Styled to match the AbandonRunButton.
      */
     @SpirePatch(clz = OptionsPanel.class, method = "render")
     public static class RenderPatch {
@@ -97,9 +98,9 @@ public class ArenaPauseButtonPatch {
                 return;
             }
 
-            // Draw button image (same style as ExitGameButton)
+            // Draw button image (same style as AbandonRunButton)
             sb.setColor(Color.WHITE);
-            sb.draw(ImageMaster.OPTION_EXIT,
+            sb.draw(ImageMaster.OPTION_ABANDON,
                 BUTTON_X - (float) W / 2.0f,
                 BUTTON_Y - (float) H / 2.0f,
                 (float) W / 2.0f,
@@ -110,18 +111,18 @@ public class ArenaPauseButtonPatch {
                 0, 0, W, H,
                 false, false);
 
-            // Draw button label (same font and position style as ExitGameButton)
-            FontHelper.renderFontCentered(sb, FontHelper.losePowerFont,
+            // Draw button label (same font and position as AbandonRunButton)
+            FontHelper.renderFontCentered(sb, FontHelper.buttonLabelFont,
                 "Practice in Arena",
-                BUTTON_X + 50.0f * Settings.scale,
-                BUTTON_Y - 170.0f * Settings.scale,
-                Settings.GOLD_COLOR, 1.0f);
+                BUTTON_X + 15.0f * Settings.scale,
+                BUTTON_Y + 5.0f * Settings.scale,
+                Settings.GOLD_COLOR);
 
-            // Draw hover highlight (same as ExitGameButton)
+            // Draw hover highlight (same as AbandonRunButton)
             if (arenaButtonHb.hovered) {
                 sb.setBlendFunction(770, 1);
                 sb.setColor(new Color(1.0f, 1.0f, 1.0f, 0.2f));
-                sb.draw(ImageMaster.OPTION_EXIT,
+                sb.draw(ImageMaster.OPTION_ABANDON,
                     BUTTON_X - (float) W / 2.0f,
                     BUTTON_Y - (float) H / 2.0f,
                     (float) W / 2.0f,
