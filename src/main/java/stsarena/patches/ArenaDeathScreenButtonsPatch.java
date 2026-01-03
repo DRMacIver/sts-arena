@@ -13,6 +13,7 @@ import com.megacrit.cardcrawl.helpers.Hitbox;
 import com.megacrit.cardcrawl.helpers.ImageMaster;
 import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import com.megacrit.cardcrawl.screens.DeathScreen;
+import com.megacrit.cardcrawl.screens.GameOverScreen;
 import stsarena.STSArena;
 import stsarena.arena.ArenaRunner;
 
@@ -170,6 +171,34 @@ public class ArenaDeathScreenButtonsPatch {
         public static SpireReturn<Void> Prefix(com.megacrit.cardcrawl.ui.buttons.ReturnToMenuButton __instance, SpriteBatch sb) {
             // Only hide when we're in arena mode AND on the death screen
             if (ArenaRunner.isArenaRun() && buttonsVisible) {
+                return SpireReturn.Return(null);
+            }
+            return SpireReturn.Continue();
+        }
+    }
+
+    /**
+     * Skip rendering the stats screen in arena mode - we don't want to show run scores.
+     */
+    @SpirePatch(clz = GameOverScreen.class, method = "renderStatsScreen")
+    public static class HideStatsScreenPatch {
+        @SpirePrefixPatch
+        public static SpireReturn<Void> Prefix(GameOverScreen __instance, SpriteBatch sb) {
+            if (ArenaRunner.isArenaRun()) {
+                return SpireReturn.Return(null);
+            }
+            return SpireReturn.Continue();
+        }
+    }
+
+    /**
+     * Skip updating the stats screen animations in arena mode.
+     */
+    @SpirePatch(clz = DeathScreen.class, method = "updateStatsScreen")
+    public static class SkipStatsUpdatePatch {
+        @SpirePrefixPatch
+        public static SpireReturn<Void> Prefix(DeathScreen __instance) {
+            if (ArenaRunner.isArenaRun()) {
                 return SpireReturn.Return(null);
             }
             return SpireReturn.Continue();
