@@ -4,12 +4,15 @@ import com.evacipated.cardcrawl.modthespire.lib.SpirePatch;
 import com.evacipated.cardcrawl.modthespire.lib.SpirePostfixPatch;
 import com.megacrit.cardcrawl.cards.AbstractCard;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
+import com.megacrit.cardcrawl.core.CardCrawlGame;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.monsters.MonsterGroup;
 import com.megacrit.cardcrawl.potions.AbstractPotion;
 import com.megacrit.cardcrawl.potions.PotionSlot;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.rooms.MonsterRoom;
+import com.megacrit.cardcrawl.rooms.MonsterRoomBoss;
+import com.megacrit.cardcrawl.rooms.MonsterRoomElite;
 import com.megacrit.cardcrawl.screens.DeathScreen;
 import com.megacrit.cardcrawl.screens.VictoryScreen;
 import stsarena.STSArena;
@@ -21,7 +24,9 @@ import stsarena.data.ArenaRepository;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -30,10 +35,11 @@ import java.util.UUID;
  */
 public class NormalRunLoadoutSaver {
 
-    // State captured at the start of combat (for defeats)
+    // State captured at the start of combat (for defeats and Practice in Arena)
     private static int combatStartHp = 0;
     private static int combatStartMaxHp = 0;
     private static List<AbstractPotion> combatStartPotions = new ArrayList<>();
+    private static Map<String, Integer> combatStartRelicCounters = new HashMap<>();
     private static String combatEncounterId = null;
 
     // Most recently saved loadout (for "Try Again in Arena" feature)
@@ -48,46 +54,162 @@ public class NormalRunLoadoutSaver {
     public static class OnCombatStart {
         @SpirePostfixPatch
         public static void Postfix() {
-            // Skip if this is an arena run
-            if (ArenaRunner.isArenaRun()) {
-                return;
+            captureCombatStartState();
+        }
+    }
+
+    /**
+     * Also patch elite rooms in case they override onPlayerEntry.
+     */
+    @SpirePatch(clz = MonsterRoomElite.class, method = "onPlayerEntry")
+    public static class OnEliteCombatStart {
+        @SpirePostfixPatch
+        public static void Postfix() {
+            captureCombatStartState();
+        }
+    }
+
+    /**
+     * Also patch boss rooms in case they override onPlayerEntry.
+     */
+    @SpirePatch(clz = MonsterRoomBoss.class, method = "onPlayerEntry")
+    public static class OnBossCombatStart {
+        @SpirePostfixPatch
+        public static void Postfix() {
+            captureCombatStartState();
+        }
+    }
+
+    /**
+     * Shared logic to capture combat start state.
+     */
+    private static void captureCombatStartState() {
+        // Skip if this is an arena run
+        if (ArenaRunner.isArenaRun()) {
+            return;
+        }
+
+        // Capture state when entering a monster room
+        if (AbstractDungeon.player != null) {
+            combatStartHp = AbstractDungeon.player.currentHealth;
+            combatStartMaxHp = AbstractDungeon.player.maxHealth;
+
+            // Copy potions
+            combatStartPotions.clear();
+            for (AbstractPotion potion : AbstractDungeon.player.potions) {
+                if (!(potion instanceof PotionSlot)) {
+                    combatStartPotions.add(potion.makeCopy());
+                }
             }
 
-            // Capture state when entering a monster room
-            if (AbstractDungeon.player != null) {
-                combatStartHp = AbstractDungeon.player.currentHealth;
-                combatStartMaxHp = AbstractDungeon.player.maxHealth;
+            // Capture relic counters
+            combatStartRelicCounters.clear();
+            for (AbstractRelic relic : AbstractDungeon.player.relics) {
+                combatStartRelicCounters.put(relic.relicId, relic.counter);
+            }
 
-                // Copy potions
-                combatStartPotions.clear();
-                for (AbstractPotion potion : AbstractDungeon.player.potions) {
-                    if (!(potion instanceof PotionSlot)) {
-                        combatStartPotions.add(potion.makeCopy());
-                    }
-                }
+            // Capture encounter ID based on room type
+            combatEncounterId = getEncounterIdForCurrentRoom();
 
-                // Capture encounter ID from the monster list
-                // The current encounter should be at the front of the monster list
-                combatEncounterId = null;
-                if (AbstractDungeon.monsterList != null && !AbstractDungeon.monsterList.isEmpty()) {
-                    combatEncounterId = AbstractDungeon.monsterList.get(0);
-                }
+            STSArena.logger.info("Captured combat start state: HP=" + combatStartHp + "/" + combatStartMaxHp +
+                ", potions=" + combatStartPotions.size() + ", relics=" + combatStartRelicCounters.size() +
+                ", encounter=" + combatEncounterId);
+        }
+    }
 
-                STSArena.logger.info("Captured combat start state: HP=" + combatStartHp + "/" + combatStartMaxHp +
-                    ", potions=" + combatStartPotions.size() + ", encounter=" + combatEncounterId);
+    /**
+     * Get the encounter ID for the current room based on room type.
+     * Works for normal fights, elites, bosses, and event fights.
+     */
+    private static String getEncounterIdForCurrentRoom() {
+        if (AbstractDungeon.getCurrRoom() == null) {
+            return null;
+        }
+
+        MonsterGroup monsters = AbstractDungeon.getCurrRoom().monsters;
+
+        // For boss rooms, use bossKey which is set by the game
+        if (AbstractDungeon.getCurrRoom() instanceof MonsterRoomBoss) {
+            String bossKey = AbstractDungeon.bossKey;
+            STSArena.logger.info("Boss room detected, bossKey: " + bossKey);
+            return bossKey;
+        }
+
+        // For elite rooms, get the encounter from the monsters directly
+        // (eliteMonsterList contains NEXT elites, not current)
+        if (AbstractDungeon.getCurrRoom() instanceof MonsterRoomElite) {
+            String encounterId = getEncounterFromMonsters(monsters);
+            STSArena.logger.info("Elite room detected, encounterId: " + encounterId);
+            return encounterId;
+        }
+
+        // For normal monster rooms, use the monster list (front entry is current)
+        if (AbstractDungeon.monsterList != null && !AbstractDungeon.monsterList.isEmpty()) {
+            String encounterId = AbstractDungeon.monsterList.get(0);
+            STSArena.logger.info("Monster room detected, encounterId: " + encounterId);
+            return encounterId;
+        }
+
+        // Fallback: get from monsters in room
+        String encounterId = getEncounterFromMonsters(monsters);
+        STSArena.logger.info("Fallback encounter from monsters: " + encounterId);
+        return encounterId;
+    }
+
+    /**
+     * Get the encounter ID from the monsters currently in the room.
+     * For single monsters, uses the monster's name.
+     * For multi-monster encounters, uses the count + name pattern.
+     */
+    private static String getEncounterFromMonsters(MonsterGroup monsters) {
+        if (monsters == null || monsters.monsters == null || monsters.monsters.isEmpty()) {
+            return null;
+        }
+
+        int count = monsters.monsters.size();
+
+        // Single monster - use its name directly
+        if (count == 1) {
+            return monsters.monsters.get(0).name;
+        }
+
+        // Multi-monster - check if all same type
+        String firstName = monsters.monsters.get(0).name;
+        boolean allSame = true;
+        for (int i = 1; i < count; i++) {
+            if (!monsters.monsters.get(i).name.equals(firstName)) {
+                allSame = false;
+                break;
             }
         }
+
+        if (allSame) {
+            // "3 Sentries", "2 Louse", etc.
+            return count + " " + firstName + (firstName.endsWith("s") ? "" : "s");
+        }
+
+        // Mixed encounter - just use first monster's name as best guess
+        return firstName;
     }
 
     /**
      * Save loadout when player dies in a normal run.
      * Uses the pre-combat state (HP and potions from before the fatal fight).
+     * Does NOT save if the run was abandoned.
      */
     @SpirePatch(clz = DeathScreen.class, method = SpirePatch.CONSTRUCTOR, paramtypez = {MonsterGroup.class})
     public static class OnDefeat {
         @SpirePostfixPatch
         public static void Postfix(DeathScreen __instance, MonsterGroup m) {
             if (!ArenaRunner.isArenaRun()) {
+                // Check if the run was abandoned - don't save loadout in that case
+                // CardCrawlGame.startOver is true when abandoning
+                if (ArenaPauseButtonPatch.isAbandoning || CardCrawlGame.startOver) {
+                    STSArena.logger.info("Run was abandoned (isAbandoning=" + ArenaPauseButtonPatch.isAbandoning +
+                        ", startOver=" + CardCrawlGame.startOver + ") - not saving loadout");
+                    ArenaPauseButtonPatch.isAbandoning = false;  // Reset flag
+                    return;
+                }
                 STSArena.logger.info("Normal run ended in defeat - saving loadout with pre-combat state");
                 saveLoadoutOnDefeat();
             }
@@ -322,5 +444,58 @@ public class NormalRunLoadoutSaver {
     public static void clearRetryData() {
         lastSavedLoadoutId = -1;
         lastSavedEncounterId = null;
+    }
+
+    /**
+     * Get the current combat encounter ID (captured when entering the fight).
+     * Returns null if not currently in a combat room or encounter wasn't captured.
+     */
+    public static String getCurrentCombatEncounterId() {
+        // Only return encounter ID if we're actually in a combat room
+        if (AbstractDungeon.getCurrRoom() == null) {
+            return null;
+        }
+        if (!(AbstractDungeon.getCurrRoom() instanceof MonsterRoom)) {
+            // Not in a combat room (shop, rest site, event, etc.)
+            return null;
+        }
+        return combatEncounterId;
+    }
+
+    /**
+     * Get the pre-combat relic counter for a specific relic.
+     * Returns the counter value captured at combat start, or null if not captured.
+     */
+    public static Integer getCombatStartRelicCounter(String relicId) {
+        return combatStartRelicCounters.get(relicId);
+    }
+
+    /**
+     * Get all pre-combat relic counters.
+     * Used by Practice in Arena to restore relic state from before the fight.
+     */
+    public static Map<String, Integer> getCombatStartRelicCounters() {
+        return new HashMap<>(combatStartRelicCounters);
+    }
+
+    /**
+     * Get pre-combat HP.
+     */
+    public static int getCombatStartHp() {
+        return combatStartHp;
+    }
+
+    /**
+     * Get pre-combat max HP.
+     */
+    public static int getCombatStartMaxHp() {
+        return combatStartMaxHp;
+    }
+
+    /**
+     * Get pre-combat potions.
+     */
+    public static List<AbstractPotion> getCombatStartPotions() {
+        return new ArrayList<>(combatStartPotions);
     }
 }
