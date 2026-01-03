@@ -165,7 +165,7 @@ public class LoadoutCreatorScreen {
         }
 
         // Name box hitbox
-        nameBoxHitbox = new Hitbox(200.0f * Settings.scale, 28.0f * Settings.scale);
+        nameBoxHitbox = new Hitbox(280.0f * Settings.scale, 28.0f * Settings.scale);
 
         // Search box hitbox
         searchBoxHitbox = new Hitbox(280.0f * Settings.scale, 28.0f * Settings.scale);
@@ -540,7 +540,7 @@ public class LoadoutCreatorScreen {
         }
 
         // Update name box hitbox (top right, near save button)
-        float nameBoxX = Settings.WIDTH - 260.0f * Settings.scale;
+        float nameBoxX = Settings.WIDTH - 320.0f * Settings.scale;
         nameBoxHitbox.move(nameBoxX, TITLE_Y);
         nameBoxHitbox.update();
         if (nameBoxHitbox.hovered && InputHelper.justClickedLeft) {
@@ -694,7 +694,7 @@ public class LoadoutCreatorScreen {
         }
 
         // Max HP controls
-        float maxHpX = statsX + 180.0f * Settings.scale;
+        float maxHpX = statsX + 200.0f * Settings.scale;
         maxHpMinusHitbox.move(maxHpX, STATS_Y);
         maxHpValueHitbox.move(maxHpX + 40.0f * Settings.scale, STATS_Y);
         maxHpPlusHitbox.move(maxHpX + 80.0f * Settings.scale, STATS_Y);
@@ -723,7 +723,7 @@ public class LoadoutCreatorScreen {
         }
 
         // Ascension controls
-        float ascX = statsX + 360.0f * Settings.scale;
+        float ascX = statsX + 380.0f * Settings.scale;
         ascMinusHitbox.move(ascX, STATS_Y);
         ascPlusHitbox.move(ascX + 60.0f * Settings.scale, STATS_Y);
         ascMinusHitbox.update();
@@ -1279,13 +1279,25 @@ public class LoadoutCreatorScreen {
             sb.draw(ImageMaster.WHITE_SQUARE_IMG, nameBoxHitbox.x + nameBoxHitbox.width - 2, nameBoxHitbox.y, 2, nameBoxHitbox.height);
         }
 
-        // Text
+        // Text - truncate if too long
         String displayText = loadoutName.isEmpty() ? "Untitled" : loadoutName;
         Color textColor = loadoutName.isEmpty() ? new Color(0.5f, 0.5f, 0.5f, 1.0f) : Settings.CREAM_COLOR;
         if (isTypingName) {
             displayText = loadoutName + "|";
             textColor = Settings.CREAM_COLOR;
         }
+
+        // Truncate text to fit within the box (with some padding)
+        float maxWidth = nameBoxHitbox.width - 16.0f * Settings.scale;
+        while (displayText.length() > 1 && FontHelper.getWidth(FontHelper.cardDescFont_N, displayText, 1.0f) > maxWidth) {
+            // When editing, keep the cursor visible at the end
+            if (isTypingName && displayText.endsWith("|")) {
+                displayText = "..." + displayText.substring(displayText.length() - Math.min(displayText.length(), 20));
+            } else {
+                displayText = displayText.substring(0, displayText.length() - 1);
+            }
+        }
+
         FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
             displayText,
             nameBoxHitbox.cX, nameBoxHitbox.cY, textColor);
@@ -1346,16 +1358,16 @@ public class LoadoutCreatorScreen {
         renderStatButton(sb, hpPlusHitbox, "+");
 
         // Max HP
-        float maxHpX = statsX + 180.0f * Settings.scale;
+        float maxHpX = statsX + 200.0f * Settings.scale;
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             "Max:",
-            maxHpX - 50.0f * Settings.scale, STATS_Y + 10.0f * Settings.scale, Settings.CREAM_COLOR);
+            maxHpX - 55.0f * Settings.scale, STATS_Y + 10.0f * Settings.scale, Settings.CREAM_COLOR);
         renderStatButton(sb, maxHpMinusHitbox, "-");
         renderHpValue(sb, maxHpValueHitbox, isEditingMaxHp, isEditingMaxHp ? maxHpEditText : String.valueOf(maxHp));
         renderStatButton(sb, maxHpPlusHitbox, "+");
 
         // Ascension
-        float ascX = statsX + 360.0f * Settings.scale;
+        float ascX = statsX + 380.0f * Settings.scale;
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             "A:",
             ascX - 30.0f * Settings.scale, STATS_Y + 10.0f * Settings.scale, Settings.CREAM_COLOR);
