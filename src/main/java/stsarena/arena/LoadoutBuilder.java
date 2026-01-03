@@ -469,7 +469,48 @@ public class LoadoutBuilder {
         String relicClass = LoadoutConfig.getRelicClass(relicId);
         if (relicClass != null && !relicClass.equals(playerClass)) return false;
 
+        // Bottle relics require a suitable card in the deck
+        if ("Bottled Flame".equals(relicId)) {
+            // Need a non-basic attack card
+            boolean hasNonBasicAttack = false;
+            for (CardEntry card : deck) {
+                String type = LoadoutConfig.getCardType(card.cardId);
+                if ("ATTACK".equals(type) && !isBasicCard(card.cardId)) {
+                    hasNonBasicAttack = true;
+                    break;
+                }
+            }
+            if (!hasNonBasicAttack) return false;
+        } else if ("Bottled Lightning".equals(relicId)) {
+            // Need a non-basic skill card
+            boolean hasNonBasicSkill = false;
+            for (CardEntry card : deck) {
+                String type = LoadoutConfig.getCardType(card.cardId);
+                if ("SKILL".equals(type) && !isBasicCard(card.cardId)) {
+                    hasNonBasicSkill = true;
+                    break;
+                }
+            }
+            if (!hasNonBasicSkill) return false;
+        } else if ("Bottled Tornado".equals(relicId)) {
+            // Need a power card
+            boolean hasPower = false;
+            for (CardEntry card : deck) {
+                String type = LoadoutConfig.getCardType(card.cardId);
+                if ("POWER".equals(type)) {
+                    hasPower = true;
+                    break;
+                }
+            }
+            if (!hasPower) return false;
+        }
+
         return true;
+    }
+
+    private boolean isBasicCard(String cardId) {
+        // Basic cards are Strikes and Defends
+        return cardId.contains("Strike") || cardId.contains("Defend");
     }
 
     private void applyRelicEffects(String relicId) {

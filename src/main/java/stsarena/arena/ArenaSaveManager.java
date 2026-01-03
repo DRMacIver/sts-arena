@@ -109,6 +109,96 @@ public class ArenaSaveManager {
         save.put("relics", relics);
         save.put("relic_counters", relicCounters);
 
+        // Handle bottle relics - first check for cards already marked as bottled,
+        // then fall back to finding a suitable card
+        AbstractCard bottledFlameCard = null;
+        AbstractCard bottledLightningCard = null;
+        AbstractCard bottledTornadoCard = null;
+
+        // First pass: find cards already marked as bottled
+        for (AbstractCard card : loadout.deck) {
+            if (card.inBottleFlame && bottledFlameCard == null) {
+                bottledFlameCard = card;
+            }
+            if (card.inBottleLightning && bottledLightningCard == null) {
+                bottledLightningCard = card;
+            }
+            if (card.inBottleTornado && bottledTornadoCard == null) {
+                bottledTornadoCard = card;
+            }
+        }
+
+        // Second pass: for bottle relics without a marked card, find a suitable one
+        for (AbstractRelic relic : loadout.relics) {
+            String relicId = relic.relicId;
+            if ("Bottled Flame".equals(relicId) && bottledFlameCard == null) {
+                // Find an attack card (non-basic)
+                for (AbstractCard card : loadout.deck) {
+                    if (card.type == AbstractCard.CardType.ATTACK && card.rarity != AbstractCard.CardRarity.BASIC) {
+                        bottledFlameCard = card;
+                        break;
+                    }
+                }
+            } else if ("Bottled Lightning".equals(relicId) && bottledLightningCard == null) {
+                // Find a skill card (non-basic)
+                for (AbstractCard card : loadout.deck) {
+                    if (card.type == AbstractCard.CardType.SKILL && card.rarity != AbstractCard.CardRarity.BASIC) {
+                        bottledLightningCard = card;
+                        break;
+                    }
+                }
+            } else if ("Bottled Tornado".equals(relicId) && bottledTornadoCard == null) {
+                // Find a power card
+                for (AbstractCard card : loadout.deck) {
+                    if (card.type == AbstractCard.CardType.POWER) {
+                        bottledTornadoCard = card;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Save bottle data
+        boolean hasBottledFlame = relics.contains("Bottled Flame");
+        boolean hasBottledLightning = relics.contains("Bottled Lightning");
+        boolean hasBottledTornado = relics.contains("Bottled Tornado");
+
+        if (bottledFlameCard != null) {
+            save.put("bottled_flame", bottledFlameCard.cardID);
+            save.put("bottled_flame_upgrade", bottledFlameCard.timesUpgraded);
+            save.put("bottled_flame_misc", bottledFlameCard.misc);
+            STSArena.logger.info("ARENA: Bottled Flame contains: " + bottledFlameCard.name);
+        } else {
+            save.put("bottled_flame", null);
+            if (hasBottledFlame) {
+                STSArena.logger.warn("ARENA: Has Bottled Flame relic but no suitable attack card to bottle");
+            }
+        }
+
+        if (bottledLightningCard != null) {
+            save.put("bottled_lightning", bottledLightningCard.cardID);
+            save.put("bottled_lightning_upgrade", bottledLightningCard.timesUpgraded);
+            save.put("bottled_lightning_misc", bottledLightningCard.misc);
+            STSArena.logger.info("ARENA: Bottled Lightning contains: " + bottledLightningCard.name);
+        } else {
+            save.put("bottled_lightning", null);
+            if (hasBottledLightning) {
+                STSArena.logger.warn("ARENA: Has Bottled Lightning relic but no suitable skill card to bottle");
+            }
+        }
+
+        if (bottledTornadoCard != null) {
+            save.put("bottled_tornado", bottledTornadoCard.cardID);
+            save.put("bottled_tornado_upgrade", bottledTornadoCard.timesUpgraded);
+            save.put("bottled_tornado_misc", bottledTornadoCard.misc);
+            STSArena.logger.info("ARENA: Bottled Tornado contains: " + bottledTornadoCard.name);
+        } else {
+            save.put("bottled_tornado", null);
+            if (hasBottledTornado) {
+                STSArena.logger.warn("ARENA: Has Bottled Tornado relic but no suitable power card to bottle");
+            }
+        }
+
         // Potions - use loadout potions, fill remaining slots with empty
         List<String> potions = new ArrayList<>();
         for (int i = 0; i < loadout.potionSlots; i++) {

@@ -248,4 +248,15 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         returnToArenaOnMainMenu = true;
         logger.info("ARENA: Will return to arena selection on main menu");
     }
+
+    /**
+     * Check if any arena screen is currently open.
+     * Used to block main menu button hover effects.
+     */
+    public static boolean isAnyScreenOpen() {
+        return (historyScreen != null && historyScreen.isOpen) ||
+               (encounterSelectScreen != null && encounterSelectScreen.isOpen) ||
+               (loadoutSelectScreen != null && loadoutSelectScreen.isOpen) ||
+               (loadoutCreatorScreen != null && loadoutCreatorScreen.isOpen);
+    }
 }

@@ -411,15 +411,45 @@ public class ArenaLoadoutSelectScreen {
             if (confirmDeleteHb.hovered) {
                 // Delete the loadout
                 ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+
+                // Find the index of the deleted item to select the next one
+                int deletedIndex = -1;
+                for (int i = 0; i < items.size(); i++) {
+                    if (items.get(i) == selectedItem) {
+                        deletedIndex = i;
+                        break;
+                    }
+                }
+
                 if (repo.deleteLoadout(selectedItem.savedLoadout.dbId)) {
                     STSArena.logger.info("Deleted loadout: " + selectedItem.savedLoadout.name);
                     // Refresh the list
-                    selectedItem = null;
                     isConfirmingDelete = false;
                     buildItemList();
                     hitboxes = new Hitbox[items.size()];
                     for (int i = 0; i < items.size(); i++) {
                         hitboxes[i] = new Hitbox(LEFT_PANEL_WIDTH - 20.0f * Settings.scale, BUTTON_HEIGHT);
+                    }
+
+                    // Select the next saved loadout (skip headers and special items)
+                    selectedItem = null;
+                    if (deletedIndex >= 0) {
+                        // Try to select the item at the same position, or the previous one
+                        for (int i = deletedIndex; i < items.size(); i++) {
+                            if (items.get(i).savedLoadout != null) {
+                                selectedItem = items.get(i);
+                                break;
+                            }
+                        }
+                        // If nothing found after, try before
+                        if (selectedItem == null) {
+                            for (int i = deletedIndex - 1; i >= 0; i--) {
+                                if (items.get(i).savedLoadout != null) {
+                                    selectedItem = items.get(i);
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
                 InputHelper.justClickedLeft = false;

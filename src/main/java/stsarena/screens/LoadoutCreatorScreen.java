@@ -85,9 +85,20 @@ public class LoadoutCreatorScreen {
     private int currentHp;
     private int maxHp;
     private int ascensionLevel = 0;
-    private Hitbox hpMinusHitbox, hpPlusHitbox;
-    private Hitbox maxHpMinusHitbox, maxHpPlusHitbox;
+    private Hitbox hpMinusHitbox, hpPlusHitbox, hpValueHitbox;
+    private Hitbox maxHpMinusHitbox, maxHpPlusHitbox, maxHpValueHitbox;
     private Hitbox ascMinusHitbox, ascPlusHitbox;
+
+    // HP editing state
+    private boolean isEditingHp = false;
+    private boolean isEditingMaxHp = false;
+    private String hpEditText = "";
+    private String maxHpEditText = "";
+
+    // Loadout name
+    private String loadoutName = "";
+    private boolean isTypingName = false;
+    private Hitbox nameBoxHitbox;
 
     // Search
     private String searchText = "";
@@ -153,6 +164,9 @@ public class LoadoutCreatorScreen {
             contentTabHitboxes[i] = new Hitbox(CONTENT_TAB_WIDTH, CONTENT_TAB_HEIGHT);
         }
 
+        // Name box hitbox
+        nameBoxHitbox = new Hitbox(200.0f * Settings.scale, 28.0f * Settings.scale);
+
         // Search box hitbox
         searchBoxHitbox = new Hitbox(280.0f * Settings.scale, 28.0f * Settings.scale);
 
@@ -161,10 +175,13 @@ public class LoadoutCreatorScreen {
 
         // Stats hitboxes
         float smallBtn = 30.0f * Settings.scale;
+        float valueWidth = 50.0f * Settings.scale;
         hpMinusHitbox = new Hitbox(smallBtn, smallBtn);
         hpPlusHitbox = new Hitbox(smallBtn, smallBtn);
+        hpValueHitbox = new Hitbox(valueWidth, smallBtn);
         maxHpMinusHitbox = new Hitbox(smallBtn, smallBtn);
         maxHpPlusHitbox = new Hitbox(smallBtn, smallBtn);
+        maxHpValueHitbox = new Hitbox(valueWidth, smallBtn);
         ascMinusHitbox = new Hitbox(smallBtn, smallBtn);
         ascPlusHitbox = new Hitbox(smallBtn, smallBtn);
     }
@@ -177,6 +194,8 @@ public class LoadoutCreatorScreen {
         // Reset state
         this.selectedClass = AbstractPlayer.PlayerClass.IRONCLAD;
         this.activeTab = ContentTab.CARDS;
+        this.loadoutName = "";
+        this.isTypingName = false;
         this.searchText = "";
         this.isTypingSearch = false;
         this.deckCards.clear();
@@ -228,6 +247,8 @@ public class LoadoutCreatorScreen {
         // Call open() to initialize the screen with defaults
         this.isOpen = true;
         this.cancelButton.show("Cancel");
+        this.loadoutName = "Copy of " + loadout.name;
+        this.isTypingName = false;
         this.searchText = "";
         this.isTypingSearch = false;
         this.deckCards.clear();
@@ -508,9 +529,26 @@ public class LoadoutCreatorScreen {
             return;
         }
 
+        // Handle text input for name
+        if (isTypingName) {
+            handleNameInput();
+        }
+
         // Handle text input for search
         if (isTypingSearch) {
             handleSearchInput();
+        }
+
+        // Update name box hitbox (top right, near save button)
+        float nameBoxX = Settings.WIDTH - 260.0f * Settings.scale;
+        nameBoxHitbox.move(nameBoxX, TITLE_Y);
+        nameBoxHitbox.update();
+        if (nameBoxHitbox.hovered && InputHelper.justClickedLeft) {
+            isTypingName = true;
+            isTypingSearch = false;
+            InputHelper.justClickedLeft = false;
+        } else if (InputHelper.justClickedLeft && !nameBoxHitbox.hovered && isTypingName) {
+            isTypingName = false;
         }
 
         // Update search box hitbox
@@ -518,8 +556,9 @@ public class LoadoutCreatorScreen {
         searchBoxHitbox.update();
         if (searchBoxHitbox.hovered && InputHelper.justClickedLeft) {
             isTypingSearch = true;
+            isTypingName = false;
             InputHelper.justClickedLeft = false;
-        } else if (InputHelper.justClickedLeft && !searchBoxHitbox.hovered) {
+        } else if (InputHelper.justClickedLeft && !searchBoxHitbox.hovered && isTypingSearch) {
             isTypingSearch = false;
         }
 
@@ -618,41 +657,73 @@ public class LoadoutCreatorScreen {
         float statsX = Settings.WIDTH / 2.0f + 80.0f * Settings.scale;
         float btnSize = 30.0f * Settings.scale;
 
+        // Handle HP editing input
+        if (isEditingHp) {
+            handleHpInput(true);
+        }
+        if (isEditingMaxHp) {
+            handleHpInput(false);
+        }
+
         // HP controls
         float hpX = statsX;
         hpMinusHitbox.move(hpX, STATS_Y);
+        hpValueHitbox.move(hpX + 40.0f * Settings.scale, STATS_Y);
         hpPlusHitbox.move(hpX + 80.0f * Settings.scale, STATS_Y);
         hpMinusHitbox.update();
+        hpValueHitbox.update();
         hpPlusHitbox.update();
 
-        if (hpMinusHitbox.hovered && InputHelper.justClickedLeft) {
+        if (hpMinusHitbox.hovered && InputHelper.justClickedLeft && !isEditingHp) {
             currentHp = Math.max(1, currentHp - 1);
             InputHelper.justClickedLeft = false;
         }
-        if (hpPlusHitbox.hovered && InputHelper.justClickedLeft) {
+        if (hpPlusHitbox.hovered && InputHelper.justClickedLeft && !isEditingHp) {
             currentHp = Math.min(maxHp, currentHp + 1);
             InputHelper.justClickedLeft = false;
         }
+        if (hpValueHitbox.hovered && InputHelper.justClickedLeft) {
+            isEditingHp = true;
+            isEditingMaxHp = false;
+            isTypingName = false;
+            isTypingSearch = false;
+            hpEditText = String.valueOf(currentHp);
+            InputHelper.justClickedLeft = false;
+        } else if (InputHelper.justClickedLeft && !hpValueHitbox.hovered && isEditingHp) {
+            finishHpEdit(true);
+        }
 
         // Max HP controls
-        float maxHpX = statsX + 160.0f * Settings.scale;
+        float maxHpX = statsX + 180.0f * Settings.scale;
         maxHpMinusHitbox.move(maxHpX, STATS_Y);
+        maxHpValueHitbox.move(maxHpX + 40.0f * Settings.scale, STATS_Y);
         maxHpPlusHitbox.move(maxHpX + 80.0f * Settings.scale, STATS_Y);
         maxHpMinusHitbox.update();
+        maxHpValueHitbox.update();
         maxHpPlusHitbox.update();
 
-        if (maxHpMinusHitbox.hovered && InputHelper.justClickedLeft) {
+        if (maxHpMinusHitbox.hovered && InputHelper.justClickedLeft && !isEditingMaxHp) {
             maxHp = Math.max(1, maxHp - 1);
             currentHp = Math.min(currentHp, maxHp);
             InputHelper.justClickedLeft = false;
         }
-        if (maxHpPlusHitbox.hovered && InputHelper.justClickedLeft) {
+        if (maxHpPlusHitbox.hovered && InputHelper.justClickedLeft && !isEditingMaxHp) {
             maxHp = Math.min(999, maxHp + 1);
             InputHelper.justClickedLeft = false;
         }
+        if (maxHpValueHitbox.hovered && InputHelper.justClickedLeft) {
+            isEditingMaxHp = true;
+            isEditingHp = false;
+            isTypingName = false;
+            isTypingSearch = false;
+            maxHpEditText = String.valueOf(maxHp);
+            InputHelper.justClickedLeft = false;
+        } else if (InputHelper.justClickedLeft && !maxHpValueHitbox.hovered && isEditingMaxHp) {
+            finishHpEdit(false);
+        }
 
         // Ascension controls
-        float ascX = statsX + 320.0f * Settings.scale;
+        float ascX = statsX + 360.0f * Settings.scale;
         ascMinusHitbox.move(ascX, STATS_Y);
         ascPlusHitbox.move(ascX + 60.0f * Settings.scale, STATS_Y);
         ascMinusHitbox.update();
@@ -665,6 +736,71 @@ public class LoadoutCreatorScreen {
         if (ascPlusHitbox.hovered && InputHelper.justClickedLeft) {
             ascensionLevel = Math.min(20, ascensionLevel + 1);
             InputHelper.justClickedLeft = false;
+        }
+    }
+
+    private void handleHpInput(boolean isCurrentHp) {
+        String editText = isCurrentHp ? hpEditText : maxHpEditText;
+
+        // Handle backspace
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.BACKSPACE) && !editText.isEmpty()) {
+            editText = editText.substring(0, editText.length() - 1);
+            if (isCurrentHp) {
+                hpEditText = editText;
+            } else {
+                maxHpEditText = editText;
+            }
+        }
+
+        // Handle escape to cancel
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ESCAPE)) {
+            if (isCurrentHp) {
+                isEditingHp = false;
+            } else {
+                isEditingMaxHp = false;
+            }
+        }
+
+        // Handle enter to confirm
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ENTER)) {
+            finishHpEdit(isCurrentHp);
+        }
+
+        // Handle number input
+        for (int keycode = com.badlogic.gdx.Input.Keys.NUM_0; keycode <= com.badlogic.gdx.Input.Keys.NUM_9; keycode++) {
+            if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(keycode)) {
+                char c = (char) ('0' + (keycode - com.badlogic.gdx.Input.Keys.NUM_0));
+                // Limit to 3 digits
+                if (editText.length() < 3) {
+                    editText += c;
+                    if (isCurrentHp) {
+                        hpEditText = editText;
+                    } else {
+                        maxHpEditText = editText;
+                    }
+                }
+            }
+        }
+    }
+
+    private void finishHpEdit(boolean isCurrentHp) {
+        if (isCurrentHp) {
+            isEditingHp = false;
+            try {
+                int value = Integer.parseInt(hpEditText);
+                currentHp = Math.max(1, Math.min(maxHp, value));
+            } catch (NumberFormatException e) {
+                // Keep existing value
+            }
+        } else {
+            isEditingMaxHp = false;
+            try {
+                int value = Integer.parseInt(maxHpEditText);
+                maxHp = Math.max(1, Math.min(999, value));
+                currentHp = Math.min(currentHp, maxHp);
+            } catch (NumberFormatException e) {
+                // Keep existing value
+            }
         }
     }
 
@@ -684,7 +820,7 @@ public class LoadoutCreatorScreen {
         for (int i = 0; i < count; i++) {
             float itemY = y - i * ROW_HEIGHT;
 
-            if (itemY > LIST_START_Y - LIST_HEIGHT && itemY < LIST_START_Y + ROW_HEIGHT) {
+            if (itemY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && itemY < LIST_START_Y + ROW_HEIGHT * 2) {
                 if (i < availableItemHitboxes.length) {
                     availableItemHitboxes[i].move(LEFT_COLUMN_X, itemY - BUTTON_HEIGHT / 2.0f);
                     availableItemHitboxes[i].update();
@@ -730,7 +866,7 @@ public class LoadoutCreatorScreen {
             float cardY = y - row * ROW_HEIGHT;
             row++;
 
-            if (cardY > LIST_START_Y - LIST_HEIGHT && cardY < LIST_START_Y + ROW_HEIGHT) {
+            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y + ROW_HEIGHT * 2) {
                 float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 70.0f * Settings.scale;
 
                 // Upgrade button
@@ -761,7 +897,7 @@ public class LoadoutCreatorScreen {
             float relicY = y - row * ROW_HEIGHT;
             row++;
 
-            if (relicY > LIST_START_Y - LIST_HEIGHT && relicY < LIST_START_Y + ROW_HEIGHT) {
+            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY < LIST_START_Y + ROW_HEIGHT * 2) {
                 if (i < relicRemoveHitboxes.length) {
                     float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 35.0f * Settings.scale;
                     relicRemoveHitboxes[i].move(buttonX, relicY - BUTTON_HEIGHT / 2.0f);
@@ -780,7 +916,7 @@ public class LoadoutCreatorScreen {
             float potionY = y - row * ROW_HEIGHT;
             row++;
 
-            if (potionY > LIST_START_Y - LIST_HEIGHT && potionY < LIST_START_Y + ROW_HEIGHT) {
+            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY < LIST_START_Y + ROW_HEIGHT * 2) {
                 if (i < potionRemoveHitboxes.length) {
                     float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 35.0f * Settings.scale;
                     potionRemoveHitboxes[i].move(buttonX, potionY - BUTTON_HEIGHT / 2.0f);
@@ -791,6 +927,40 @@ public class LoadoutCreatorScreen {
                     }
                 }
             }
+        }
+    }
+
+    private void handleNameInput() {
+        // Handle backspace
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.BACKSPACE) && !loadoutName.isEmpty()) {
+            loadoutName = loadoutName.substring(0, loadoutName.length() - 1);
+        }
+
+        // Handle escape or enter to stop typing
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ENTER) ||
+            com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ESCAPE)) {
+            isTypingName = false;
+        }
+
+        // Handle shift key for uppercase letters
+        boolean shiftHeld = com.badlogic.gdx.Gdx.input.isKeyPressed(com.badlogic.gdx.Input.Keys.SHIFT_LEFT) ||
+                           com.badlogic.gdx.Gdx.input.isKeyPressed(com.badlogic.gdx.Input.Keys.SHIFT_RIGHT);
+
+        // Handle typed characters
+        for (int keycode = com.badlogic.gdx.Input.Keys.A; keycode <= com.badlogic.gdx.Input.Keys.Z; keycode++) {
+            if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(keycode)) {
+                char c = (char) ((shiftHeld ? 'A' : 'a') + (keycode - com.badlogic.gdx.Input.Keys.A));
+                loadoutName += c;
+            }
+        }
+        for (int keycode = com.badlogic.gdx.Input.Keys.NUM_0; keycode <= com.badlogic.gdx.Input.Keys.NUM_9; keycode++) {
+            if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(keycode)) {
+                char c = (char) ('0' + (keycode - com.badlogic.gdx.Input.Keys.NUM_0));
+                loadoutName += c;
+            }
+        }
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.SPACE)) {
+            loadoutName += ' ';
         }
     }
 
@@ -986,13 +1156,19 @@ public class LoadoutCreatorScreen {
 
         int potionSlots = getPotionSlots();
 
-        // Generate name
-        String className = selectedClass.name();
-        className = className.substring(0, 1) + className.substring(1).toLowerCase().replace("_", " ");
+        // Use custom name or generate default
+        String name;
+        if (loadoutName.isEmpty()) {
+            String className = selectedClass.name();
+            className = className.substring(0, 1) + className.substring(1).toLowerCase().replace("_", " ");
+            name = "Custom " + className;
+        } else {
+            name = loadoutName.trim();
+        }
 
         RandomLoadoutGenerator.GeneratedLoadout loadout = new RandomLoadoutGenerator.GeneratedLoadout(
             UUID.randomUUID().toString(),
-            "Custom " + className,
+            name,
             System.currentTimeMillis(),
             selectedClass,
             deck,
@@ -1028,6 +1204,9 @@ public class LoadoutCreatorScreen {
         FontHelper.renderFontCentered(sb, FontHelper.SCP_cardTitleFont_small,
             "Create Custom Loadout",
             Settings.WIDTH / 2.0f, TITLE_Y, Settings.GOLD_COLOR);
+
+        // Name input box
+        renderNameBox(sb);
 
         // Save button
         renderSaveButton(sb);
@@ -1074,6 +1253,42 @@ public class LoadoutCreatorScreen {
             case POTIONS: return "Available Potions (" + availablePotions.size() + ")";
             default: return "";
         }
+    }
+
+    private void renderNameBox(SpriteBatch sb) {
+        // Label
+        FontHelper.renderFontRightTopAligned(sb, FontHelper.cardDescFont_N,
+            "Name:",
+            nameBoxHitbox.x - 10.0f * Settings.scale,
+            nameBoxHitbox.y + nameBoxHitbox.height - 6.0f * Settings.scale,
+            Settings.CREAM_COLOR);
+
+        // Box background
+        Color bgColor = isTypingName ? new Color(0.2f, 0.2f, 0.3f, 0.9f) : new Color(0.1f, 0.1f, 0.15f, 0.7f);
+        sb.setColor(bgColor);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+            nameBoxHitbox.x, nameBoxHitbox.y,
+            nameBoxHitbox.width, nameBoxHitbox.height);
+
+        // Border when active
+        if (isTypingName) {
+            sb.setColor(Settings.GOLD_COLOR);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, nameBoxHitbox.x, nameBoxHitbox.y + nameBoxHitbox.height - 2, nameBoxHitbox.width, 2);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, nameBoxHitbox.x, nameBoxHitbox.y, nameBoxHitbox.width, 2);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, nameBoxHitbox.x, nameBoxHitbox.y, 2, nameBoxHitbox.height);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, nameBoxHitbox.x + nameBoxHitbox.width - 2, nameBoxHitbox.y, 2, nameBoxHitbox.height);
+        }
+
+        // Text
+        String displayText = loadoutName.isEmpty() ? "Untitled" : loadoutName;
+        Color textColor = loadoutName.isEmpty() ? new Color(0.5f, 0.5f, 0.5f, 1.0f) : Settings.CREAM_COLOR;
+        if (isTypingName) {
+            displayText = loadoutName + "|";
+            textColor = Settings.CREAM_COLOR;
+        }
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            displayText,
+            nameBoxHitbox.cX, nameBoxHitbox.cY, textColor);
     }
 
     private void renderSaveButton(SpriteBatch sb) {
@@ -1127,24 +1342,20 @@ public class LoadoutCreatorScreen {
             "HP:",
             statsX - 90.0f * Settings.scale, STATS_Y + 10.0f * Settings.scale, Settings.CREAM_COLOR);
         renderStatButton(sb, hpMinusHitbox, "-");
-        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
-            String.valueOf(currentHp),
-            statsX + 40.0f * Settings.scale, STATS_Y, Settings.CREAM_COLOR);
+        renderHpValue(sb, hpValueHitbox, isEditingHp, isEditingHp ? hpEditText : String.valueOf(currentHp));
         renderStatButton(sb, hpPlusHitbox, "+");
 
         // Max HP
-        float maxHpX = statsX + 160.0f * Settings.scale;
+        float maxHpX = statsX + 180.0f * Settings.scale;
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             "Max:",
             maxHpX - 50.0f * Settings.scale, STATS_Y + 10.0f * Settings.scale, Settings.CREAM_COLOR);
         renderStatButton(sb, maxHpMinusHitbox, "-");
-        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
-            String.valueOf(maxHp),
-            maxHpX + 40.0f * Settings.scale, STATS_Y, Settings.CREAM_COLOR);
+        renderHpValue(sb, maxHpValueHitbox, isEditingMaxHp, isEditingMaxHp ? maxHpEditText : String.valueOf(maxHp));
         renderStatButton(sb, maxHpPlusHitbox, "+");
 
         // Ascension
-        float ascX = statsX + 320.0f * Settings.scale;
+        float ascX = statsX + 360.0f * Settings.scale;
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             "A:",
             ascX - 30.0f * Settings.scale, STATS_Y + 10.0f * Settings.scale, Settings.CREAM_COLOR);
@@ -1153,6 +1364,35 @@ public class LoadoutCreatorScreen {
             String.valueOf(ascensionLevel),
             ascX + 30.0f * Settings.scale, STATS_Y, Settings.CREAM_COLOR);
         renderStatButton(sb, ascPlusHitbox, "+");
+    }
+
+    private void renderHpValue(SpriteBatch sb, Hitbox hb, boolean isEditing, String text) {
+        // Background
+        Color bgColor;
+        if (isEditing) {
+            bgColor = new Color(0.2f, 0.2f, 0.3f, 0.9f);
+        } else if (hb.hovered) {
+            bgColor = new Color(0.2f, 0.25f, 0.3f, 0.7f);
+        } else {
+            bgColor = new Color(0.1f, 0.1f, 0.15f, 0.5f);
+        }
+        sb.setColor(bgColor);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, hb.x, hb.y, hb.width, hb.height);
+
+        // Border when editing
+        if (isEditing) {
+            sb.setColor(Settings.GOLD_COLOR);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, hb.x, hb.y + hb.height - 2, hb.width, 2);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, hb.x, hb.y, hb.width, 2);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, hb.x, hb.y, 2, hb.height);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, hb.x + hb.width - 2, hb.y, 2, hb.height);
+        }
+
+        // Text (with cursor when editing)
+        String displayText = isEditing ? text + "|" : text;
+        Color textColor = isEditing ? Settings.GOLD_COLOR : (hb.hovered ? Settings.CREAM_COLOR : Settings.CREAM_COLOR);
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            displayText, hb.cX, hb.cY, textColor);
     }
 
     private void renderStatButton(SpriteBatch sb, Hitbox hb, String text) {
@@ -1237,7 +1477,7 @@ public class LoadoutCreatorScreen {
         for (int i = 0; i < availableCards.size(); i++) {
             float cardY = startY - i * ROW_HEIGHT;
 
-            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y + ROW_HEIGHT) {
+            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y + ROW_HEIGHT * 2) {
                 AbstractCard card = availableCards.get(i);
                 boolean hovered = i < availableItemHitboxes.length && availableItemHitboxes[i].hovered;
 
@@ -1268,7 +1508,7 @@ public class LoadoutCreatorScreen {
         for (int i = 0; i < availableRelics.size(); i++) {
             float relicY = startY - i * ROW_HEIGHT;
 
-            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY < LIST_START_Y + ROW_HEIGHT) {
+            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY < LIST_START_Y + ROW_HEIGHT * 2) {
                 AbstractRelic relic = availableRelics.get(i);
                 boolean hovered = i < availableItemHitboxes.length && availableItemHitboxes[i].hovered;
 
@@ -1301,7 +1541,7 @@ public class LoadoutCreatorScreen {
         for (int i = 0; i < availablePotions.size(); i++) {
             float potionY = startY - i * ROW_HEIGHT;
 
-            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY < LIST_START_Y + ROW_HEIGHT) {
+            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY < LIST_START_Y + ROW_HEIGHT * 2) {
                 AbstractPotion potion = availablePotions.get(i);
                 boolean hovered = i < availableItemHitboxes.length && availableItemHitboxes[i].hovered && canAddMore;
 
@@ -1348,7 +1588,7 @@ public class LoadoutCreatorScreen {
             float cardY = y - row * ROW_HEIGHT;
             row++;
 
-            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y + ROW_HEIGHT) {
+            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y + ROW_HEIGHT * 2) {
                 renderDeckCard(sb, i, cardY);
             }
         }
@@ -1366,7 +1606,7 @@ public class LoadoutCreatorScreen {
             float relicY = y - row * ROW_HEIGHT;
             row++;
 
-            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY < LIST_START_Y + ROW_HEIGHT) {
+            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY < LIST_START_Y + ROW_HEIGHT * 2) {
                 renderSelectedRelic(sb, i, relicY);
             }
         }
@@ -1385,7 +1625,7 @@ public class LoadoutCreatorScreen {
             float potionY = y - row * ROW_HEIGHT;
             row++;
 
-            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY < LIST_START_Y + ROW_HEIGHT) {
+            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY < LIST_START_Y + ROW_HEIGHT * 2) {
                 renderSelectedPotion(sb, i, potionY);
             }
         }
