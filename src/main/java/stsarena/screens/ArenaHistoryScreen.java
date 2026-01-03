@@ -6,6 +6,7 @@ import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.helpers.FontHelper;
 import com.megacrit.cardcrawl.helpers.Hitbox;
 import com.megacrit.cardcrawl.helpers.MathHelper;
+import com.megacrit.cardcrawl.helpers.TipHelper;
 import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import com.megacrit.cardcrawl.screens.mainMenu.MenuCancelButton;
 import stsarena.STSArena;
@@ -48,6 +49,14 @@ public class ArenaHistoryScreen {
 
     // Replay button hitboxes (one per row)
     private Hitbox[] replayHitboxes;
+
+    // Loadout name hitboxes for tooltips (one per row)
+    private Hitbox[] loadoutNameHitboxes;
+    private static final float LOADOUT_COL_WIDTH = 300.0f * Settings.scale;
+    private static final int TRUNCATE_LENGTH = 25;
+
+    // Tooltip state
+    private String hoveredLoadoutName = null;
 
     // Filter by loadout (null = show all)
     private Long filterLoadoutId = null;
@@ -110,16 +119,19 @@ public class ArenaHistoryScreen {
             // Sort the runs
             sortRuns();
 
-            // Create hitboxes for replay buttons
+            // Create hitboxes for replay buttons and loadout names
             replayHitboxes = new Hitbox[recentRuns.size()];
+            loadoutNameHitboxes = new Hitbox[recentRuns.size()];
             for (int i = 0; i < recentRuns.size(); i++) {
                 replayHitboxes[i] = new Hitbox(REPLAY_BUTTON_WIDTH, REPLAY_BUTTON_HEIGHT);
+                loadoutNameHitboxes[i] = new Hitbox(LOADOUT_COL_WIDTH, ROW_HEIGHT * 0.6f);
             }
         } catch (Exception e) {
             STSArena.logger.error("Failed to load arena history", e);
             this.recentRuns = null;
             this.stats = null;
             this.replayHitboxes = new Hitbox[0];
+            this.loadoutNameHitboxes = new Hitbox[0];
         }
 
         this.scrollY = 0.0f;
@@ -253,9 +265,11 @@ public class ArenaHistoryScreen {
             }
         }
 
-        // Update replay hitboxes and check for clicks
-        if (recentRuns != null && replayHitboxes != null) {
+        // Update replay hitboxes and loadout name hitboxes
+        hoveredLoadoutName = null; // Reset tooltip state
+        if (recentRuns != null && replayHitboxes != null && loadoutNameHitboxes != null) {
             float replayX = LEFT_X + 1000.0f * Settings.scale + REPLAY_BUTTON_WIDTH / 2.0f;
+            float loadoutX = LEFT_X + LOADOUT_COL_WIDTH / 2.0f;
             float y = HISTORY_START_Y - scrollY;
 
             for (int i = 0; i < recentRuns.size(); i++) {
@@ -263,13 +277,25 @@ public class ArenaHistoryScreen {
 
                 // Only update visible hitboxes
                 if (rowY > 0 && rowY < Settings.HEIGHT - 100.0f * Settings.scale) {
-                    // Center button vertically in the row
+                    // Replay button
                     replayHitboxes[i].move(replayX, rowY - 15.0f * Settings.scale);
                     replayHitboxes[i].update();
 
                     if (replayHitboxes[i].hovered && InputHelper.justClickedLeft) {
                         replayRun(recentRuns.get(i));
                         return;
+                    }
+
+                    // Loadout name hitbox for tooltip
+                    loadoutNameHitboxes[i].move(loadoutX, rowY - 15.0f * Settings.scale);
+                    loadoutNameHitboxes[i].update();
+
+                    // Check if hovering over a truncated name
+                    if (loadoutNameHitboxes[i].hovered) {
+                        String name = recentRuns.get(i).loadoutName;
+                        if (name != null && name.length() > TRUNCATE_LENGTH) {
+                            hoveredLoadoutName = name;
+                        }
                     }
                 }
             }
@@ -363,6 +389,13 @@ public class ArenaHistoryScreen {
 
         // Cancel button
         this.cancelButton.render(sb);
+
+        // Render tooltip for truncated loadout names (must be last to appear on top)
+        if (hoveredLoadoutName != null) {
+            TipHelper.renderGenericTip(InputHelper.mX + 20.0f * Settings.scale,
+                InputHelper.mY - 20.0f * Settings.scale,
+                "Loadout Name", hoveredLoadoutName);
+        }
     }
 
     private void renderRunRow(SpriteBatch sb, ArenaRepository.ArenaRunRecord run, float y, Hitbox replayHb) {
@@ -386,10 +419,10 @@ public class ArenaHistoryScreen {
 
         // Show loadout name - truncate if too long instead of wrapping
         String loadoutName = run.loadoutName != null ? run.loadoutName : "Unknown";
-        // Simple truncation - limit to ~25 chars to fit column
+        // Simple truncation - use constant to match tooltip logic
         String displayName = loadoutName;
-        if (loadoutName.length() > 25) {
-            displayName = loadoutName.substring(0, 22) + "...";
+        if (loadoutName.length() > TRUNCATE_LENGTH) {
+            displayName = loadoutName.substring(0, TRUNCATE_LENGTH - 3) + "...";
         }
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             displayName, col1, y, textColor);
