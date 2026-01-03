@@ -32,6 +32,11 @@ Thumbs.db
 
 # Dependencies (these must be copied manually and should not be committed)
 lib/*.jar
+lib/natives*/
+lib/mods/
+
+# Game config files (generated when running)
+info.displayconfig
 
 # Mods for testing
 mods/
