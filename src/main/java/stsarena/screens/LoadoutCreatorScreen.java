@@ -63,8 +63,8 @@ public class LoadoutCreatorScreen {
     private static final float BUTTON_HEIGHT = 28.0f * Settings.scale;
     private static final float SMALL_BUTTON_WIDTH = 28.0f * Settings.scale;
 
-    // List heights
-    private static final float LIST_HEIGHT = 380.0f * Settings.scale;
+    // List heights - use more vertical space (extends closer to cancel button)
+    private static final float LIST_HEIGHT = 580.0f * Settings.scale;
 
     // Content tab enum
     private enum ContentTab { CARDS, RELICS, POTIONS }
@@ -820,7 +820,7 @@ public class LoadoutCreatorScreen {
         for (int i = 0; i < count; i++) {
             float itemY = y - i * ROW_HEIGHT;
 
-            if (itemY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && itemY < LIST_START_Y + ROW_HEIGHT * 2) {
+            if (itemY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && itemY < LIST_START_Y) {
                 if (i < availableItemHitboxes.length) {
                     availableItemHitboxes[i].move(LEFT_COLUMN_X, itemY - BUTTON_HEIGHT / 2.0f);
                     availableItemHitboxes[i].update();
@@ -866,7 +866,7 @@ public class LoadoutCreatorScreen {
             float cardY = y - row * ROW_HEIGHT;
             row++;
 
-            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y + ROW_HEIGHT * 2) {
+            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y) {
                 float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 70.0f * Settings.scale;
 
                 // Upgrade button
@@ -897,7 +897,7 @@ public class LoadoutCreatorScreen {
             float relicY = y - row * ROW_HEIGHT;
             row++;
 
-            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY < LIST_START_Y + ROW_HEIGHT * 2) {
+            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY < LIST_START_Y) {
                 if (i < relicRemoveHitboxes.length) {
                     float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 35.0f * Settings.scale;
                     relicRemoveHitboxes[i].move(buttonX, relicY - BUTTON_HEIGHT / 2.0f);
@@ -916,7 +916,7 @@ public class LoadoutCreatorScreen {
             float potionY = y - row * ROW_HEIGHT;
             row++;
 
-            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY < LIST_START_Y + ROW_HEIGHT * 2) {
+            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY < LIST_START_Y) {
                 if (i < potionRemoveHitboxes.length) {
                     float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 35.0f * Settings.scale;
                     potionRemoveHitboxes[i].move(buttonX, potionY - BUTTON_HEIGHT / 2.0f);
@@ -1501,7 +1501,7 @@ public class LoadoutCreatorScreen {
         for (int i = 0; i < availableCards.size(); i++) {
             float cardY = startY - i * ROW_HEIGHT;
 
-            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y + ROW_HEIGHT * 2) {
+            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y) {
                 AbstractCard card = availableCards.get(i);
                 boolean hovered = i < availableItemHitboxes.length && availableItemHitboxes[i].hovered;
 
@@ -1532,7 +1532,7 @@ public class LoadoutCreatorScreen {
         for (int i = 0; i < availableRelics.size(); i++) {
             float relicY = startY - i * ROW_HEIGHT;
 
-            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY < LIST_START_Y + ROW_HEIGHT * 2) {
+            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY < LIST_START_Y) {
                 AbstractRelic relic = availableRelics.get(i);
                 boolean hovered = i < availableItemHitboxes.length && availableItemHitboxes[i].hovered;
 
@@ -1565,7 +1565,7 @@ public class LoadoutCreatorScreen {
         for (int i = 0; i < availablePotions.size(); i++) {
             float potionY = startY - i * ROW_HEIGHT;
 
-            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY < LIST_START_Y + ROW_HEIGHT * 2) {
+            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY < LIST_START_Y) {
                 AbstractPotion potion = availablePotions.get(i);
                 boolean hovered = i < availableItemHitboxes.length && availableItemHitboxes[i].hovered && canAddMore;
 
@@ -1601,7 +1601,8 @@ public class LoadoutCreatorScreen {
         int row = 0;
 
         // Use a common visibility check for all items - must match updateSelectedItems
-        float visibleTop = LIST_START_Y + ROW_HEIGHT * 2;
+        // visibleTop is at LIST_START_Y to prevent overlap with "Your Loadout" header
+        float visibleTop = LIST_START_Y;
         float visibleBottom = LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT;
 
         // Cards section header
