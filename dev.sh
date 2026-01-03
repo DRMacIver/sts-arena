@@ -29,13 +29,25 @@ devcontainer up --workspace-folder "$SCRIPT_DIR" $REBUILD_FLAG
 # Store hash after successful build
 echo "$CURRENT_HASH" > "$HASH_FILE"
 
-# Launch Claude Code with skip permissions
-# Pass ANTHROPIC_API_KEY if set, otherwise Claude will prompt for login
-if [ -n "$ANTHROPIC_API_KEY" ]; then
-    devcontainer exec --workspace-folder "$SCRIPT_DIR" \
-        --remote-env "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" \
-        claude --dangerously-skip-permissions "$@"
+# If arguments passed, run that command; otherwise run Claude Code
+if [ $# -gt 0 ]; then
+    # Run custom command (e.g., ./dev.sh bash)
+    if [ -n "$ANTHROPIC_API_KEY" ]; then
+        devcontainer exec --workspace-folder "$SCRIPT_DIR" \
+            --remote-env "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" \
+            "$@"
+    else
+        devcontainer exec --workspace-folder "$SCRIPT_DIR" \
+            "$@"
+    fi
 else
-    devcontainer exec --workspace-folder "$SCRIPT_DIR" \
-        claude --dangerously-skip-permissions "$@"
+    # Default: Launch Claude Code with skip permissions
+    if [ -n "$ANTHROPIC_API_KEY" ]; then
+        devcontainer exec --workspace-folder "$SCRIPT_DIR" \
+            --remote-env "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" \
+            claude --dangerously-skip-permissions
+    else
+        devcontainer exec --workspace-folder "$SCRIPT_DIR" \
+            claude --dangerously-skip-permissions
+    fi
 fi
