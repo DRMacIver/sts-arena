@@ -1233,6 +1233,18 @@ public class LoadoutCreatorScreen {
             "Your Loadout",
             RIGHT_COLUMN_X, LIST_START_Y + 25.0f * Settings.scale, Settings.GOLD_COLOR);
 
+        // Draw panel backgrounds for scroll areas
+        float panelWidth = COLUMN_WIDTH - 10.0f * Settings.scale;
+        sb.setColor(new Color(0.05f, 0.05f, 0.08f, 0.6f));
+        // Left panel background
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+            LEFT_COLUMN_X - panelWidth / 2.0f, LIST_START_Y - LIST_HEIGHT,
+            panelWidth, LIST_HEIGHT);
+        // Right panel background
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+            RIGHT_COLUMN_X - panelWidth / 2.0f, LIST_START_Y - LIST_HEIGHT,
+            panelWidth, LIST_HEIGHT);
+
         // Render available items (left panel)
         renderAvailableItems(sb);
 
@@ -1588,11 +1600,18 @@ public class LoadoutCreatorScreen {
         float y = LIST_START_Y + selectedScrollY;
         int row = 0;
 
+        // Use a common visibility check for all items - must match updateSelectedItems
+        float visibleTop = LIST_START_Y + ROW_HEIGHT * 2;
+        float visibleBottom = LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT;
+
         // Cards section header
-        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            "Deck (" + deckCards.size() + ")",
-            RIGHT_COLUMN_X - COLUMN_WIDTH / 2.0f + 8.0f * Settings.scale,
-            y - row * ROW_HEIGHT - 4.0f * Settings.scale, Settings.GOLD_COLOR);
+        float headerY = y - row * ROW_HEIGHT;
+        if (headerY > visibleBottom && headerY < visibleTop) {
+            FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+                "Deck (" + deckCards.size() + ")",
+                RIGHT_COLUMN_X - COLUMN_WIDTH / 2.0f + 8.0f * Settings.scale,
+                headerY - 4.0f * Settings.scale, Settings.GOLD_COLOR);
+        }
         row++;
 
         // Cards
@@ -1600,17 +1619,19 @@ public class LoadoutCreatorScreen {
             float cardY = y - row * ROW_HEIGHT;
             row++;
 
-            if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY < LIST_START_Y + ROW_HEIGHT * 2) {
+            if (cardY > visibleBottom && cardY < visibleTop) {
                 renderDeckCard(sb, i, cardY);
             }
         }
 
         // Relics section header
         float relicHeaderY = y - row * ROW_HEIGHT;
-        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            "Relics (" + selectedRelics.size() + ")",
-            RIGHT_COLUMN_X - COLUMN_WIDTH / 2.0f + 8.0f * Settings.scale,
-            relicHeaderY - 4.0f * Settings.scale, Settings.GOLD_COLOR);
+        if (relicHeaderY > visibleBottom && relicHeaderY < visibleTop) {
+            FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+                "Relics (" + selectedRelics.size() + ")",
+                RIGHT_COLUMN_X - COLUMN_WIDTH / 2.0f + 8.0f * Settings.scale,
+                relicHeaderY - 4.0f * Settings.scale, Settings.GOLD_COLOR);
+        }
         row++;
 
         // Relics
@@ -1618,7 +1639,7 @@ public class LoadoutCreatorScreen {
             float relicY = y - row * ROW_HEIGHT;
             row++;
 
-            if (relicY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && relicY < LIST_START_Y + ROW_HEIGHT * 2) {
+            if (relicY > visibleBottom && relicY < visibleTop) {
                 renderSelectedRelic(sb, i, relicY);
             }
         }
@@ -1626,10 +1647,12 @@ public class LoadoutCreatorScreen {
         // Potions section header
         int maxPotions = getPotionSlots();
         float potionHeaderY = y - row * ROW_HEIGHT;
-        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            "Potions (" + selectedPotions.size() + "/" + maxPotions + ")",
-            RIGHT_COLUMN_X - COLUMN_WIDTH / 2.0f + 8.0f * Settings.scale,
-            potionHeaderY - 4.0f * Settings.scale, Settings.GOLD_COLOR);
+        if (potionHeaderY > visibleBottom && potionHeaderY < visibleTop) {
+            FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+                "Potions (" + selectedPotions.size() + "/" + maxPotions + ")",
+                RIGHT_COLUMN_X - COLUMN_WIDTH / 2.0f + 8.0f * Settings.scale,
+                potionHeaderY - 4.0f * Settings.scale, Settings.GOLD_COLOR);
+        }
         row++;
 
         // Potions
@@ -1637,7 +1660,7 @@ public class LoadoutCreatorScreen {
             float potionY = y - row * ROW_HEIGHT;
             row++;
 
-            if (potionY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && potionY < LIST_START_Y + ROW_HEIGHT * 2) {
+            if (potionY > visibleBottom && potionY < visibleTop) {
                 renderSelectedPotion(sb, i, potionY);
             }
         }
