@@ -8,6 +8,7 @@ import com.megacrit.cardcrawl.helpers.Hitbox;
 import com.megacrit.cardcrawl.helpers.MathHelper;
 import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import com.megacrit.cardcrawl.screens.mainMenu.MenuCancelButton;
+import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import stsarena.STSArena;
 import stsarena.arena.ArenaRunner;
 import stsarena.arena.RandomLoadoutGenerator;
@@ -45,6 +46,13 @@ public class ArenaEncounterSelectScreen {
     // Encounter outcomes for current loadout (encounter ID -> "VICTORY" or "DEFEAT")
     private Map<String, String> encounterOutcomes = new HashMap<>();
 
+    // Track if we came from the pause menu (Practice in Arena button)
+    private boolean openedFromPauseMenu = false;
+
+    // Current encounter when opened from a fight (shown at top of list)
+    private String currentEncounter = null;
+    private Hitbox currentEncounterHb = new Hitbox(BUTTON_WIDTH, BUTTON_HEIGHT);
+
     private static class ListItem {
         String text;
         String encounterId; // null for headers
@@ -76,55 +84,13 @@ public class ArenaEncounterSelectScreen {
         // Random option
         items.add(new ListItem("Random", null, false, true));
 
-        // Act 1
-        items.add(new ListItem("--- Act 1 ---", null, true, false));
-        addEncounters(items, new String[]{
-            "Cultist", "Jaw Worm", "2 Louse", "Small Slimes", "Blue Slaver",
-            "Gremlin Gang", "Looter", "Large Slime", "Lots of Slimes",
-            "Exordium Thugs", "Exordium Wildlife", "Red Slaver", "3 Louse", "2 Fungi Beasts"
-        });
-        items.add(new ListItem("Act 1 Elites", null, true, false));
-        addEncounters(items, new String[]{"Gremlin Nob", "Lagavulin", "3 Sentries"});
-        items.add(new ListItem("Act 1 Bosses", null, true, false));
-        addEncounters(items, new String[]{"The Guardian", "Hexaghost", "Slime Boss"});
-
-        // Act 2
-        items.add(new ListItem("--- Act 2 ---", null, true, false));
-        addEncounters(items, new String[]{
-            "Chosen", "Shell Parasite", "Spheric Guardian", "3 Byrds", "2 Thieves",
-            "Chosen and Byrds", "Sentry and Sphere", "Snake Plant", "Snecko",
-            "Centurion and Healer", "Cultist and Chosen", "3 Cultists", "Shelled Parasite and Fungi"
-        });
-        items.add(new ListItem("Act 2 Elites", null, true, false));
-        addEncounters(items, new String[]{"Gremlin Leader", "Slavers", "Book of Stabbing"});
-        items.add(new ListItem("Act 2 Bosses", null, true, false));
-        addEncounters(items, new String[]{"Automaton", "Collector", "Champ"});
-
-        // Act 3
-        items.add(new ListItem("--- Act 3 ---", null, true, false));
-        addEncounters(items, new String[]{
-            "3 Darklings", "Orb Walker", "3 Shapes", "Spire Growth", "Transient",
-            "4 Shapes", "Maw", "Jaw Worm Horde", "Sphere and 2 Shapes", "Writhing Mass"
-        });
-        items.add(new ListItem("Act 3 Elites", null, true, false));
-        addEncounters(items, new String[]{"Giant Head", "Nemesis", "Reptomancer"});
-        items.add(new ListItem("Act 3 Bosses", null, true, false));
-        addEncounters(items, new String[]{"Awakened One", "Time Eater", "Donu and Deca"});
-
-        // Act 4
-        items.add(new ListItem("--- Act 4 ---", null, true, false));
-        addEncounters(items, new String[]{"Shield and Spear", "The Heart"});
-
-        // Event Encounters
-        items.add(new ListItem("--- Event Encounters ---", null, true, false));
-        addEncounters(items, new String[]{
-            "The Mushroom Lair",     // 3 Fungi Beasts (event version)
-            "Masked Bandits",        // Red Mask gang event
-            "Colosseum Slavers",     // Colosseum fight 1
-            "Colosseum Nobs",        // Colosseum fight 2
-            "2 Orb Walkers",         // Mind Bloom event
-            "Mind Bloom Boss Battle" // Fight 2 act 1 bosses
-        });
+        // Build list from centralized encounter categories
+        for (stsarena.arena.LoadoutConfig.EncounterCategory category : stsarena.arena.LoadoutConfig.ENCOUNTER_CATEGORIES) {
+            // Add header
+            items.add(new ListItem(category.header, null, true, false));
+            // Add encounters
+            addEncounters(items, category.encounters);
+        }
     }
 
     private void addEncounters(List<ListItem> list, String[] encounters) {
@@ -136,6 +102,8 @@ public class ArenaEncounterSelectScreen {
     public void open() {
         STSArena.logger.info("Opening Arena Encounter Select Screen");
         this.isOpen = true;
+        this.openedFromPauseMenu = false;  // Reset when opening normally
+        this.currentEncounter = null;       // Reset current encounter
         this.cancelButton.show("Back");
         this.scrollY = 0.0f;
         this.targetScrollY = 0.0f;
@@ -156,10 +124,19 @@ public class ArenaEncounterSelectScreen {
 
     /**
      * Open the encounter selection screen with a pre-selected loadout.
-     * Used when entering arena from a normal run (F10 keybind).
+     * Used when entering arena from the pause menu (Practice in Arena button).
      */
     public void openWithLoadout(long loadoutId) {
-        STSArena.logger.info("Opening Arena Encounter Select Screen with loadout ID: " + loadoutId);
+        openWithLoadout(loadoutId, null);
+    }
+
+    /**
+     * Open the encounter selection screen with a pre-selected loadout and optional current encounter.
+     * Used when entering arena from the pause menu (Practice in Arena button) during a fight.
+     */
+    public void openWithLoadout(long loadoutId, String currentEncounter) {
+        STSArena.logger.info("Opening Arena Encounter Select Screen with loadout ID: " + loadoutId +
+            ", currentEncounter: " + currentEncounter);
 
         // Load the loadout from the database
         try {
@@ -177,8 +154,11 @@ public class ArenaEncounterSelectScreen {
             STSArena.logger.error("Failed to load loadout by ID", e);
         }
 
-        // Now open normally
+        // Open the screen
         open();
+        // Mark that we came from the pause menu (after open() resets it)
+        this.openedFromPauseMenu = true;
+        this.currentEncounter = currentEncounter;
     }
 
     public void close() {
@@ -189,13 +169,25 @@ public class ArenaEncounterSelectScreen {
     public void update() {
         if (!isOpen) return;
 
-        // Cancel button - go back to loadout selection
+        // Cancel button - go back to previous screen
         this.cancelButton.update();
         if (this.cancelButton.hb.clicked || InputHelper.pressedEscape) {
             InputHelper.pressedEscape = false;
             this.cancelButton.hb.clicked = false;
             this.close();
-            STSArena.openLoadoutSelectScreen();
+
+            if (openedFromPauseMenu) {
+                // Go back to the settings/pause menu
+                STSArena.logger.info("Returning to settings screen from arena encounter select");
+                AbstractDungeon.settingsScreen.open();
+            } else if (ArenaRunner.wasStartedFromNormalRun()) {
+                // Return to the normal run we came from
+                STSArena.logger.info("Returning to normal run from arena encounter select");
+                ArenaRunner.resumeNormalRun();
+            } else {
+                // Go back to loadout selection
+                STSArena.openLoadoutSelectScreen();
+            }
             return;
         }
 
@@ -213,8 +205,23 @@ public class ArenaEncounterSelectScreen {
 
         scrollY = MathHelper.scrollSnapLerpSpeed(scrollY, targetScrollY);
 
+        // Handle current encounter hitbox (special entry at top)
+        if (currentEncounter != null) {
+            float currentEncounterY = LIST_START_Y - ROW_HEIGHT;
+            currentEncounterHb.move(CENTER_X, currentEncounterY - BUTTON_HEIGHT / 2.0f);
+            currentEncounterHb.update();
+
+            if (currentEncounterHb.hovered && InputHelper.justClickedLeft) {
+                selectCurrentEncounter();
+                return;
+            }
+        }
+
+        // Calculate offset for regular items when current encounter is shown
+        float currentEncounterOffset = currentEncounter != null ? ROW_HEIGHT * 2.5f : 0;
+
         // Update hitboxes and check for clicks
-        float y = LIST_START_Y + scrollY;
+        float y = LIST_START_Y - currentEncounterOffset + scrollY;
         for (int i = 0; i < items.size(); i++) {
             ListItem item = items.get(i);
             float buttonY = y - i * ROW_HEIGHT;
@@ -235,6 +242,35 @@ public class ArenaEncounterSelectScreen {
         }
     }
 
+    /**
+     * Select the current encounter (from a fight).
+     */
+    private void selectCurrentEncounter() {
+        STSArena.logger.info("Current encounter selected: " + currentEncounter);
+
+        // If we came from the pause menu, mark that we're starting from a normal run
+        if (openedFromPauseMenu && AbstractDungeon.player != null) {
+            ArenaRunner.setStartedFromNormalRun(AbstractDungeon.player.chosenClass);
+        }
+
+        this.close();
+
+        // Use the loadout selection from ArenaLoadoutSelectScreen
+        if (ArenaLoadoutSelectScreen.useNewRandomLoadout) {
+            // Generate new random loadout (shouldn't happen from Practice in Arena)
+            RandomLoadoutGenerator.GeneratedLoadout loadout = RandomLoadoutGenerator.generate();
+            ArenaRunner.startFight(loadout, currentEncounter);
+        } else if (ArenaLoadoutSelectScreen.selectedSavedLoadout != null) {
+            // Use saved loadout
+            ArenaRunner.startFightWithSavedLoadout(ArenaLoadoutSelectScreen.selectedSavedLoadout, currentEncounter);
+        } else {
+            // Fallback - should not happen
+            STSArena.logger.warn("No loadout selected, generating random");
+            RandomLoadoutGenerator.GeneratedLoadout loadout = RandomLoadoutGenerator.generate();
+            ArenaRunner.startFight(loadout, currentEncounter);
+        }
+    }
+
     private void selectEncounter(ListItem item) {
         String encounter;
         if (item.isRandom) {
@@ -243,6 +279,12 @@ public class ArenaEncounterSelectScreen {
         } else {
             encounter = item.encounterId;
             STSArena.logger.info("Specific encounter selected: " + encounter);
+        }
+
+        // If we came from the pause menu, mark that we're starting from a normal run
+        // This enables returning to the original game when leaving arena
+        if (openedFromPauseMenu && AbstractDungeon.player != null) {
+            ArenaRunner.setStartedFromNormalRun(AbstractDungeon.player.chosenClass);
         }
 
         this.close();
@@ -275,8 +317,28 @@ public class ArenaEncounterSelectScreen {
             "Select Encounter",
             CENTER_X, TITLE_Y, Settings.GOLD_COLOR);
 
-        // Render items
-        float y = LIST_START_Y + scrollY;
+        // Calculate offset for current encounter section
+        float currentEncounterOffset = 0;
+        if (currentEncounter != null) {
+            // Render current encounter section at the top
+            float currentY = LIST_START_Y;
+
+            // Header for current encounter
+            FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+                "--- Current Fight ---",
+                CENTER_X, currentY - BUTTON_HEIGHT / 2.0f, new Color(1.0f, 0.8f, 0.2f, 1.0f));
+
+            currentY -= ROW_HEIGHT;
+
+            // Render the current encounter button with special styling
+            renderCurrentEncounter(sb, currentEncounter, currentY);
+
+            // Add spacing after current encounter section
+            currentEncounterOffset = ROW_HEIGHT * 2.5f;
+        }
+
+        // Render regular items
+        float y = LIST_START_Y - currentEncounterOffset + scrollY;
         for (int i = 0; i < items.size(); i++) {
             ListItem item = items.get(i);
             float buttonY = y - i * ROW_HEIGHT;
@@ -293,6 +355,32 @@ public class ArenaEncounterSelectScreen {
 
         // Cancel button
         this.cancelButton.render(sb);
+    }
+
+    private void renderCurrentEncounter(SpriteBatch sb, String text, float y) {
+        // Special background for current encounter (highlighted)
+        Color bgColor;
+        if (currentEncounterHb.hovered) {
+            bgColor = new Color(0.4f, 0.35f, 0.2f, 0.9f);
+        } else {
+            bgColor = new Color(0.25f, 0.2f, 0.1f, 0.8f);
+        }
+
+        sb.setColor(bgColor);
+        sb.draw(com.megacrit.cardcrawl.helpers.ImageMaster.WHITE_SQUARE_IMG,
+            CENTER_X - BUTTON_WIDTH / 2.0f,
+            y - BUTTON_HEIGHT,
+            BUTTON_WIDTH,
+            BUTTON_HEIGHT);
+
+        // Gold text for current encounter
+        Color textColor = currentEncounterHb.hovered ? Settings.GOLD_COLOR : new Color(1.0f, 0.9f, 0.6f, 1.0f);
+
+        FontHelper.renderFontCentered(sb, FontHelper.tipHeaderFont,
+            text,
+            CENTER_X, y - BUTTON_HEIGHT / 2.0f, textColor);
+
+        currentEncounterHb.render(sb);
     }
 
     private void renderHeader(SpriteBatch sb, String text, float y) {

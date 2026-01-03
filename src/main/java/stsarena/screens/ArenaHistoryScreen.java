@@ -14,6 +14,9 @@ import stsarena.data.ArenaDatabase;
 import stsarena.data.ArenaRepository;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 
@@ -49,6 +52,18 @@ public class ArenaHistoryScreen {
     // Filter by loadout (null = show all)
     private Long filterLoadoutId = null;
     private String filterLoadoutName = null;
+
+    // Sorting state
+    private enum SortColumn { LOADOUT, ENCOUNTER, OUTCOME, DATE }
+    private SortColumn sortColumn = SortColumn.DATE;
+    private boolean sortAscending = false; // Most recent first by default
+
+    // Column header hitboxes for sorting
+    private static final float HEADER_HB_HEIGHT = 30.0f * Settings.scale;
+    private Hitbox loadoutHeaderHb = new Hitbox(300.0f * Settings.scale, HEADER_HB_HEIGHT);
+    private Hitbox encounterHeaderHb = new Hitbox(280.0f * Settings.scale, HEADER_HB_HEIGHT);
+    private Hitbox outcomeHeaderHb = new Hitbox(140.0f * Settings.scale, HEADER_HB_HEIGHT);
+    private Hitbox dateHeaderHb = new Hitbox(200.0f * Settings.scale, HEADER_HB_HEIGHT);
 
     public ArenaHistoryScreen() {
         this.cancelButton = new MenuCancelButton();
@@ -92,6 +107,9 @@ public class ArenaHistoryScreen {
 
             STSArena.logger.info("Loaded " + recentRuns.size() + " arena runs");
 
+            // Sort the runs
+            sortRuns();
+
             // Create hitboxes for replay buttons
             replayHitboxes = new Hitbox[recentRuns.size()];
             for (int i = 0; i < recentRuns.size(); i++) {
@@ -111,6 +129,66 @@ public class ArenaHistoryScreen {
     public void close() {
         this.isOpen = false;
         this.cancelButton.hide();
+    }
+
+    /**
+     * Sort the runs list based on current sort column and direction.
+     */
+    private void sortRuns() {
+        if (recentRuns == null || recentRuns.isEmpty()) return;
+
+        Comparator<ArenaRepository.ArenaRunRecord> comparator;
+        switch (sortColumn) {
+            case LOADOUT:
+                comparator = (a, b) -> {
+                    String nameA = a.loadoutName != null ? a.loadoutName : "";
+                    String nameB = b.loadoutName != null ? b.loadoutName : "";
+                    return nameA.compareToIgnoreCase(nameB);
+                };
+                break;
+            case ENCOUNTER:
+                comparator = (a, b) -> {
+                    String encA = a.encounterId != null ? a.encounterId : "";
+                    String encB = b.encounterId != null ? b.encounterId : "";
+                    return encA.compareToIgnoreCase(encB);
+                };
+                break;
+            case OUTCOME:
+                comparator = (a, b) -> {
+                    String outA = a.outcome != null ? a.outcome : "";
+                    String outB = b.outcome != null ? b.outcome : "";
+                    return outA.compareTo(outB);
+                };
+                break;
+            case DATE:
+            default:
+                comparator = (a, b) -> Long.compare(a.startedAt, b.startedAt);
+                break;
+        }
+
+        if (!sortAscending) {
+            comparator = comparator.reversed();
+        }
+
+        Collections.sort(recentRuns, comparator);
+    }
+
+    /**
+     * Handle clicking on a column header to change sort.
+     */
+    private void handleHeaderClick(SortColumn column) {
+        if (sortColumn == column) {
+            // Toggle direction
+            sortAscending = !sortAscending;
+        } else {
+            // New column, reset to descending (or ascending for text columns)
+            sortColumn = column;
+            sortAscending = (column == SortColumn.LOADOUT || column == SortColumn.ENCOUNTER);
+        }
+        sortRuns();
+        // Reset scroll to top when sorting changes
+        scrollY = 0;
+        targetScrollY = 0;
     }
 
     public void update() {
@@ -138,6 +216,40 @@ public class ArenaHistoryScreen {
         if (targetScrollY > maxScroll) targetScrollY = maxScroll;
 
         scrollY = MathHelper.scrollSnapLerpSpeed(scrollY, targetScrollY);
+
+        // Update column header hitboxes for sorting
+        float headerY = HISTORY_START_Y + 30.0f * Settings.scale - HEADER_HB_HEIGHT / 2.0f;
+        float col1 = LEFT_X + 150.0f * Settings.scale;
+        float col2 = LEFT_X + 460.0f * Settings.scale;
+        float col3 = LEFT_X + 690.0f * Settings.scale;
+        float col4 = LEFT_X + 880.0f * Settings.scale;
+
+        loadoutHeaderHb.move(col1, headerY);
+        encounterHeaderHb.move(col2, headerY);
+        outcomeHeaderHb.move(col3, headerY);
+        dateHeaderHb.move(col4, headerY);
+
+        loadoutHeaderHb.update();
+        encounterHeaderHb.update();
+        outcomeHeaderHb.update();
+        dateHeaderHb.update();
+
+        // Check for header clicks
+        if (InputHelper.justClickedLeft) {
+            if (loadoutHeaderHb.hovered) {
+                handleHeaderClick(SortColumn.LOADOUT);
+                return;
+            } else if (encounterHeaderHb.hovered) {
+                handleHeaderClick(SortColumn.ENCOUNTER);
+                return;
+            } else if (outcomeHeaderHb.hovered) {
+                handleHeaderClick(SortColumn.OUTCOME);
+                return;
+            } else if (dateHeaderHb.hovered) {
+                handleHeaderClick(SortColumn.DATE);
+                return;
+            }
+        }
 
         // Update replay hitboxes and check for clicks
         if (recentRuns != null && replayHitboxes != null) {
@@ -221,14 +333,11 @@ public class ArenaHistoryScreen {
         float col4 = LEFT_X + 780.0f * Settings.scale; // Date
         float col5 = LEFT_X + 1000.0f * Settings.scale; // Replay
 
-        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            "Loadout", col1, headerY, Settings.GOLD_COLOR);
-        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            "Encounter", col2, headerY, Settings.GOLD_COLOR);
-        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            "Outcome", col3, headerY, Settings.GOLD_COLOR);
-        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            "Date", col4, headerY, Settings.GOLD_COLOR);
+        // Render sortable column headers with indicators
+        renderSortableHeader(sb, "Loadout", col1, headerY, SortColumn.LOADOUT, loadoutHeaderHb);
+        renderSortableHeader(sb, "Encounter", col2, headerY, SortColumn.ENCOUNTER, encounterHeaderHb);
+        renderSortableHeader(sb, "Outcome", col3, headerY, SortColumn.OUTCOME, outcomeHeaderHb);
+        renderSortableHeader(sb, "Date", col4, headerY, SortColumn.DATE, dateHeaderHb);
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
             "Action", col5, headerY, Settings.GOLD_COLOR);
 
@@ -316,5 +425,33 @@ public class ArenaHistoryScreen {
         FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
             "Replay",
             buttonX + REPLAY_BUTTON_WIDTH / 2.0f, buttonCenterY, buttonTextColor);
+    }
+
+    /**
+     * Render a sortable column header with sort indicator.
+     */
+    private void renderSortableHeader(SpriteBatch sb, String label, float x, float y,
+                                       SortColumn column, Hitbox hb) {
+        // Determine color based on state
+        Color headerColor;
+        if (sortColumn == column) {
+            headerColor = Settings.GREEN_TEXT_COLOR; // Highlight active sort column
+        } else if (hb.hovered) {
+            headerColor = Color.WHITE;
+        } else {
+            headerColor = Settings.GOLD_COLOR;
+        }
+
+        // Build label with sort indicator
+        String displayLabel = label;
+        if (sortColumn == column) {
+            displayLabel = label + (sortAscending ? " ^" : " v");
+        }
+
+        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+            displayLabel, x, y, headerColor);
+
+        // Render hitbox for debugging (comment out in production)
+        // hb.render(sb);
     }
 }

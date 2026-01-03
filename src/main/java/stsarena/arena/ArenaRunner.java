@@ -6,6 +6,7 @@ import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.map.MapRoomNode;
 import com.megacrit.cardcrawl.rooms.AbstractRoom;
 import com.megacrit.cardcrawl.rooms.MonsterRoom;
+import com.megacrit.cardcrawl.rooms.MonsterRoomElite;
 import com.megacrit.cardcrawl.screens.GameOverScreen;
 import stsarena.STSArena;
 import stsarena.data.ArenaDatabase;
@@ -39,6 +40,10 @@ public class ArenaRunner {
 
     // Flag to trigger return to main menu after arena fight ends
     private static boolean pendingReturnToMainMenu = false;
+
+    // Track if arena was started from a normal run (Practice in Arena button)
+    private static boolean startedFromNormalRun = false;
+    private static com.megacrit.cardcrawl.characters.AbstractPlayer.PlayerClass normalRunPlayerClass = null;
 
     /**
      * Start a random arena fight from the main menu.
@@ -221,9 +226,18 @@ public class ArenaRunner {
             AbstractDungeon.currMapNode = cur;
         }
 
-        // Create next room node with MonsterRoom (like BaseMod Fight command)
+        // Determine if we should use elite room (for burning effect at A18+)
+        boolean useEliteRoom = LoadoutConfig.isEliteEncounter(encounterName) &&
+                               AbstractDungeon.ascensionLevel >= 18;
+
+        // Create next room node with appropriate room type
         MapRoomNode node = new MapRoomNode(cur.x, cur.y);
-        node.room = new MonsterRoom();
+        if (useEliteRoom) {
+            node.room = new MonsterRoomElite();
+            STSArena.logger.info("ARENA: Using MonsterRoomElite for burning elite effect");
+        } else {
+            node.room = new MonsterRoom();
+        }
 
         // Copy edges from current node
         for (com.megacrit.cardcrawl.map.MapEdge edge : cur.getEdges()) {
@@ -298,9 +312,12 @@ public class ArenaRunner {
 
     /**
      * Complete the current arena run with victory.
+     * @param imperfect If true, the player took damage during the fight.
+     *                  For imperfect victories, we don't immediately return to menu
+     *                  to allow the VictoryScreen to show "Try Again?" option.
      */
-    public static void recordVictory() {
-        STSArena.logger.info("ARENA: recordVictory called - isArenaRun=" + isArenaRun + ", currentRunDbId=" + currentRunDbId);
+    public static void recordVictory(boolean imperfect) {
+        STSArena.logger.info("ARENA: recordVictory called - isArenaRun=" + isArenaRun + ", currentRunDbId=" + currentRunDbId + ", imperfect=" + imperfect);
         if (!isArenaRun || currentRunDbId < 0) {
             STSArena.logger.info("ARENA: recordVictory skipped - conditions not met");
             return;
@@ -336,9 +353,20 @@ public class ArenaRunner {
             STSArena.logger.error("Failed to record victory", e);
         }
 
-        // Trigger return to main menu
-        pendingReturnToMainMenu = true;
-        STSArena.setReturnToArenaOnMainMenu();
+        // For perfect victories, trigger return to main menu immediately
+        // For imperfect victories, let the VictoryScreen handle the "Try Again?" prompt
+        if (!imperfect) {
+            pendingReturnToMainMenu = true;
+            STSArena.setReturnToArenaOnMainMenu();
+        }
+    }
+
+    /**
+     * Complete the current arena run with victory (backward compatibility).
+     * Assumes perfect victory.
+     */
+    public static void recordVictory() {
+        recordVictory(false);
     }
 
     /**
@@ -516,6 +544,74 @@ public class ArenaRunner {
      */
     public static String getCurrentEncounter() {
         return currentEncounter;
+    }
+
+    /**
+     * Mark that the next arena run is starting from a normal run (Practice in Arena).
+     * Call this before startFightWithSavedLoadout when coming from the pause menu.
+     */
+    public static void setStartedFromNormalRun(com.megacrit.cardcrawl.characters.AbstractPlayer.PlayerClass playerClass) {
+        startedFromNormalRun = true;
+        normalRunPlayerClass = playerClass;
+        STSArena.logger.info("ARENA: Marked as starting from normal run (class: " + playerClass + ")");
+    }
+
+    /**
+     * Check if the current arena run was started from a normal run.
+     */
+    public static boolean wasStartedFromNormalRun() {
+        return startedFromNormalRun;
+    }
+
+    /**
+     * Get the player class of the normal run we came from.
+     */
+    public static com.megacrit.cardcrawl.characters.AbstractPlayer.PlayerClass getNormalRunPlayerClass() {
+        return normalRunPlayerClass;
+    }
+
+    /**
+     * Resume the normal run that was in progress before arena started.
+     * Call this instead of startOver() when leaving arena via pause menu.
+     */
+    public static void resumeNormalRun() {
+        if (!startedFromNormalRun || normalRunPlayerClass == null) {
+            STSArena.logger.warn("ARENA: Cannot resume normal run - not started from one");
+            return;
+        }
+
+        STSArena.logger.info("ARENA: Resuming normal run for " + normalRunPlayerClass);
+
+        // Restore the original save file
+        SaveFileManager.restoreOriginalSave();
+
+        // Set up to load the save
+        CardCrawlGame.loadingSave = true;
+        CardCrawlGame.chosenCharacter = normalRunPlayerClass;
+
+        // Clear arena state
+        isArenaRun = false;
+        arenaRunInProgress = false;
+        startedFromNormalRun = false;
+        normalRunPlayerClass = null;
+        currentRunDbId = -1;
+        currentLoadoutDbId = -1;
+        currentLoadout = null;
+        currentEncounter = null;
+        pendingLoadout = null;
+        pendingEncounter = null;
+        pendingReturnToMainMenu = false;
+
+        // Set main menu to faded out to skip animation
+        if (CardCrawlGame.mainMenuScreen != null) {
+            CardCrawlGame.mainMenuScreen.isFadingOut = true;
+            CardCrawlGame.mainMenuScreen.fadedOut = true;
+        }
+
+        // Transition to load the save
+        CardCrawlGame.mode = CardCrawlGame.GameMode.CHAR_SELECT;
+
+        STSArena.logger.info("ARENA: Normal run resume initiated");
     }
 
     /**

@@ -241,4 +241,46 @@ public class LoadoutConfigTest {
         assertTrue("Prismatic shard should be rare (< 50%)",
             LoadoutConfig.PRISMATIC_SHARD_CHANCE < 0.5);
     }
+
+    @Test
+    public void testIsEliteEncounterAct1Elites() {
+        assertTrue("Gremlin Nob should be an elite",
+            LoadoutConfig.isEliteEncounter("Gremlin Nob"));
+        assertTrue("Lagavulin should be an elite",
+            LoadoutConfig.isEliteEncounter("Lagavulin"));
+        assertTrue("3 Sentries should be an elite",
+            LoadoutConfig.isEliteEncounter("3 Sentries"));
+    }
+
+    @Test
+    public void testIsEliteEncounterAct2Elites() {
+        assertTrue("Gremlin Leader should be an elite",
+            LoadoutConfig.isEliteEncounter("Gremlin Leader"));
+        assertTrue("Slavers should be an elite",
+            LoadoutConfig.isEliteEncounter("Slavers"));
+        assertTrue("Book of Stabbing should be an elite",
+            LoadoutConfig.isEliteEncounter("Book of Stabbing"));
+    }
+
+    @Test
+    public void testIsEliteEncounterAct3Elites() {
+        assertTrue("Giant Head should be an elite",
+            LoadoutConfig.isEliteEncounter("Giant Head"));
+        assertTrue("Nemesis should be an elite",
+            LoadoutConfig.isEliteEncounter("Nemesis"));
+        assertTrue("Reptomancer should be an elite",
+            LoadoutConfig.isEliteEncounter("Reptomancer"));
+    }
+
+    @Test
+    public void testIsEliteEncounterNonElites() {
+        assertFalse("Cultist should not be an elite",
+            LoadoutConfig.isEliteEncounter("Cultist"));
+        assertFalse("Jaw Worm should not be an elite",
+            LoadoutConfig.isEliteEncounter("Jaw Worm"));
+        assertFalse("The Guardian should not be an elite (it's a boss)",
+            LoadoutConfig.isEliteEncounter("The Guardian"));
+        assertFalse("The Heart should not be an elite (it's a boss)",
+            LoadoutConfig.isEliteEncounter("The Heart"));
+    }
 }

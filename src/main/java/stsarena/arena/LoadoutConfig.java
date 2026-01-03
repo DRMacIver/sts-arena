@@ -291,10 +291,15 @@ public class LoadoutConfig {
 
     public static final Set<String> ORB_GENERATORS = new HashSet<>(Arrays.asList(
         "Zap", "Dualcast", "Ball Lightning", "Compile Driver", "Cold Snap",
-        "Coolheaded", "Glacier", "Blizzard", "Capacitor", "Consume",
+        "Coolheaded", "Glacier", "Capacitor", "Consume",
         "Darkness", "Doom and Gloom", "Electrodynamics", "Fusion",
         "Chaos", "Rainbow", "Recursion", "Loop", "Multi-Cast",
         "Tempest", "Thunder Strike", "White Noise"
+    ));
+
+    // Frost orb generators specifically (for Blizzard synergy)
+    public static final Set<String> FROST_ORB_GENERATORS = new HashSet<>(Arrays.asList(
+        "Cold Snap", "Coolheaded", "Glacier", "Chill"
     ));
 
     public static final Set<String> SHIV_GENERATORS = new HashSet<>(Arrays.asList(
@@ -362,7 +367,8 @@ public class LoadoutConfig {
 
         // Orb synergy
         // Note: Hyperbeam removes all focus - it's anti-synergy with focus, not a requirement
-        CARD_SYNERGIES.put("Blizzard", LoadoutBuilder.CardSynergy.REQUIRES_ORBS);
+        // Blizzard deals damage based on Frost channeled, so specifically needs frost orb generation
+        CARD_SYNERGIES.put("Blizzard", LoadoutBuilder.CardSynergy.REQUIRES_FROST_ORBS);
 
         // Mantra synergy - cards that specifically need mantra generation
         // Note: Rushdown (Adaptation) triggers on Wrath entry, not mantra - no requirement
@@ -761,6 +767,129 @@ public class LoadoutConfig {
 
     // ========== ENCOUNTERS ==========
 
+    /**
+     * Encounter category containing a header and list of encounter IDs.
+     */
+    public static class EncounterCategory {
+        public final String header;
+        public final String[] encounters;
+        public final boolean isElite;
+        public final boolean isBoss;
+
+        public EncounterCategory(String header, String[] encounters, boolean isElite, boolean isBoss) {
+            this.header = header;
+            this.encounters = encounters;
+            this.isElite = isElite;
+            this.isBoss = isBoss;
+        }
+
+        public EncounterCategory(String header, String[] encounters) {
+            this(header, encounters, false, false);
+        }
+    }
+
+    /**
+     * All encounter categories organized by act.
+     * This is the single source of truth for encounter organization.
+     */
+    public static final EncounterCategory[] ENCOUNTER_CATEGORIES = {
+        // Act 1
+        new EncounterCategory("--- Act 1 ---", new String[]{
+            "Cultist", "Jaw Worm", "2 Louse", "Small Slimes", "Blue Slaver",
+            "Gremlin Gang", "Looter", "Large Slime", "Lots of Slimes",
+            "Exordium Thugs", "Exordium Wildlife", "Red Slaver", "3 Louse", "2 Fungi Beasts"
+        }),
+        new EncounterCategory("Act 1 Elites", new String[]{
+            "Gremlin Nob", "Lagavulin", "3 Sentries"
+        }, true, false),
+        new EncounterCategory("Act 1 Bosses", new String[]{
+            "The Guardian", "Hexaghost", "Slime Boss"
+        }, false, true),
+
+        // Act 2
+        new EncounterCategory("--- Act 2 ---", new String[]{
+            "Chosen", "Shell Parasite", "Spheric Guardian", "3 Byrds", "2 Thieves",
+            "Chosen and Byrds", "Sentry and Sphere", "Snake Plant", "Snecko",
+            "Centurion and Healer", "Cultist and Chosen", "3 Cultists", "Shelled Parasite and Fungi"
+        }),
+        new EncounterCategory("Act 2 Elites", new String[]{
+            "Gremlin Leader", "Slavers", "Book of Stabbing"
+        }, true, false),
+        new EncounterCategory("Act 2 Bosses", new String[]{
+            "Automaton", "Collector", "Champ"
+        }, false, true),
+
+        // Act 3
+        new EncounterCategory("--- Act 3 ---", new String[]{
+            "3 Darklings", "Orb Walker", "3 Shapes", "Spire Growth", "Transient",
+            "4 Shapes", "Maw", "Jaw Worm Horde", "Sphere and 2 Shapes", "Writhing Mass"
+        }),
+        new EncounterCategory("Act 3 Elites", new String[]{
+            "Giant Head", "Nemesis", "Reptomancer"
+        }, true, false),
+        new EncounterCategory("Act 3 Bosses", new String[]{
+            "Awakened One", "Time Eater", "Donu and Deca"
+        }, false, true),
+
+        // Act 4
+        new EncounterCategory("--- Act 4 ---", new String[]{
+            "Shield and Spear", "The Heart"
+        }, false, true),
+
+        // Event Encounters
+        new EncounterCategory("--- Event Encounters ---", new String[]{
+            "The Mushroom Lair",     // 3 Fungi Beasts (event version)
+            "Masked Bandits",        // Red Mask gang event
+            "Colosseum Slavers",     // Colosseum fight 1
+            "Colosseum Nobs",        // Colosseum fight 2
+            "2 Orb Walkers"          // Mind Bloom event
+        })
+    };
+
+    /**
+     * Set of elite encounter IDs (derived from ENCOUNTER_CATEGORIES).
+     * At Ascension 18+, these apply the "burning elite" effect (1 damage per turn).
+     */
+    private static Set<String> eliteEncountersCache = null;
+
+    private static Set<String> getEliteEncounters() {
+        if (eliteEncountersCache == null) {
+            eliteEncountersCache = new HashSet<>();
+            for (EncounterCategory cat : ENCOUNTER_CATEGORIES) {
+                if (cat.isElite) {
+                    eliteEncountersCache.addAll(Arrays.asList(cat.encounters));
+                }
+            }
+        }
+        return eliteEncountersCache;
+    }
+
+    /**
+     * Check if an encounter is an elite encounter.
+     */
+    public static boolean isEliteEncounter(String encounterId) {
+        return getEliteEncounters().contains(encounterId);
+    }
+
+    /**
+     * Check if an encounter is a boss encounter.
+     */
+    public static boolean isBossEncounter(String encounterId) {
+        for (EncounterCategory cat : ENCOUNTER_CATEGORIES) {
+            if (cat.isBoss) {
+                for (String enc : cat.encounters) {
+                    if (enc.equals(encounterId)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * All encounters as a flat array (derived from ENCOUNTER_CATEGORIES).
+     */
     public static final String[] ENCOUNTERS = {
         // Act 1 normal encounters
         "Cultist", "Jaw Worm", "2 Louse", "Small Slimes", "Blue Slaver",
