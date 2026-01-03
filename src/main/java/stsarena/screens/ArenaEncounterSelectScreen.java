@@ -53,6 +53,18 @@ public class ArenaEncounterSelectScreen {
     private String currentEncounter = null;
     private Hitbox currentEncounterHb = new Hitbox(BUTTON_WIDTH, BUTTON_HEIGHT);
 
+    // Search state
+    private String searchText = "";
+    private boolean isTypingSearch = false;
+    private Hitbox searchBoxHitbox = new Hitbox(200.0f * Settings.scale, 30.0f * Settings.scale);
+    private static final float SEARCH_BOX_WIDTH = 200.0f * Settings.scale;
+    private static final float SEARCH_BOX_HEIGHT = 30.0f * Settings.scale;
+    private static final float SEARCH_BOX_Y = TITLE_Y + 5.0f * Settings.scale;
+
+    // All encounters (unfiltered) and filtered list
+    private List<ListItem> allItems;
+    private List<ListItem> filteredItems;
+
     private static class ListItem {
         String text;
         String encounterId; // null for headers
@@ -70,32 +82,65 @@ public class ArenaEncounterSelectScreen {
     public ArenaEncounterSelectScreen() {
         this.cancelButton = new MenuCancelButton();
         buildItemList();
-
-        // Create hitboxes for each item
-        hitboxes = new Hitbox[items.size()];
-        for (int i = 0; i < items.size(); i++) {
-            hitboxes[i] = new Hitbox(BUTTON_WIDTH, BUTTON_HEIGHT);
-        }
+        applyFilter();
     }
 
     private void buildItemList() {
-        items = new ArrayList<>();
+        allItems = new ArrayList<>();
 
         // Random option
-        items.add(new ListItem("Random", null, false, true));
+        allItems.add(new ListItem("Random", null, false, true));
 
         // Build list from centralized encounter categories
         for (stsarena.arena.LoadoutConfig.EncounterCategory category : stsarena.arena.LoadoutConfig.ENCOUNTER_CATEGORIES) {
             // Add header
-            items.add(new ListItem(category.header, null, true, false));
+            allItems.add(new ListItem(category.header, null, true, false));
             // Add encounters
-            addEncounters(items, category.encounters);
+            addEncounters(allItems, category.encounters);
         }
     }
 
     private void addEncounters(List<ListItem> list, String[] encounters) {
         for (String enc : encounters) {
             list.add(new ListItem(enc, enc, false, false));
+        }
+    }
+
+    /**
+     * Apply search filter to encounters.
+     */
+    private void applyFilter() {
+        if (searchText.isEmpty()) {
+            // No filter - use all items
+            items = new ArrayList<>(allItems);
+        } else {
+            items = new ArrayList<>();
+            String lowerSearch = searchText.toLowerCase();
+            String currentHeader = null;
+            boolean headerAdded = false;
+
+            for (ListItem item : allItems) {
+                if (item.isHeader) {
+                    currentHeader = item.text;
+                    headerAdded = false;
+                } else if (item.isRandom) {
+                    // Always include Random option
+                    items.add(item);
+                } else if (item.text.toLowerCase().contains(lowerSearch)) {
+                    // Add header if not yet added
+                    if (!headerAdded && currentHeader != null) {
+                        items.add(new ListItem(currentHeader, null, true, false));
+                        headerAdded = true;
+                    }
+                    items.add(item);
+                }
+            }
+        }
+
+        // Create hitboxes for the filtered items
+        hitboxes = new Hitbox[items.size()];
+        for (int i = 0; i < items.size(); i++) {
+            hitboxes[i] = new Hitbox(BUTTON_WIDTH, BUTTON_HEIGHT);
         }
     }
 
@@ -107,6 +152,11 @@ public class ArenaEncounterSelectScreen {
         this.cancelButton.show("Back");
         this.scrollY = 0.0f;
         this.targetScrollY = 0.0f;
+
+        // Reset search state
+        this.searchText = "";
+        this.isTypingSearch = false;
+        applyFilter();
 
         // Load encounter outcomes for the selected loadout
         encounterOutcomes.clear();
@@ -168,6 +218,22 @@ public class ArenaEncounterSelectScreen {
 
     public void update() {
         if (!isOpen) return;
+
+        // Handle search text input
+        if (isTypingSearch) {
+            handleSearchInput();
+        }
+
+        // Update search box
+        float searchX = CENTER_X + BUTTON_WIDTH / 2.0f - SEARCH_BOX_WIDTH - 10.0f * Settings.scale;
+        searchBoxHitbox.move(searchX + SEARCH_BOX_WIDTH / 2.0f, SEARCH_BOX_Y);
+        searchBoxHitbox.update();
+        if (searchBoxHitbox.hovered && InputHelper.justClickedLeft) {
+            isTypingSearch = true;
+            InputHelper.justClickedLeft = false;
+        } else if (InputHelper.justClickedLeft && !searchBoxHitbox.hovered && isTypingSearch) {
+            isTypingSearch = false;
+        }
 
         // Cancel button - go back to previous screen
         this.cancelButton.update();
@@ -305,6 +371,52 @@ public class ArenaEncounterSelectScreen {
         }
     }
 
+    private void handleSearchInput() {
+        // Handle backspace
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.BACKSPACE) && !searchText.isEmpty()) {
+            searchText = searchText.substring(0, searchText.length() - 1);
+            applyFilter();
+            scrollY = 0;
+            targetScrollY = 0;
+        }
+
+        // Handle escape or enter to stop typing
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ENTER) ||
+            com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ESCAPE)) {
+            isTypingSearch = false;
+        }
+
+        // Handle typed characters - letters
+        for (int keycode = com.badlogic.gdx.Input.Keys.A; keycode <= com.badlogic.gdx.Input.Keys.Z; keycode++) {
+            if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(keycode)) {
+                char c = (char) ('a' + (keycode - com.badlogic.gdx.Input.Keys.A));
+                searchText += c;
+                applyFilter();
+                scrollY = 0;
+                targetScrollY = 0;
+            }
+        }
+
+        // Handle numbers
+        for (int keycode = com.badlogic.gdx.Input.Keys.NUM_0; keycode <= com.badlogic.gdx.Input.Keys.NUM_9; keycode++) {
+            if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(keycode)) {
+                char c = (char) ('0' + (keycode - com.badlogic.gdx.Input.Keys.NUM_0));
+                searchText += c;
+                applyFilter();
+                scrollY = 0;
+                targetScrollY = 0;
+            }
+        }
+
+        // Handle space
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.SPACE)) {
+            searchText += ' ';
+            applyFilter();
+            scrollY = 0;
+            targetScrollY = 0;
+        }
+    }
+
     public void render(SpriteBatch sb) {
         if (!isOpen) return;
 
@@ -316,6 +428,9 @@ public class ArenaEncounterSelectScreen {
         FontHelper.renderFontCentered(sb, FontHelper.SCP_cardTitleFont_small,
             "Select Encounter",
             CENTER_X, TITLE_Y, Settings.GOLD_COLOR);
+
+        // Search box
+        renderSearchBox(sb);
 
         // Calculate offset for current encounter section
         float currentEncounterOffset = 0;
@@ -430,5 +545,39 @@ public class ArenaEncounterSelectScreen {
         FontHelper.renderFontCentered(sb, font,
             text,
             CENTER_X, y - BUTTON_HEIGHT / 2.0f, textColor);
+    }
+
+    private void renderSearchBox(SpriteBatch sb) {
+        float searchX = CENTER_X + BUTTON_WIDTH / 2.0f - SEARCH_BOX_WIDTH - 10.0f * Settings.scale;
+
+        // Background
+        Color bgColor = isTypingSearch ? new Color(0.2f, 0.2f, 0.3f, 0.9f) :
+                        searchBoxHitbox.hovered ? new Color(0.2f, 0.2f, 0.25f, 0.8f) :
+                        new Color(0.1f, 0.1f, 0.15f, 0.7f);
+        sb.setColor(bgColor);
+        sb.draw(com.megacrit.cardcrawl.helpers.ImageMaster.WHITE_SQUARE_IMG,
+            searchX, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f,
+            SEARCH_BOX_WIDTH, SEARCH_BOX_HEIGHT);
+
+        // Border when active
+        if (isTypingSearch) {
+            sb.setColor(Settings.GOLD_COLOR);
+            float bw = 2.0f * Settings.scale;
+            sb.draw(com.megacrit.cardcrawl.helpers.ImageMaster.WHITE_SQUARE_IMG, searchX, SEARCH_BOX_Y + SEARCH_BOX_HEIGHT / 2.0f - bw, SEARCH_BOX_WIDTH, bw);
+            sb.draw(com.megacrit.cardcrawl.helpers.ImageMaster.WHITE_SQUARE_IMG, searchX, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f, SEARCH_BOX_WIDTH, bw);
+            sb.draw(com.megacrit.cardcrawl.helpers.ImageMaster.WHITE_SQUARE_IMG, searchX, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f, bw, SEARCH_BOX_HEIGHT);
+            sb.draw(com.megacrit.cardcrawl.helpers.ImageMaster.WHITE_SQUARE_IMG, searchX + SEARCH_BOX_WIDTH - bw, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f, bw, SEARCH_BOX_HEIGHT);
+        }
+
+        // Text
+        String displayText = searchText.isEmpty() ? "Search..." : searchText;
+        Color textColor = searchText.isEmpty() ? new Color(0.5f, 0.5f, 0.5f, 1.0f) : Settings.CREAM_COLOR;
+        if (isTypingSearch) {
+            displayText = searchText + "|";
+            textColor = Settings.CREAM_COLOR;
+        }
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            displayText,
+            searchX + SEARCH_BOX_WIDTH / 2.0f, SEARCH_BOX_Y, textColor);
     }
 }

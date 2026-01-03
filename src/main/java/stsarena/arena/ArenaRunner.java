@@ -639,6 +639,90 @@ public class ArenaRunner {
         }
     }
 
+    // Flag to indicate we should restart fight after editing loadout
+    private static boolean pendingRetryAfterEdit = false;
+
+    /**
+     * Open the loadout editor for deck tweaks, then restart the fight.
+     * Called from "Modify Deck" button on death/victory screens.
+     */
+    public static void modifyDeckAndRetry() {
+        if (currentLoadout == null || currentLoadoutDbId <= 0) {
+            STSArena.logger.error("Cannot modify deck - no current loadout stored");
+            return;
+        }
+
+        STSArena.logger.info("ARENA: Opening deck editor for retry with loadout ID: " + currentLoadoutDbId);
+
+        // Set flag to restart fight after editing
+        pendingRetryAfterEdit = true;
+
+        // Get the loadout record from database
+        try {
+            ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+            ArenaRepository.LoadoutRecord loadoutRecord = repo.getLoadoutById(currentLoadoutDbId);
+
+            if (loadoutRecord != null) {
+                // Clear arena state but keep the encounter for retry
+                String encounter = currentEncounter;
+
+                // Store encounter for later
+                pendingEncounter = encounter;
+
+                // Trigger return to main menu and open editor
+                Settings.isTrial = false;
+                Settings.isDailyRun = false;
+                Settings.isEndless = false;
+
+                // Clear arena run but remember we're editing for retry
+                isArenaRun = false;
+                arenaRunInProgress = false;
+
+                STSArena.setOpenLoadoutEditorOnMainMenu(loadoutRecord);
+                CardCrawlGame.startOver();
+            } else {
+                STSArena.logger.error("Failed to load loadout record for editing");
+                pendingRetryAfterEdit = false;
+            }
+        } catch (Exception e) {
+            STSArena.logger.error("Error opening deck editor for retry", e);
+            pendingRetryAfterEdit = false;
+        }
+    }
+
+    /**
+     * Check if we're waiting to retry after editing a loadout.
+     */
+    public static boolean isPendingRetryAfterEdit() {
+        return pendingRetryAfterEdit;
+    }
+
+    /**
+     * Called after loadout editing is complete. Restarts the fight if we were editing for retry.
+     */
+    public static void completeRetryEdit(ArenaRepository.LoadoutRecord editedLoadout) {
+        if (!pendingRetryAfterEdit || pendingEncounter == null) {
+            STSArena.logger.info("ARENA: completeRetryEdit called but not in retry edit mode");
+            pendingRetryAfterEdit = false;
+            return;
+        }
+
+        STSArena.logger.info("ARENA: Completing retry edit, starting fight with modified loadout");
+        pendingRetryAfterEdit = false;
+        String encounter = pendingEncounter;
+        pendingEncounter = null;
+
+        // Start fight with the edited loadout
+        startFightWithSavedLoadout(editedLoadout, encounter);
+    }
+
+    /**
+     * Clear the pending retry after edit state.
+     */
+    public static void clearPendingRetryEdit() {
+        pendingRetryAfterEdit = false;
+    }
+
     /**
      * Start an arena fight with a saved loadout from the database.
      */

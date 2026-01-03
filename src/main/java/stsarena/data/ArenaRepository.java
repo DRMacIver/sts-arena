@@ -11,6 +11,8 @@ import org.apache.logging.log4j.Logger;
 import stsarena.arena.RandomLoadoutGenerator;
 
 import java.lang.reflect.Type;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,8 +40,13 @@ public class ArenaRepository {
     public long saveLoadout(RandomLoadoutGenerator.GeneratedLoadout loadout) {
         logger.info("saveLoadout called for: " + loadout.name + " (id=" + loadout.id + ")");
 
-        String sql = "INSERT INTO loadouts (uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, potion_slots, created_at, ascension_level) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String deckJson = serializeDeck(loadout.deck);
+        String relicsJson = serializeRelics(loadout.relics);
+        String potionsJson = serializePotions(loadout.potions);
+        String contentHash = computeContentHash(deckJson, relicsJson, potionsJson);
+
+        String sql = "INSERT INTO loadouts (uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, potion_slots, created_at, ascension_level, content_hash) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         Connection conn = database.getConnection();
         if (conn == null) {
@@ -53,12 +60,13 @@ public class ArenaRepository {
             stmt.setString(3, loadout.playerClass.name());
             stmt.setInt(4, loadout.maxHp);
             stmt.setInt(5, loadout.currentHp);
-            stmt.setString(6, serializeDeck(loadout.deck));
-            stmt.setString(7, serializeRelics(loadout.relics));
-            stmt.setString(8, serializePotions(loadout.potions));
+            stmt.setString(6, deckJson);
+            stmt.setString(7, relicsJson);
+            stmt.setString(8, potionsJson);
             stmt.setInt(9, loadout.potionSlots);
             stmt.setLong(10, loadout.createdAt);
             stmt.setInt(11, loadout.ascensionLevel);
+            stmt.setString(12, contentHash);
 
             logger.info("saveLoadout: Executing insert...");
             int rows = stmt.executeUpdate();
@@ -67,7 +75,7 @@ public class ArenaRepository {
             try (ResultSet rs = stmt.getGeneratedKeys()) {
                 if (rs.next()) {
                     long id = rs.getLong(1);
-                    logger.info("Saved loadout '" + loadout.name + "' with database ID: " + id);
+                    logger.info("Saved loadout '" + loadout.name + "' with database ID: " + id + ", contentHash: " + contentHash);
                     return id;
                 } else {
                     logger.error("saveLoadout: No generated key returned!");
@@ -80,23 +88,56 @@ public class ArenaRepository {
     }
 
     /**
+     * Compute a content hash for a loadout's deck, relics, and potions.
+     * Used for version tracking - if the hash changes, the loadout was modified.
+     */
+    public static String computeContentHash(String deckJson, String relicsJson, String potionsJson) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            String content = deckJson + "|" + relicsJson + "|" + potionsJson;
+            byte[] hash = md.digest(content.getBytes());
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString().substring(0, 16); // Use first 16 chars for brevity
+        } catch (NoSuchAlgorithmException e) {
+            logger.error("SHA-256 not available", e);
+            return null;
+        }
+    }
+
+    /**
      * Start a new arena run. Returns the run ID.
+     * Snapshots the loadout configuration at the time of the run.
      */
     public long startArenaRun(long loadoutId, String encounterId, int startingHp) {
-        String sql = "INSERT INTO arena_runs (loadout_id, encounter_id, started_at, starting_hp) VALUES (?, ?, ?, ?)";
+        // First, get the loadout to snapshot its current state
+        LoadoutRecord loadout = getLoadoutById(loadoutId);
+        if (loadout == null) {
+            logger.error("Cannot start arena run: loadout not found with ID " + loadoutId);
+            return -1;
+        }
+
+        String sql = "INSERT INTO arena_runs (loadout_id, encounter_id, started_at, starting_hp, deck_json, relics_json, potions_json, content_hash) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (PreparedStatement stmt = database.getConnection().prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setLong(1, loadoutId);
             stmt.setString(2, encounterId);
             stmt.setLong(3, System.currentTimeMillis());
             stmt.setInt(4, startingHp);
+            stmt.setString(5, loadout.deckJson);
+            stmt.setString(6, loadout.relicsJson);
+            stmt.setString(7, loadout.potionsJson);
+            stmt.setString(8, loadout.contentHash);
 
             stmt.executeUpdate();
 
             try (ResultSet rs = stmt.getGeneratedKeys()) {
                 if (rs.next()) {
                     long id = rs.getLong(1);
-                    logger.info("Started arena run " + id + " with encounter: " + encounterId);
+                    logger.info("Started arena run " + id + " with encounter: " + encounterId + ", contentHash: " + loadout.contentHash);
                     return id;
                 }
             }
@@ -314,6 +355,11 @@ public class ArenaRepository {
         public int damageDealt;
         public int damageTaken;
         public int turnsTaken;
+        // Loadout snapshot at time of run
+        public String deckJson;
+        public String relicsJson;
+        public String potionsJson;
+        public String contentHash;
     }
 
     /**
@@ -333,7 +379,7 @@ public class ArenaRepository {
      * Get a specific loadout by database ID.
      */
     public LoadoutRecord getLoadoutById(long loadoutId) {
-        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, potion_slots, created_at, ascension_level " +
+        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, potion_slots, created_at, ascension_level, content_hash, is_favorite " +
                      "FROM loadouts WHERE id = ?";
 
         try (PreparedStatement stmt = database.getConnection().prepareStatement(sql)) {
@@ -354,6 +400,8 @@ public class ArenaRepository {
                     record.potionSlots = rs.getInt("potion_slots");
                     record.createdAt = rs.getLong("created_at");
                     record.ascensionLevel = rs.getInt("ascension_level");
+                    record.contentHash = rs.getString("content_hash");
+                    record.isFavorite = rs.getInt("is_favorite") == 1;
                     return record;
                 }
             }
@@ -365,11 +413,52 @@ public class ArenaRepository {
     }
 
     /**
+     * Toggle the favorite status of a loadout.
+     * Returns the new favorite status.
+     */
+    public boolean toggleFavorite(long loadoutId) {
+        // First get current status
+        String selectSql = "SELECT is_favorite FROM loadouts WHERE id = ?";
+        boolean currentStatus = false;
+
+        try (PreparedStatement stmt = database.getConnection().prepareStatement(selectSql)) {
+            stmt.setLong(1, loadoutId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    currentStatus = rs.getInt("is_favorite") == 1;
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to get favorite status", e);
+            return false;
+        }
+
+        // Toggle the status
+        boolean newStatus = !currentStatus;
+        String updateSql = "UPDATE loadouts SET is_favorite = ? WHERE id = ?";
+
+        try (PreparedStatement stmt = database.getConnection().prepareStatement(updateSql)) {
+            stmt.setInt(1, newStatus ? 1 : 0);
+            stmt.setLong(2, loadoutId);
+
+            int updated = stmt.executeUpdate();
+            if (updated > 0) {
+                logger.info("Toggled favorite for loadout " + loadoutId + " to: " + newStatus);
+                return newStatus;
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to toggle favorite", e);
+        }
+        return currentStatus;
+    }
+
+    /**
      * Get saved loadouts for selection.
+     * Results are sorted by favorite status (favorites first), then by created_at descending.
      */
     public List<LoadoutRecord> getLoadouts(int limit) {
-        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, potion_slots, created_at, ascension_level " +
-                     "FROM loadouts ORDER BY created_at DESC LIMIT ?";
+        String sql = "SELECT id, uuid, name, character_class, max_hp, current_hp, deck_json, relics_json, potions_json, potion_slots, created_at, ascension_level, content_hash, is_favorite " +
+                     "FROM loadouts ORDER BY is_favorite DESC, created_at DESC LIMIT ?";
 
         List<LoadoutRecord> results = new ArrayList<>();
 
@@ -391,6 +480,8 @@ public class ArenaRepository {
                     record.potionSlots = rs.getInt("potion_slots");
                     record.createdAt = rs.getLong("created_at");
                     record.ascensionLevel = rs.getInt("ascension_level");
+                    record.contentHash = rs.getString("content_hash");
+                    record.isFavorite = rs.getInt("is_favorite") == 1;
                     results.add(record);
                 }
             }
@@ -417,6 +508,8 @@ public class ArenaRepository {
         public int potionSlots;
         public long createdAt;
         public int ascensionLevel;
+        public String contentHash;
+        public boolean isFavorite;
     }
 
     /**
@@ -467,6 +560,43 @@ public class ArenaRepository {
             }
         } catch (SQLException e) {
             logger.error("Failed to rename loadout", e);
+        }
+        return false;
+    }
+
+    /**
+     * Update a loadout's configuration (deck, relics, potions, HP).
+     * This recalculates the content hash for version tracking.
+     * Returns true if successful.
+     */
+    public boolean updateLoadout(RandomLoadoutGenerator.GeneratedLoadout loadout, long loadoutId) {
+        String deckJson = serializeDeck(loadout.deck);
+        String relicsJson = serializeRelics(loadout.relics);
+        String potionsJson = serializePotions(loadout.potions);
+        String contentHash = computeContentHash(deckJson, relicsJson, potionsJson);
+
+        String sql = "UPDATE loadouts SET name = ?, max_hp = ?, current_hp = ?, deck_json = ?, relics_json = ?, " +
+                     "potions_json = ?, potion_slots = ?, ascension_level = ?, content_hash = ? WHERE id = ?";
+
+        try (PreparedStatement stmt = database.getConnection().prepareStatement(sql)) {
+            stmt.setString(1, loadout.name);
+            stmt.setInt(2, loadout.maxHp);
+            stmt.setInt(3, loadout.currentHp);
+            stmt.setString(4, deckJson);
+            stmt.setString(5, relicsJson);
+            stmt.setString(6, potionsJson);
+            stmt.setInt(7, loadout.potionSlots);
+            stmt.setInt(8, loadout.ascensionLevel);
+            stmt.setString(9, contentHash);
+            stmt.setLong(10, loadoutId);
+
+            int updated = stmt.executeUpdate();
+            if (updated > 0) {
+                logger.info("Updated loadout " + loadoutId + " (" + loadout.name + "), new contentHash: " + contentHash);
+                return true;
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to update loadout", e);
         }
         return false;
     }
@@ -658,6 +788,44 @@ public class ArenaRepository {
 
             return sameOrBetterTurns && sameOrBetterDamage && sameOrBetterPotions && strictlyBetterSomewhere;
         }
+    }
+
+    /**
+     * Get distinct content hashes used in runs for a specific loadout.
+     * Used to determine how many "versions" of a loadout have been used.
+     */
+    public List<String> getDistinctContentHashesForLoadout(long loadoutId) {
+        String sql = "SELECT DISTINCT content_hash FROM arena_runs " +
+                     "WHERE loadout_id = ? AND content_hash IS NOT NULL " +
+                     "ORDER BY started_at DESC";
+
+        List<String> results = new ArrayList<>();
+
+        try (PreparedStatement stmt = database.getConnection().prepareStatement(sql)) {
+            stmt.setLong(1, loadoutId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    results.add(rs.getString("content_hash"));
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to get distinct content hashes for loadout", e);
+        }
+
+        return results;
+    }
+
+    /**
+     * Check if a loadout has been modified since a particular content hash.
+     * Returns true if the current loadout's content hash differs from the given hash.
+     */
+    public boolean hasLoadoutChanged(long loadoutId, String previousContentHash) {
+        LoadoutRecord loadout = getLoadoutById(loadoutId);
+        if (loadout == null || loadout.contentHash == null || previousContentHash == null) {
+            return false;
+        }
+        return !loadout.contentHash.equals(previousContentHash);
     }
 
     /**

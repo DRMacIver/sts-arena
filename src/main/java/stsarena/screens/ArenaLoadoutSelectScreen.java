@@ -21,6 +21,7 @@ import stsarena.data.ArenaDatabase;
 import stsarena.data.ArenaRepository;
 
 import java.lang.reflect.Type;
+import java.sql.PreparedStatement;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -75,7 +76,7 @@ public class ArenaLoadoutSelectScreen {
     private static final float ACTION_BUTTON_WIDTH = 180.0f * Settings.scale;
     private static final float ACTION_BUTTON_HEIGHT = 40.0f * Settings.scale;
     private static final float ACTION_BUTTON_SPACING = 50.0f * Settings.scale;
-    private Hitbox fightButtonHb, copyButtonHb, renameButtonHb, deleteButtonHb, loadoutHistoryButtonHb;
+    private Hitbox fightButtonHb, favoriteButtonHb, editButtonHb, copyButtonHb, renameButtonHb, deleteButtonHb, loadoutHistoryButtonHb;
 
     // Rename state
     private boolean isRenaming = false;
@@ -84,6 +85,16 @@ public class ArenaLoadoutSelectScreen {
     // Delete confirmation state
     private boolean isConfirmingDelete = false;
     private Hitbox confirmDeleteHb, cancelDeleteHb;
+
+    // Multi-select mode for bulk operations
+    private boolean isMultiSelectMode = false;
+    private List<Long> selectedLoadoutIds = new ArrayList<>();
+    private Hitbox multiSelectToggleHb;
+    private Hitbox bulkDeleteHb;
+    private Hitbox bulkUnfavoriteHb;
+    private Hitbox cancelMultiSelectHb;
+    private static final float BULK_BUTTON_WIDTH = 140.0f * Settings.scale;
+    private static final float BULK_BUTTON_HEIGHT = 35.0f * Settings.scale;
 
     // Backspace repeat timing
     private float backspaceHeldTime = 0f;
@@ -97,6 +108,24 @@ public class ArenaLoadoutSelectScreen {
 
     // For parsing JSON
     private static final Gson gson = new Gson();
+
+    // Search and filter state
+    private String searchText = "";
+    private boolean isTypingSearch = false;
+    private Hitbox searchBoxHitbox;
+    private static final float SEARCH_BOX_WIDTH = 200.0f * Settings.scale;
+    private static final float SEARCH_BOX_HEIGHT = 30.0f * Settings.scale;
+    private static final float SEARCH_BOX_Y = TITLE_Y + 5.0f * Settings.scale;
+
+    // Character class filter (null = all classes)
+    private String filterClass = null;  // "IRONCLAD", "THE_SILENT", "DEFECT", "WATCHER", or null for all
+    private Hitbox[] classFilterHitboxes;
+    private static final float FILTER_TAB_WIDTH = 70.0f * Settings.scale;
+    private static final float FILTER_TAB_HEIGHT = 25.0f * Settings.scale;
+    private static final float FILTER_TAB_Y = TITLE_Y - 40.0f * Settings.scale;
+
+    // Unfiltered loadouts (for filtering)
+    private List<ArenaRepository.LoadoutRecord> allLoadouts = new ArrayList<>();
 
     private static class ListItem {
         String text;
@@ -123,6 +152,8 @@ public class ArenaLoadoutSelectScreen {
 
         // Action buttons
         fightButtonHb = new Hitbox(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT);
+        favoriteButtonHb = new Hitbox(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT);
+        editButtonHb = new Hitbox(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT);
         copyButtonHb = new Hitbox(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT);
         renameButtonHb = new Hitbox(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT);
         deleteButtonHb = new Hitbox(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT);
@@ -131,6 +162,21 @@ public class ArenaLoadoutSelectScreen {
         // Delete confirmation buttons
         confirmDeleteHb = new Hitbox(80.0f * Settings.scale, 35.0f * Settings.scale);
         cancelDeleteHb = new Hitbox(80.0f * Settings.scale, 35.0f * Settings.scale);
+
+        // Multi-select mode buttons
+        multiSelectToggleHb = new Hitbox(BULK_BUTTON_WIDTH, BULK_BUTTON_HEIGHT);
+        bulkDeleteHb = new Hitbox(BULK_BUTTON_WIDTH, BULK_BUTTON_HEIGHT);
+        bulkUnfavoriteHb = new Hitbox(BULK_BUTTON_WIDTH, BULK_BUTTON_HEIGHT);
+        cancelMultiSelectHb = new Hitbox(BULK_BUTTON_WIDTH, BULK_BUTTON_HEIGHT);
+
+        // Search box
+        searchBoxHitbox = new Hitbox(SEARCH_BOX_WIDTH, SEARCH_BOX_HEIGHT);
+
+        // Class filter tabs (All, IC, SI, DE, WA)
+        classFilterHitboxes = new Hitbox[5];
+        for (int i = 0; i < 5; i++) {
+            classFilterHitboxes[i] = new Hitbox(FILTER_TAB_WIDTH, FILTER_TAB_HEIGHT);
+        }
     }
 
     public void open() {
@@ -151,7 +197,19 @@ public class ArenaLoadoutSelectScreen {
         this.renameText = "";
         this.isConfirmingDelete = false;
 
-        // Build the item list
+        // Reset search/filter state
+        this.searchText = "";
+        this.isTypingSearch = false;
+        this.filterClass = null;
+
+        // Reset multi-select state
+        this.isMultiSelectMode = false;
+        this.selectedLoadoutIds.clear();
+
+        // Load all loadouts from database
+        loadAllLoadouts();
+
+        // Build the item list (with current filters)
         buildItemList();
 
         // Create hitboxes
@@ -161,31 +219,63 @@ public class ArenaLoadoutSelectScreen {
         }
     }
 
+    /**
+     * Load all loadouts from database (unfiltered).
+     */
+    private void loadAllLoadouts() {
+        allLoadouts.clear();
+        try {
+            ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+            allLoadouts = repo.getLoadouts(100);
+        } catch (Exception e) {
+            STSArena.logger.error("Failed to load saved loadouts", e);
+        }
+    }
+
     private void buildItemList() {
         items.clear();
 
-        // Create custom loadout option
-        items.add(new ListItem("+ Create Custom Loadout", false, false, true, null));
+        // Create custom loadout option (only if no search active)
+        if (searchText.isEmpty()) {
+            items.add(new ListItem("+ Create Custom Loadout", false, false, true, null));
 
-        // New random loadout option
-        items.add(new ListItem("New Random Loadout", true, false, false, null));
+            // New random loadout option
+            items.add(new ListItem("New Random Loadout", true, false, false, null));
+        }
 
-        // Load saved loadouts from database
-        try {
-            ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
-            List<ArenaRepository.LoadoutRecord> loadouts = repo.getLoadouts(50);
-
-            if (!loadouts.isEmpty()) {
-                // Add header
-                items.add(new ListItem("--- Saved Loadouts ---", false, true, false, null));
-
-                for (ArenaRepository.LoadoutRecord loadout : loadouts) {
-                    String label = loadout.name;
-                    items.add(new ListItem(label, false, false, false, loadout));
-                }
+        // Apply filters to loadouts
+        List<ArenaRepository.LoadoutRecord> filteredLoadouts = new ArrayList<>();
+        for (ArenaRepository.LoadoutRecord loadout : allLoadouts) {
+            // Filter by class
+            if (filterClass != null && !filterClass.equals(loadout.characterClass)) {
+                continue;
             }
-        } catch (Exception e) {
-            STSArena.logger.error("Failed to load saved loadouts", e);
+            // Filter by search text
+            if (!searchText.isEmpty() && !loadout.name.toLowerCase().contains(searchText.toLowerCase())) {
+                continue;
+            }
+            filteredLoadouts.add(loadout);
+        }
+
+        if (!filteredLoadouts.isEmpty()) {
+            // Add header
+            String headerText = searchText.isEmpty() && filterClass == null ?
+                "--- Saved Loadouts ---" :
+                "--- Filtered (" + filteredLoadouts.size() + ") ---";
+            items.add(new ListItem(headerText, false, true, false, null));
+
+            for (ArenaRepository.LoadoutRecord loadout : filteredLoadouts) {
+                String label = loadout.name;
+                items.add(new ListItem(label, false, false, false, loadout));
+            }
+        } else if (!searchText.isEmpty() || filterClass != null) {
+            items.add(new ListItem("--- No matches ---", false, true, false, null));
+        }
+
+        // Recreate hitboxes for new item list
+        hitboxes = new Hitbox[items.size()];
+        for (int i = 0; i < items.size(); i++) {
+            hitboxes[i] = new Hitbox(LEFT_PANEL_WIDTH - 20.0f * Settings.scale, BUTTON_HEIGHT);
         }
     }
 
@@ -200,6 +290,45 @@ public class ArenaLoadoutSelectScreen {
         // Handle rename text input
         if (isRenaming) {
             handleRenameInput();
+        }
+
+        // Handle search text input
+        if (isTypingSearch) {
+            handleSearchInput();
+        }
+
+        // Update search box
+        float searchX = LEFT_PANEL_X + LEFT_PANEL_WIDTH - SEARCH_BOX_WIDTH / 2.0f - 10.0f * Settings.scale;
+        searchBoxHitbox.move(searchX, SEARCH_BOX_Y);
+        searchBoxHitbox.update();
+        if (searchBoxHitbox.hovered && InputHelper.justClickedLeft && !isRenaming && !isConfirmingDelete) {
+            isTypingSearch = true;
+            InputHelper.justClickedLeft = false;
+        } else if (InputHelper.justClickedLeft && !searchBoxHitbox.hovered && isTypingSearch) {
+            isTypingSearch = false;
+        }
+
+        // Update class filter tabs
+        String[] filterValues = {null, "IRONCLAD", "THE_SILENT", "DEFECT", "WATCHER"};
+        float filterStartX = LEFT_PANEL_X + 10.0f * Settings.scale;
+        for (int i = 0; i < 5; i++) {
+            float tabX = filterStartX + i * (FILTER_TAB_WIDTH + 5.0f * Settings.scale);
+            classFilterHitboxes[i].move(tabX + FILTER_TAB_WIDTH / 2.0f, FILTER_TAB_Y);
+            classFilterHitboxes[i].update();
+
+            if (classFilterHitboxes[i].hovered && InputHelper.justClickedLeft && !isRenaming && !isConfirmingDelete && !isTypingSearch) {
+                String newFilter = filterValues[i];
+                if ((filterClass == null && newFilter == null) || (filterClass != null && filterClass.equals(newFilter))) {
+                    // Already selected, do nothing
+                } else {
+                    filterClass = newFilter;
+                    selectedItem = null;  // Clear selection when filter changes
+                    buildItemList();
+                    scrollY = 0;
+                    targetScrollY = 0;
+                }
+                InputHelper.justClickedLeft = false;
+            }
         }
 
         // Cancel button
@@ -247,8 +376,24 @@ public class ArenaLoadoutSelectScreen {
             return;  // Block other interaction while confirming
         }
 
-        // Update action buttons when a saved loadout is selected
-        if (selectedItem != null && selectedItem.savedLoadout != null && !isRenaming) {
+        // Multi-select toggle button (bottom left of list area)
+        float multiSelectY = 100.0f * Settings.scale;
+        multiSelectToggleHb.move(LEFT_PANEL_X + BULK_BUTTON_WIDTH / 2.0f + 10.0f * Settings.scale, multiSelectY);
+        multiSelectToggleHb.update();
+        if (multiSelectToggleHb.hovered && InputHelper.justClickedLeft && !isRenaming && !isConfirmingDelete && !isTypingSearch) {
+            isMultiSelectMode = !isMultiSelectMode;
+            selectedLoadoutIds.clear();
+            selectedItem = null;  // Clear single selection when entering multi-select
+            InputHelper.justClickedLeft = false;
+        }
+
+        // Update bulk operation buttons when in multi-select mode
+        if (isMultiSelectMode && !selectedLoadoutIds.isEmpty()) {
+            updateBulkOperations();
+        }
+
+        // Update action buttons when a saved loadout is selected (not in multi-select mode)
+        if (!isMultiSelectMode && selectedItem != null && selectedItem.savedLoadout != null && !isRenaming) {
             updateActionButtons();
         }
 
@@ -411,6 +556,56 @@ public class ArenaLoadoutSelectScreen {
         }
     }
 
+    private void handleSearchInput() {
+        // Handle backspace
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.BACKSPACE) && !searchText.isEmpty()) {
+            searchText = searchText.substring(0, searchText.length() - 1);
+            selectedItem = null;  // Clear selection when search changes
+            buildItemList();
+            scrollY = 0;
+            targetScrollY = 0;
+        }
+
+        // Handle escape or enter to stop typing
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ENTER) ||
+            com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ESCAPE)) {
+            isTypingSearch = false;
+        }
+
+        // Handle typed characters - letters
+        for (int keycode = com.badlogic.gdx.Input.Keys.A; keycode <= com.badlogic.gdx.Input.Keys.Z; keycode++) {
+            if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(keycode)) {
+                char c = (char) ('a' + (keycode - com.badlogic.gdx.Input.Keys.A));
+                searchText += c;
+                selectedItem = null;  // Clear selection when search changes
+                buildItemList();
+                scrollY = 0;
+                targetScrollY = 0;
+            }
+        }
+
+        // Handle numbers
+        for (int keycode = com.badlogic.gdx.Input.Keys.NUM_0; keycode <= com.badlogic.gdx.Input.Keys.NUM_9; keycode++) {
+            if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(keycode)) {
+                char c = (char) ('0' + (keycode - com.badlogic.gdx.Input.Keys.NUM_0));
+                searchText += c;
+                selectedItem = null;
+                buildItemList();
+                scrollY = 0;
+                targetScrollY = 0;
+            }
+        }
+
+        // Handle space
+        if (com.badlogic.gdx.Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.SPACE)) {
+            searchText += ' ';
+            selectedItem = null;
+            buildItemList();
+            scrollY = 0;
+            targetScrollY = 0;
+        }
+    }
+
     private void updateDeleteConfirmation() {
         float centerX = RIGHT_PANEL_X + RIGHT_PANEL_WIDTH / 2.0f;
         float centerY = Settings.HEIGHT / 2.0f;
@@ -438,11 +633,8 @@ public class ArenaLoadoutSelectScreen {
                     STSArena.logger.info("Deleted loadout: " + selectedItem.savedLoadout.name);
                     // Refresh the list
                     isConfirmingDelete = false;
-                    buildItemList();
-                    hitboxes = new Hitbox[items.size()];
-                    for (int i = 0; i < items.size(); i++) {
-                        hitboxes[i] = new Hitbox(LEFT_PANEL_WIDTH - 20.0f * Settings.scale, BUTTON_HEIGHT);
-                    }
+                    loadAllLoadouts();  // Reload from database
+                    buildItemList();    // Rebuild filtered list
 
                     // Select the next saved loadout (skip headers and special items)
                     selectedItem = null;
@@ -478,12 +670,16 @@ public class ArenaLoadoutSelectScreen {
         float buttonStartY = 350.0f * Settings.scale;
 
         fightButtonHb.move(buttonX, buttonStartY);
-        copyButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING);
-        renameButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 2);
-        loadoutHistoryButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 3);
-        deleteButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 4);
+        favoriteButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING);
+        editButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 2);
+        copyButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 3);
+        renameButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 4);
+        loadoutHistoryButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 5);
+        deleteButtonHb.move(buttonX, buttonStartY - ACTION_BUTTON_SPACING * 6);
 
         fightButtonHb.update();
+        favoriteButtonHb.update();
+        editButtonHb.update();
         copyButtonHb.update();
         renameButtonHb.update();
         loadoutHistoryButtonHb.update();
@@ -494,8 +690,29 @@ public class ArenaLoadoutSelectScreen {
                 // Fight with this loadout
                 startFightWithSelectedLoadout();
                 InputHelper.justClickedLeft = false;
+            } else if (favoriteButtonHb.hovered) {
+                // Toggle favorite status
+                ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+                boolean newStatus = repo.toggleFavorite(selectedItem.savedLoadout.dbId);
+                selectedItem.savedLoadout.isFavorite = newStatus;
+                // Reload and rebuild to re-sort
+                loadAllLoadouts();
+                buildItemList();
+                // Re-select the item
+                for (ListItem item : items) {
+                    if (item.savedLoadout != null && item.savedLoadout.dbId == selectedItem.savedLoadout.dbId) {
+                        selectedItem = item;
+                        break;
+                    }
+                }
+                InputHelper.justClickedLeft = false;
+            } else if (editButtonHb.hovered) {
+                // Edit this loadout in-place
+                this.close();
+                STSArena.openLoadoutCreatorForEdit(selectedItem.savedLoadout);
+                InputHelper.justClickedLeft = false;
             } else if (copyButtonHb.hovered) {
-                // Copy to loadout creator
+                // Copy to loadout creator (creates new loadout)
                 this.close();
                 STSArena.openLoadoutCreatorWithLoadout(selectedItem.savedLoadout);
                 InputHelper.justClickedLeft = false;
@@ -518,28 +735,92 @@ public class ArenaLoadoutSelectScreen {
     }
 
     private void handleItemClick(ListItem item) {
-        // For Create Custom and New Random, navigate immediately
-        if (item.isCustomCreate) {
-            STSArena.logger.info("Opening custom loadout creator");
-            this.close();
-            STSArena.openLoadoutCreatorScreen();
-            return;
+        // For Create Custom and New Random, navigate immediately (not in multi-select mode)
+        if (!isMultiSelectMode) {
+            if (item.isCustomCreate) {
+                STSArena.logger.info("Opening custom loadout creator");
+                this.close();
+                STSArena.openLoadoutCreatorScreen();
+                return;
+            }
+
+            if (item.isNewRandom) {
+                STSArena.logger.info("New random loadout - proceeding to encounter selection");
+                useNewRandomLoadout = true;
+                selectedSavedLoadout = null;
+                this.close();
+                STSArena.openEncounterSelectScreen();
+                return;
+            }
         }
 
-        if (item.isNewRandom) {
-            STSArena.logger.info("New random loadout - proceeding to encounter selection");
-            useNewRandomLoadout = true;
-            selectedSavedLoadout = null;
-            this.close();
-            STSArena.openEncounterSelectScreen();
-            return;
-        }
-
-        // For saved loadouts, just select it
+        // For saved loadouts
         if (item.savedLoadout != null) {
-            selectedItem = item;
-            isRenaming = false;
-            isConfirmingDelete = false;
+            if (isMultiSelectMode) {
+                // Toggle selection in multi-select mode
+                Long id = item.savedLoadout.dbId;
+                if (selectedLoadoutIds.contains(id)) {
+                    selectedLoadoutIds.remove(id);
+                } else {
+                    selectedLoadoutIds.add(id);
+                }
+            } else {
+                // Single select mode
+                selectedItem = item;
+                isRenaming = false;
+                isConfirmingDelete = false;
+            }
+        }
+    }
+
+    private void updateBulkOperations() {
+        float buttonsY = 100.0f * Settings.scale;
+        float startX = LEFT_PANEL_X + BULK_BUTTON_WIDTH + 30.0f * Settings.scale;
+
+        bulkDeleteHb.move(startX + BULK_BUTTON_WIDTH / 2.0f, buttonsY);
+        bulkUnfavoriteHb.move(startX + BULK_BUTTON_WIDTH * 1.5f + 10.0f * Settings.scale, buttonsY);
+        cancelMultiSelectHb.move(startX + BULK_BUTTON_WIDTH * 2.5f + 20.0f * Settings.scale, buttonsY);
+
+        bulkDeleteHb.update();
+        bulkUnfavoriteHb.update();
+        cancelMultiSelectHb.update();
+
+        if (InputHelper.justClickedLeft) {
+            if (bulkDeleteHb.hovered && !selectedLoadoutIds.isEmpty()) {
+                // Delete all selected loadouts
+                ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+                for (Long id : selectedLoadoutIds) {
+                    repo.deleteLoadout(id);
+                    STSArena.logger.info("Bulk deleted loadout: " + id);
+                }
+                selectedLoadoutIds.clear();
+                isMultiSelectMode = false;
+                loadAllLoadouts();
+                buildItemList();
+                InputHelper.justClickedLeft = false;
+            } else if (bulkUnfavoriteHb.hovered && !selectedLoadoutIds.isEmpty()) {
+                // Unfavorite all selected loadouts
+                ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
+                for (Long id : selectedLoadoutIds) {
+                    // Set favorite to false directly
+                    String sql = "UPDATE loadouts SET is_favorite = 0 WHERE id = ?";
+                    try (PreparedStatement stmt = ArenaDatabase.getInstance().getConnection().prepareStatement(sql)) {
+                        stmt.setLong(1, id);
+                        stmt.executeUpdate();
+                    } catch (Exception e) {
+                        STSArena.logger.error("Failed to unfavorite loadout: " + id, e);
+                    }
+                }
+                selectedLoadoutIds.clear();
+                isMultiSelectMode = false;
+                loadAllLoadouts();
+                buildItemList();
+                InputHelper.justClickedLeft = false;
+            } else if (cancelMultiSelectHb.hovered) {
+                isMultiSelectMode = false;
+                selectedLoadoutIds.clear();
+                InputHelper.justClickedLeft = false;
+            }
         }
     }
 
@@ -565,6 +846,12 @@ public class ArenaLoadoutSelectScreen {
             "Select Loadout",
             LEFT_PANEL_X + LEFT_PANEL_WIDTH / 2.0f, TITLE_Y, Settings.GOLD_COLOR);
 
+        // Search box
+        renderSearchBox(sb);
+
+        // Class filter tabs
+        renderFilterTabs(sb);
+
         // Render loadout list (left panel)
         renderLoadoutList(sb);
 
@@ -574,6 +861,10 @@ public class ArenaLoadoutSelectScreen {
         // Render history and stats buttons
         renderHistoryButton(sb);
         renderStatsButton(sb);
+
+        // Render multi-select toggle and bulk operations
+        renderMultiSelectToggle(sb);
+        renderBulkOperations(sb);
 
         // Cancel button
         this.cancelButton.render(sb);
@@ -607,10 +898,14 @@ public class ArenaLoadoutSelectScreen {
 
     private void renderOption(SpriteBatch sb, ListItem item, float y, Hitbox hb) {
         boolean isSelected = (selectedItem == item);
+        boolean isMultiSelected = isMultiSelectMode && item.savedLoadout != null &&
+                                  selectedLoadoutIds.contains(item.savedLoadout.dbId);
 
         // Background
         Color bgColor;
-        if (isSelected) {
+        if (isMultiSelected) {
+            bgColor = new Color(0.3f, 0.45f, 0.35f, 0.9f);  // Stronger green for multi-selected
+        } else if (isSelected) {
             bgColor = new Color(0.2f, 0.4f, 0.3f, 0.9f);  // Green tint for selected
         } else if (hb.hovered) {
             bgColor = new Color(0.3f, 0.3f, 0.4f, 0.8f);
@@ -626,11 +921,45 @@ public class ArenaLoadoutSelectScreen {
             rowWidth,
             BUTTON_HEIGHT);
 
+        // In multi-select mode, render checkbox for saved loadouts
+        float textOffset = 0;
+        if (isMultiSelectMode && item.savedLoadout != null) {
+            float checkboxSize = 18.0f * Settings.scale;
+            float checkboxX = LEFT_PANEL_X + 8.0f * Settings.scale;
+            float checkboxY = y - BUTTON_HEIGHT / 2.0f - checkboxSize / 2.0f;
+
+            // Checkbox background
+            sb.setColor(new Color(0.15f, 0.15f, 0.2f, 1.0f));
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, checkboxX, checkboxY, checkboxSize, checkboxSize);
+
+            // Checkbox border
+            sb.setColor(isMultiSelected ? Settings.GREEN_TEXT_COLOR : new Color(0.4f, 0.4f, 0.5f, 1.0f));
+            float bw = 2.0f * Settings.scale;
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, checkboxX, checkboxY, checkboxSize, bw);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, checkboxX, checkboxY + checkboxSize - bw, checkboxSize, bw);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, checkboxX, checkboxY, bw, checkboxSize);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, checkboxX + checkboxSize - bw, checkboxY, bw, checkboxSize);
+
+            // Checkmark if selected
+            if (isMultiSelected) {
+                sb.setColor(Settings.GREEN_TEXT_COLOR);
+                float innerSize = checkboxSize - 6.0f * Settings.scale;
+                sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+                    checkboxX + 3.0f * Settings.scale,
+                    checkboxY + 3.0f * Settings.scale,
+                    innerSize, innerSize);
+            }
+
+            textOffset = checkboxSize + 8.0f * Settings.scale;
+        }
+
         // Text
         Color textColor;
         if (item.isCustomCreate) {
             textColor = new Color(0.4f, 0.8f, 1.0f, 1.0f);  // Cyan
         } else if (item.isNewRandom) {
+            textColor = Settings.GREEN_TEXT_COLOR;
+        } else if (isMultiSelected) {
             textColor = Settings.GREEN_TEXT_COLOR;
         } else if (isSelected) {
             textColor = Settings.GREEN_TEXT_COLOR;
@@ -640,21 +969,42 @@ public class ArenaLoadoutSelectScreen {
             textColor = Settings.CREAM_COLOR;
         }
 
+        // Star prefix for favorites
+        String prefix = "";
+        if (item.savedLoadout != null && item.savedLoadout.isFavorite) {
+            prefix = "* ";  // Star indicator for favorites
+        }
+
         // Truncate long names to fit
-        String displayText = item.text;
-        float maxWidth = rowWidth - 20.0f * Settings.scale;
+        String displayText = prefix + item.text;
+        float maxWidth = rowWidth - 20.0f * Settings.scale - textOffset;
         if (FontHelper.getSmartWidth(FontHelper.cardDescFont_N, displayText, maxWidth, 0) > maxWidth) {
             // Truncate until it fits
-            while (displayText.length() > 3 &&
+            while (displayText.length() > 3 + prefix.length() &&
                    FontHelper.getSmartWidth(FontHelper.cardDescFont_N, displayText + "...", maxWidth, 0) > maxWidth) {
                 displayText = displayText.substring(0, displayText.length() - 1);
             }
             displayText = displayText.trim() + "...";
         }
 
-        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            displayText,
-            LEFT_PANEL_X + 10.0f * Settings.scale, y - 8.0f * Settings.scale, textColor);
+        float textX = LEFT_PANEL_X + 10.0f * Settings.scale + textOffset;
+
+        // Use gold color for the star if favorite
+        if (item.savedLoadout != null && item.savedLoadout.isFavorite) {
+            // Render star in gold
+            FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+                "*",
+                textX, y - 8.0f * Settings.scale, Settings.GOLD_COLOR);
+            // Render rest of text
+            FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+                displayText.substring(2),  // Skip the "* " prefix
+                textX + FontHelper.getSmartWidth(FontHelper.cardDescFont_N, "* ", 1000, 0),
+                y - 8.0f * Settings.scale, textColor);
+        } else {
+            FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+                displayText,
+                textX, y - 8.0f * Settings.scale, textColor);
+        }
     }
 
     private void renderPreviewPanel(SpriteBatch sb) {
@@ -713,20 +1063,32 @@ public class ArenaLoadoutSelectScreen {
         renderActionButton(sb, fightButtonHb, "Fight", buttonStartY,
             new Color(0.2f, 0.5f, 0.2f, 0.9f), Settings.GREEN_TEXT_COLOR);
 
+        // Favorite button (gold when favorited, gray otherwise)
+        boolean isFav = selectedItem != null && selectedItem.savedLoadout != null && selectedItem.savedLoadout.isFavorite;
+        String favLabel = isFav ? "* Unfavorite" : "* Favorite";
+        Color favBgColor = isFav ? new Color(0.5f, 0.45f, 0.2f, 0.9f) : new Color(0.25f, 0.25f, 0.3f, 0.9f);
+        Color favTextColor = isFav ? Settings.GOLD_COLOR : Settings.CREAM_COLOR;
+        renderActionButton(sb, favoriteButtonHb, favLabel, buttonStartY - ACTION_BUTTON_SPACING,
+            favBgColor, favTextColor);
+
+        // Edit button (orange/yellow)
+        renderActionButton(sb, editButtonHb, "Edit", buttonStartY - ACTION_BUTTON_SPACING * 2,
+            new Color(0.5f, 0.4f, 0.2f, 0.9f), new Color(1.0f, 0.8f, 0.4f, 1.0f));
+
         // Copy button (blue)
-        renderActionButton(sb, copyButtonHb, "Copy", buttonStartY - ACTION_BUTTON_SPACING,
+        renderActionButton(sb, copyButtonHb, "Copy", buttonStartY - ACTION_BUTTON_SPACING * 3,
             new Color(0.2f, 0.3f, 0.5f, 0.9f), new Color(0.5f, 0.7f, 1.0f, 1.0f));
 
         // Rename button (gray)
-        renderActionButton(sb, renameButtonHb, "Rename", buttonStartY - ACTION_BUTTON_SPACING * 2,
+        renderActionButton(sb, renameButtonHb, "Rename", buttonStartY - ACTION_BUTTON_SPACING * 4,
             new Color(0.25f, 0.25f, 0.3f, 0.9f), Settings.CREAM_COLOR);
 
         // History button (gray)
-        renderActionButton(sb, loadoutHistoryButtonHb, "History", buttonStartY - ACTION_BUTTON_SPACING * 3,
+        renderActionButton(sb, loadoutHistoryButtonHb, "History", buttonStartY - ACTION_BUTTON_SPACING * 5,
             new Color(0.25f, 0.25f, 0.3f, 0.9f), Settings.CREAM_COLOR);
 
         // Delete button (red)
-        renderActionButton(sb, deleteButtonHb, "Delete", buttonStartY - ACTION_BUTTON_SPACING * 4,
+        renderActionButton(sb, deleteButtonHb, "Delete", buttonStartY - ACTION_BUTTON_SPACING * 6,
             new Color(0.5f, 0.2f, 0.2f, 0.9f), new Color(1.0f, 0.5f, 0.5f, 1.0f));
     }
 
@@ -1081,5 +1443,150 @@ public class ArenaLoadoutSelectScreen {
             "Stats",
             STATS_BUTTON_X + HISTORY_BUTTON_WIDTH / 2.0f, HISTORY_BUTTON_Y + HISTORY_BUTTON_HEIGHT / 2.0f,
             statsButtonHitbox.hovered ? Settings.GREEN_TEXT_COLOR : Settings.CREAM_COLOR);
+    }
+
+    private void renderSearchBox(SpriteBatch sb) {
+        float searchX = LEFT_PANEL_X + LEFT_PANEL_WIDTH - SEARCH_BOX_WIDTH - 10.0f * Settings.scale;
+
+        // Background
+        Color bgColor = isTypingSearch ? new Color(0.2f, 0.2f, 0.3f, 0.9f) :
+                        searchBoxHitbox.hovered ? new Color(0.2f, 0.2f, 0.25f, 0.8f) :
+                        new Color(0.1f, 0.1f, 0.15f, 0.7f);
+        sb.setColor(bgColor);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+            searchX, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f,
+            SEARCH_BOX_WIDTH, SEARCH_BOX_HEIGHT);
+
+        // Border when active
+        if (isTypingSearch) {
+            sb.setColor(Settings.GOLD_COLOR);
+            float bw = 2.0f * Settings.scale;
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, searchX, SEARCH_BOX_Y + SEARCH_BOX_HEIGHT / 2.0f - bw, SEARCH_BOX_WIDTH, bw);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, searchX, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f, SEARCH_BOX_WIDTH, bw);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, searchX, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f, bw, SEARCH_BOX_HEIGHT);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, searchX + SEARCH_BOX_WIDTH - bw, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f, bw, SEARCH_BOX_HEIGHT);
+        }
+
+        // Text
+        String displayText = searchText.isEmpty() ? "Search..." : searchText;
+        Color textColor = searchText.isEmpty() ? new Color(0.5f, 0.5f, 0.5f, 1.0f) : Settings.CREAM_COLOR;
+        if (isTypingSearch) {
+            displayText = searchText + "|";
+            textColor = Settings.CREAM_COLOR;
+        }
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+            displayText,
+            searchX + SEARCH_BOX_WIDTH / 2.0f, SEARCH_BOX_Y, textColor);
+    }
+
+    private void renderFilterTabs(SpriteBatch sb) {
+        String[] filterLabels = {"All", "IC", "SI", "DE", "WA"};
+        String[] filterValues = {null, "IRONCLAD", "THE_SILENT", "DEFECT", "WATCHER"};
+        float filterStartX = LEFT_PANEL_X + 10.0f * Settings.scale;
+
+        for (int i = 0; i < 5; i++) {
+            float tabX = filterStartX + i * (FILTER_TAB_WIDTH + 5.0f * Settings.scale);
+            boolean isSelected = (filterClass == null && filterValues[i] == null) ||
+                                 (filterClass != null && filterClass.equals(filterValues[i]));
+            boolean isHovered = classFilterHitboxes[i].hovered;
+
+            // Background
+            Color bgColor;
+            if (isSelected) {
+                bgColor = new Color(0.25f, 0.35f, 0.45f, 0.95f);
+            } else if (isHovered) {
+                bgColor = new Color(0.2f, 0.25f, 0.35f, 0.8f);
+            } else {
+                bgColor = new Color(0.1f, 0.12f, 0.18f, 0.6f);
+            }
+            sb.setColor(bgColor);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+                tabX, FILTER_TAB_Y - FILTER_TAB_HEIGHT / 2.0f,
+                FILTER_TAB_WIDTH, FILTER_TAB_HEIGHT);
+
+            // Text
+            Color textColor = isSelected ? Settings.GOLD_COLOR : (isHovered ? Settings.CREAM_COLOR : new Color(0.7f, 0.7f, 0.7f, 1.0f));
+            FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+                filterLabels[i],
+                tabX + FILTER_TAB_WIDTH / 2.0f, FILTER_TAB_Y, textColor);
+        }
+    }
+
+    private void renderMultiSelectToggle(SpriteBatch sb) {
+        float buttonX = LEFT_PANEL_X + BULK_BUTTON_WIDTH / 2.0f + 10.0f * Settings.scale;
+        float buttonY = 100.0f * Settings.scale;
+
+        String label = isMultiSelectMode ? "Cancel Select" : "Select Multiple";
+        Color bgColor = isMultiSelectMode ?
+            (multiSelectToggleHb.hovered ? new Color(0.5f, 0.3f, 0.3f, 0.9f) : new Color(0.4f, 0.25f, 0.25f, 0.8f)) :
+            (multiSelectToggleHb.hovered ? new Color(0.3f, 0.35f, 0.45f, 0.9f) : new Color(0.2f, 0.25f, 0.35f, 0.8f));
+        Color textColor = multiSelectToggleHb.hovered ? Settings.GOLD_COLOR : Settings.CREAM_COLOR;
+
+        // Background
+        sb.setColor(bgColor);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+            buttonX - BULK_BUTTON_WIDTH / 2.0f, buttonY - BULK_BUTTON_HEIGHT / 2.0f,
+            BULK_BUTTON_WIDTH, BULK_BUTTON_HEIGHT);
+
+        // Border
+        sb.setColor(multiSelectToggleHb.hovered ? Settings.GOLD_COLOR : new Color(0.4f, 0.4f, 0.5f, 1.0f));
+        float bw = 2.0f * Settings.scale;
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - BULK_BUTTON_WIDTH / 2.0f, buttonY - BULK_BUTTON_HEIGHT / 2.0f, BULK_BUTTON_WIDTH, bw);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - BULK_BUTTON_WIDTH / 2.0f, buttonY + BULK_BUTTON_HEIGHT / 2.0f - bw, BULK_BUTTON_WIDTH, bw);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - BULK_BUTTON_WIDTH / 2.0f, buttonY - BULK_BUTTON_HEIGHT / 2.0f, bw, BULK_BUTTON_HEIGHT);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX + BULK_BUTTON_WIDTH / 2.0f - bw, buttonY - BULK_BUTTON_HEIGHT / 2.0f, bw, BULK_BUTTON_HEIGHT);
+
+        // Text
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N, label, buttonX, buttonY, textColor);
+    }
+
+    private void renderBulkOperations(SpriteBatch sb) {
+        if (!isMultiSelectMode || selectedLoadoutIds.isEmpty()) return;
+
+        float buttonsY = 100.0f * Settings.scale;
+        float startX = LEFT_PANEL_X + BULK_BUTTON_WIDTH + 30.0f * Settings.scale;
+
+        // Selection count
+        String countLabel = selectedLoadoutIds.size() + " selected";
+        FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N, countLabel,
+            startX, buttonsY + BULK_BUTTON_HEIGHT / 2.0f + 20.0f * Settings.scale, Settings.GOLD_COLOR);
+
+        // Delete button
+        renderBulkButton(sb, bulkDeleteHb, "Delete All",
+            startX + BULK_BUTTON_WIDTH / 2.0f, buttonsY,
+            new Color(0.5f, 0.2f, 0.2f, 0.9f), new Color(1.0f, 0.5f, 0.5f, 1.0f));
+
+        // Unfavorite button
+        renderBulkButton(sb, bulkUnfavoriteHb, "Unfavorite All",
+            startX + BULK_BUTTON_WIDTH * 1.5f + 10.0f * Settings.scale, buttonsY,
+            new Color(0.4f, 0.35f, 0.2f, 0.9f), new Color(0.9f, 0.8f, 0.4f, 1.0f));
+
+        // Cancel button
+        renderBulkButton(sb, cancelMultiSelectHb, "Cancel",
+            startX + BULK_BUTTON_WIDTH * 2.5f + 20.0f * Settings.scale, buttonsY,
+            new Color(0.25f, 0.25f, 0.3f, 0.9f), Settings.CREAM_COLOR);
+    }
+
+    private void renderBulkButton(SpriteBatch sb, Hitbox hb, String text, float x, float y, Color bgColor, Color textColor) {
+        Color finalBgColor = hb.hovered ?
+            new Color(bgColor.r * 1.3f, bgColor.g * 1.3f, bgColor.b * 1.3f, bgColor.a) : bgColor;
+        Color finalTextColor = hb.hovered ? Settings.GOLD_COLOR : textColor;
+
+        // Background
+        sb.setColor(finalBgColor);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG,
+            x - BULK_BUTTON_WIDTH / 2.0f, y - BULK_BUTTON_HEIGHT / 2.0f,
+            BULK_BUTTON_WIDTH, BULK_BUTTON_HEIGHT);
+
+        // Border
+        sb.setColor(hb.hovered ? Settings.GOLD_COLOR : new Color(0.4f, 0.4f, 0.5f, 1.0f));
+        float bw = 2.0f * Settings.scale;
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, x - BULK_BUTTON_WIDTH / 2.0f, y - BULK_BUTTON_HEIGHT / 2.0f, BULK_BUTTON_WIDTH, bw);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, x - BULK_BUTTON_WIDTH / 2.0f, y + BULK_BUTTON_HEIGHT / 2.0f - bw, BULK_BUTTON_WIDTH, bw);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, x - BULK_BUTTON_WIDTH / 2.0f, y - BULK_BUTTON_HEIGHT / 2.0f, bw, BULK_BUTTON_HEIGHT);
+        sb.draw(ImageMaster.WHITE_SQUARE_IMG, x + BULK_BUTTON_WIDTH / 2.0f - bw, y - BULK_BUTTON_HEIGHT / 2.0f, bw, BULK_BUTTON_HEIGHT);
+
+        // Text
+        FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N, text, x, y, finalTextColor);
     }
 }

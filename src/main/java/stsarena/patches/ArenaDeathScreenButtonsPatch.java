@@ -25,15 +25,17 @@ public class ArenaDeathScreenButtonsPatch {
     private static final float BUTTON_WIDTH = 240.0f * Settings.scale;
     private static final float BUTTON_HEIGHT = 160.0f * Settings.scale;
     private static final float BUTTON_Y = Settings.HEIGHT * 0.15f;
-    private static final float BUTTON_SPACING = 300.0f * Settings.scale;
+    private static final float BUTTON_SPACING = 260.0f * Settings.scale;
 
     // Button hitboxes
     private static Hitbox retreatHb = new Hitbox(BUTTON_WIDTH, BUTTON_HEIGHT);
+    private static Hitbox modifyDeckHb = new Hitbox(BUTTON_WIDTH, BUTTON_HEIGHT);
     private static Hitbox tryAgainHb = new Hitbox(BUTTON_WIDTH, BUTTON_HEIGHT);
 
     // Button state
     private static boolean buttonsVisible = false;
     private static boolean retreatClickStarted = false;
+    private static boolean modifyDeckClickStarted = false;
     private static boolean tryAgainClickStarted = false;
 
     /**
@@ -50,16 +52,18 @@ public class ArenaDeathScreenButtonsPatch {
 
             buttonsVisible = true;
 
-            // Position buttons
+            // Position buttons (3 buttons now)
             float centerX = Settings.WIDTH / 2.0f;
-            retreatHb.move(centerX - BUTTON_SPACING / 2.0f, BUTTON_Y);
-            tryAgainHb.move(centerX + BUTTON_SPACING / 2.0f, BUTTON_Y);
+            retreatHb.move(centerX - BUTTON_SPACING, BUTTON_Y);
+            modifyDeckHb.move(centerX, BUTTON_Y);
+            tryAgainHb.move(centerX + BUTTON_SPACING, BUTTON_Y);
 
             retreatHb.update();
+            modifyDeckHb.update();
             tryAgainHb.update();
 
             // Handle hover sounds
-            if (retreatHb.justHovered || tryAgainHb.justHovered) {
+            if (retreatHb.justHovered || modifyDeckHb.justHovered || tryAgainHb.justHovered) {
                 CardCrawlGame.sound.play("UI_HOVER");
             }
 
@@ -68,6 +72,10 @@ public class ArenaDeathScreenButtonsPatch {
                 if (retreatHb.hovered) {
                     retreatHb.clickStarted = true;
                     retreatClickStarted = true;
+                    CardCrawlGame.sound.play("UI_CLICK_1");
+                } else if (modifyDeckHb.hovered) {
+                    modifyDeckHb.clickStarted = true;
+                    modifyDeckClickStarted = true;
                     CardCrawlGame.sound.play("UI_CLICK_1");
                 } else if (tryAgainHb.hovered) {
                     tryAgainHb.clickStarted = true;
@@ -84,6 +92,15 @@ public class ArenaDeathScreenButtonsPatch {
                 STSArena.logger.info("ARENA: Retreat button clicked");
                 // Return to main menu
                 handleRetreat();
+            }
+
+            if (modifyDeckHb.clicked) {
+                modifyDeckHb.clicked = false;
+                modifyDeckHb.clickStarted = false;
+                modifyDeckClickStarted = false;
+                STSArena.logger.info("ARENA: Modify Deck button clicked");
+                // Open deck editor for retry
+                handleModifyDeck();
             }
 
             if (tryAgainHb.clicked) {
@@ -109,6 +126,11 @@ public class ArenaDeathScreenButtonsPatch {
             // Restart the current fight
             ArenaRunner.restartCurrentFight();
         }
+
+        private static void handleModifyDeck() {
+            // Open the deck editor for retry
+            ArenaRunner.modifyDeckAndRetry();
+        }
     }
 
     /**
@@ -124,6 +146,9 @@ public class ArenaDeathScreenButtonsPatch {
 
             // Render Retreat button
             renderButton(sb, retreatHb, "Retreat", retreatClickStarted);
+
+            // Render Modify Deck button
+            renderButton(sb, modifyDeckHb, "Modify Deck", modifyDeckClickStarted);
 
             // Render Try Again button
             renderButton(sb, tryAgainHb, "Try Again", tryAgainClickStarted);

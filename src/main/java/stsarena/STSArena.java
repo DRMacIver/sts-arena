@@ -51,6 +51,9 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     // Flag to return to arena selection after returning to main menu
     private static boolean returnToArenaOnMainMenu = false;
 
+    // Pending loadout to open for editing (for retry deck tweaks)
+    private static ArenaRepository.LoadoutRecord pendingLoadoutEditorRecord = null;
+
     public STSArena() {
         logger.info("Initializing STS Arena");
         BaseMod.subscribe(this);
@@ -161,6 +164,20 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         // Check if arena fight ended and we need to return to main menu
         ArenaRunner.checkPendingReturnToMainMenu();
 
+        // Check if we should open the loadout editor after returning to main menu (retry deck tweaks)
+        if (pendingLoadoutEditorRecord != null &&
+            CardCrawlGame.mainMenuScreen != null &&
+            AbstractDungeon.player == null &&
+            !CardCrawlGame.loadingSave) {
+            ArenaRepository.LoadoutRecord loadout = pendingLoadoutEditorRecord;
+            pendingLoadoutEditorRecord = null;
+            logger.info("ARENA: Returned to main menu, opening loadout editor for retry");
+            if (loadoutCreatorScreen != null && !loadoutCreatorScreen.isOpen) {
+                loadoutCreatorScreen.openForRetryEdit(loadout);
+            }
+            return;  // Don't also open encounter select
+        }
+
         // Check if we should return to arena selection after returning to main menu
         // We detect main menu by: mainMenuScreen exists, no dungeon active, not loading
         if (returnToArenaOnMainMenu &&
@@ -264,6 +281,15 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     }
 
     /**
+     * Open the loadout creator screen for editing an existing loadout in-place.
+     */
+    public static void openLoadoutCreatorForEdit(ArenaRepository.LoadoutRecord loadout) {
+        if (loadoutCreatorScreen != null) {
+            loadoutCreatorScreen.openForEdit(loadout);
+        }
+    }
+
+    /**
      * Open the history screen filtered to a specific loadout.
      */
     public static void openHistoryScreenForLoadout(long loadoutId, String loadoutName) {
@@ -288,6 +314,15 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     public static void setReturnToArenaOnMainMenu() {
         returnToArenaOnMainMenu = true;
         logger.info("ARENA: Will return to arena selection on main menu");
+    }
+
+    /**
+     * Set a loadout to open in the editor when main menu is reached.
+     * Used for deck tweaks between retry attempts.
+     */
+    public static void setOpenLoadoutEditorOnMainMenu(ArenaRepository.LoadoutRecord loadout) {
+        pendingLoadoutEditorRecord = loadout;
+        logger.info("ARENA: Will open loadout editor on main menu for: " + loadout.name);
     }
 
     /**

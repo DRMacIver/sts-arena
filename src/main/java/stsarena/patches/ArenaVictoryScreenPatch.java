@@ -27,16 +27,18 @@ public class ArenaVictoryScreenPatch {
     private static final float BUTTON_WIDTH = 240.0f * Settings.scale;
     private static final float BUTTON_HEIGHT = 160.0f * Settings.scale;
     private static final float BUTTON_Y = Settings.HEIGHT * 0.15f;
-    private static final float BUTTON_SPACING = 300.0f * Settings.scale;
+    private static final float BUTTON_SPACING = 260.0f * Settings.scale;
     private static final float MESSAGE_Y = Settings.HEIGHT * 0.35f;
 
     // Button hitboxes
     private static Hitbox continueHb = new Hitbox(BUTTON_WIDTH, BUTTON_HEIGHT);
+    private static Hitbox modifyDeckHb = new Hitbox(BUTTON_WIDTH, BUTTON_HEIGHT);
     private static Hitbox tryAgainHb = new Hitbox(BUTTON_WIDTH, BUTTON_HEIGHT);
 
     // Button state
     private static boolean buttonsVisible = false;
     private static boolean continueClickStarted = false;
+    private static boolean modifyDeckClickStarted = false;
     private static boolean tryAgainClickStarted = false;
 
     // Track if this was an imperfect victory
@@ -95,16 +97,18 @@ public class ArenaVictoryScreenPatch {
 
             buttonsVisible = true;
 
-            // Position buttons
+            // Position buttons (3 buttons now)
             float centerX = Settings.WIDTH / 2.0f;
-            continueHb.move(centerX - BUTTON_SPACING / 2.0f, BUTTON_Y);
-            tryAgainHb.move(centerX + BUTTON_SPACING / 2.0f, BUTTON_Y);
+            continueHb.move(centerX - BUTTON_SPACING, BUTTON_Y);
+            modifyDeckHb.move(centerX, BUTTON_Y);
+            tryAgainHb.move(centerX + BUTTON_SPACING, BUTTON_Y);
 
             continueHb.update();
+            modifyDeckHb.update();
             tryAgainHb.update();
 
             // Handle hover sounds
-            if (continueHb.justHovered || tryAgainHb.justHovered) {
+            if (continueHb.justHovered || modifyDeckHb.justHovered || tryAgainHb.justHovered) {
                 CardCrawlGame.sound.play("UI_HOVER");
             }
 
@@ -113,6 +117,10 @@ public class ArenaVictoryScreenPatch {
                 if (continueHb.hovered) {
                     continueHb.clickStarted = true;
                     continueClickStarted = true;
+                    CardCrawlGame.sound.play("UI_CLICK_1");
+                } else if (modifyDeckHb.hovered) {
+                    modifyDeckHb.clickStarted = true;
+                    modifyDeckClickStarted = true;
                     CardCrawlGame.sound.play("UI_CLICK_1");
                 } else if (tryAgainHb.hovered) {
                     tryAgainHb.clickStarted = true;
@@ -128,6 +136,14 @@ public class ArenaVictoryScreenPatch {
                 continueClickStarted = false;
                 STSArena.logger.info("ARENA: Continue button clicked on imperfect victory");
                 handleContinue();
+            }
+
+            if (modifyDeckHb.clicked) {
+                modifyDeckHb.clicked = false;
+                modifyDeckHb.clickStarted = false;
+                modifyDeckClickStarted = false;
+                STSArena.logger.info("ARENA: Modify Deck button clicked on imperfect victory");
+                handleModifyDeck();
             }
 
             if (tryAgainHb.clicked) {
@@ -163,6 +179,16 @@ public class ArenaVictoryScreenPatch {
             // Restart the current fight
             ArenaRunner.restartCurrentFight();
         }
+
+        private static void handleModifyDeck() {
+            // Clear imperfect victory state
+            isImperfectVictory = false;
+            damageTaken = 0;
+            buttonsVisible = false;
+
+            // Open the deck editor for retry
+            ArenaRunner.modifyDeckAndRetry();
+        }
     }
 
     /**
@@ -183,6 +209,9 @@ public class ArenaVictoryScreenPatch {
 
             // Render Continue button
             renderButton(sb, continueHb, "Continue", continueClickStarted);
+
+            // Render Modify Deck button
+            renderButton(sb, modifyDeckHb, "Modify Deck", modifyDeckClickStarted);
 
             // Render Try Again button
             renderButton(sb, tryAgainHb, "Try Again", tryAgainClickStarted);

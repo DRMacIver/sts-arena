@@ -15,7 +15,7 @@ import java.sql.*;
 public class ArenaDatabase {
 
     private static final String DB_NAME = "arena.db";
-    private static final int SCHEMA_VERSION = 5;
+    private static final int SCHEMA_VERSION = 7;
     private static final Logger logger = LogManager.getLogger(ArenaDatabase.class.getName());
 
     private static ArenaDatabase instance;
@@ -129,6 +129,12 @@ public class ArenaDatabase {
             if (currentVersion < 5) {
                 migrateToV5(stmt);
             }
+            if (currentVersion < 6) {
+                migrateToV6(stmt);
+            }
+            if (currentVersion < 7) {
+                migrateToV7(stmt);
+            }
 
             // Record schema version
             stmt.execute(
@@ -216,6 +222,38 @@ public class ArenaDatabase {
     private void migrateToV5(Statement stmt) throws SQLException {
         logger.info("Running migration to V5: adding potion_slots");
         addColumnIfNotExists(stmt, "loadouts", "potion_slots", "INTEGER NOT NULL DEFAULT 3");
+    }
+
+    /**
+     * V6: Add content_hash for loadout versioning and snapshot columns to arena_runs
+     */
+    private void migrateToV6(Statement stmt) throws SQLException {
+        logger.info("Running migration to V6: adding content_hash and run snapshots");
+
+        // Add content_hash to loadouts table
+        addColumnIfNotExists(stmt, "loadouts", "content_hash", "TEXT");
+
+        // Add snapshot columns to arena_runs for version tracking
+        addColumnIfNotExists(stmt, "arena_runs", "deck_json", "TEXT");
+        addColumnIfNotExists(stmt, "arena_runs", "relics_json", "TEXT");
+        addColumnIfNotExists(stmt, "arena_runs", "potions_json", "TEXT");
+        addColumnIfNotExists(stmt, "arena_runs", "content_hash", "TEXT");
+
+        // Create index for content_hash lookups
+        try {
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_arena_runs_content_hash ON arena_runs(content_hash)");
+        } catch (SQLException e) {
+            // Index may already exist
+            logger.info("Index idx_arena_runs_content_hash may already exist");
+        }
+    }
+
+    /**
+     * V7: Add is_favorite column for pinning loadouts
+     */
+    private void migrateToV7(Statement stmt) throws SQLException {
+        logger.info("Running migration to V7: adding is_favorite column");
+        addColumnIfNotExists(stmt, "loadouts", "is_favorite", "INTEGER NOT NULL DEFAULT 0");
     }
 
     /**

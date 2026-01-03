@@ -137,6 +137,13 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
     // For parsing JSON
     private static final Gson gson = new Gson();
 
+    // Edit mode tracking
+    private boolean isEditMode = false;
+    private long editLoadoutId = -1;
+
+    // Retry edit mode (editing deck between retry attempts)
+    private boolean isRetryEditMode = false;
+
     /**
      * A card in the deck with its upgrade status.
      */
@@ -216,6 +223,9 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         this.availableTargetScrollY = 0.0f;
         this.selectedScrollY = 0.0f;
         this.selectedTargetScrollY = 0.0f;
+        this.isEditMode = false;
+        this.editLoadoutId = -1;
+        this.isRetryEditMode = false;
 
         // Set default HP for selected class
         this.maxHp = LoadoutConfig.getBaseMaxHp(selectedClass);
@@ -285,6 +295,9 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         this.availableTargetScrollY = 0.0f;
         this.selectedScrollY = 0.0f;
         this.selectedTargetScrollY = 0.0f;
+        this.isEditMode = false;
+        this.editLoadoutId = -1;
+        this.isRetryEditMode = false;
 
         // Set character class from loadout
         try {
@@ -356,6 +369,118 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         // Build available items list
         refreshAvailableItems();
         refreshSelectedHitboxes();
+    }
+
+    /**
+     * Open the loadout creator for editing an existing loadout in-place.
+     * Changes will update the existing loadout instead of creating a new one.
+     */
+    public void openForEdit(ArenaRepository.LoadoutRecord loadout) {
+        STSArena.logger.info("Opening Loadout Creator for EDIT: " + loadout.name + " (ID: " + loadout.dbId + ")");
+
+        // Use openWithLoadout to populate the data, but don't prepend "Copy of"
+        this.isOpen = true;
+        this.cancelButton.show("Cancel");
+        this.loadoutName = loadout.name;  // Keep original name (not "Copy of")
+        this.isTypingName = false;
+        this.searchText = "";
+        this.isTypingSearch = false;
+        this.deckCards.clear();
+        this.selectedRelics.clear();
+        this.selectedPotions.clear();
+        this.availableScrollY = 0.0f;
+        this.availableTargetScrollY = 0.0f;
+        this.selectedScrollY = 0.0f;
+        this.selectedTargetScrollY = 0.0f;
+
+        // Set edit mode
+        this.isEditMode = true;
+        this.editLoadoutId = loadout.dbId;
+
+        // Set character class from loadout
+        try {
+            this.selectedClass = AbstractPlayer.PlayerClass.valueOf(loadout.characterClass);
+        } catch (IllegalArgumentException e) {
+            this.selectedClass = AbstractPlayer.PlayerClass.IRONCLAD;
+        }
+
+        // Set HP and ascension from loadout
+        this.maxHp = loadout.maxHp;
+        this.currentHp = loadout.currentHp;
+        this.ascensionLevel = loadout.ascensionLevel;
+
+        // Parse and populate deck
+        try {
+            Type cardListType = new TypeToken<List<ArenaRepository.CardData>>(){}.getType();
+            List<ArenaRepository.CardData> cardDataList = gson.fromJson(loadout.deckJson, cardListType);
+            if (cardDataList != null) {
+                for (ArenaRepository.CardData cardData : cardDataList) {
+                    AbstractCard card = CardLibrary.getCard(cardData.id);
+                    if (card != null) {
+                        DeckCard dc = new DeckCard(card.makeCopy());
+                        dc.upgraded = cardData.upgrades > 0;
+                        deckCards.add(dc);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            STSArena.logger.error("Failed to parse deck from loadout", e);
+        }
+
+        // Parse and populate relics
+        try {
+            Type relicListType = new TypeToken<List<String>>(){}.getType();
+            List<String> relicIds = gson.fromJson(loadout.relicsJson, relicListType);
+            if (relicIds != null) {
+                for (String relicId : relicIds) {
+                    if (RelicLibrary.isARelic(relicId)) {
+                        AbstractRelic relic = RelicLibrary.getRelic(relicId);
+                        if (relic != null) {
+                            selectedRelics.add(relic.makeCopy());
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            STSArena.logger.error("Failed to parse relics from loadout", e);
+        }
+
+        // Parse and populate potions
+        try {
+            Type potionListType = new TypeToken<List<String>>(){}.getType();
+            List<String> potionIds = gson.fromJson(loadout.potionsJson, potionListType);
+            if (potionIds != null) {
+                for (String potionId : potionIds) {
+                    AbstractPotion potion = PotionHelper.getPotion(potionId);
+                    if (potion != null) {
+                        selectedPotions.add(potion.makeCopy());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            STSArena.logger.error("Failed to parse potions from loadout", e);
+        }
+
+        // Initialize potions for this class
+        PotionHelper.initialize(selectedClass);
+
+        // Build available items list
+        refreshAvailableItems();
+        refreshSelectedHitboxes();
+    }
+
+    /**
+     * Open the loadout creator for editing between retry attempts.
+     * After saving, the fight will restart with the modified loadout.
+     */
+    public void openForRetryEdit(ArenaRepository.LoadoutRecord loadout) {
+        STSArena.logger.info("Opening Loadout Creator for RETRY EDIT: " + loadout.name + " (ID: " + loadout.dbId + ")");
+
+        // Set retry edit mode flag
+        this.isRetryEditMode = true;
+
+        // Use the regular edit mode logic
+        openForEdit(loadout);
     }
 
     private boolean hasPrismaticShard() {
@@ -1283,13 +1408,37 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         );
 
         ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
-        long dbId = repo.saveLoadout(loadout);
 
-        if (dbId > 0) {
-            STSArena.logger.info("Saved custom loadout with " + deck.size() + " cards, " +
-                relics.size() + " relics, " + potions.size() + " potions");
+        if (isEditMode && editLoadoutId > 0) {
+            // Update existing loadout (new version with new content hash)
+            boolean success = repo.updateLoadout(loadout, editLoadoutId);
+            if (success) {
+                STSArena.logger.info("Updated loadout (ID: " + editLoadoutId + ") with " + deck.size() + " cards, " +
+                    relics.size() + " relics, " + potions.size() + " potions");
+
+                // If this is a retry edit, restart the fight with the updated loadout
+                if (isRetryEditMode) {
+                    ArenaRepository.LoadoutRecord updatedRecord = repo.getLoadoutById(editLoadoutId);
+                    isRetryEditMode = false;
+                    isEditMode = false;
+                    editLoadoutId = -1;
+                    close();
+                    if (updatedRecord != null) {
+                        stsarena.arena.ArenaRunner.completeRetryEdit(updatedRecord);
+                    }
+                    return;
+                }
+            }
+        } else {
+            // Create new loadout
+            long dbId = repo.saveLoadout(loadout);
+            if (dbId > 0) {
+                STSArena.logger.info("Saved custom loadout with " + deck.size() + " cards, " +
+                    relics.size() + " relics, " + potions.size() + " potions");
+            }
         }
 
+        isRetryEditMode = false;  // Clear flag in case it was set
         close();
         STSArena.openLoadoutSelectScreen();
     }
@@ -1302,8 +1451,9 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         sb.draw(ImageMaster.WHITE_SQUARE_IMG, 0, 0, Settings.WIDTH, Settings.HEIGHT);
 
         // Title
+        String title = isEditMode ? "Edit Loadout" : "Create Custom Loadout";
         FontHelper.renderFontCentered(sb, FontHelper.SCP_cardTitleFont_small,
-            "Create Custom Loadout",
+            title,
             Settings.WIDTH / 2.0f, TITLE_Y, Settings.GOLD_COLOR);
 
         // Name input box
@@ -1439,8 +1589,9 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         sb.draw(ImageMaster.WHITE_SQUARE_IMG,
             saveButtonHitbox.x, saveButtonHitbox.y,
             saveButtonHitbox.width, saveButtonHitbox.height);
+        String buttonText = isEditMode ? "Update" : "Save";
         FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
-            "Save",
+            buttonText,
             saveButtonHitbox.cX, saveButtonHitbox.cY,
             deckCards.isEmpty() ? Settings.CREAM_COLOR : Settings.GREEN_TEXT_COLOR);
     }
