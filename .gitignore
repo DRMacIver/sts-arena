@@ -33,6 +33,9 @@ Thumbs.db
 # Dependencies (these must be copied manually and should not be committed)
 lib/*.jar
 
+# Mods for testing
+mods/
+
 # Build outputs
 *.class
 
@@ -42,7 +45,6 @@ lib/*.jar
 # Temporary/working directories
 .temp/
 decompiled/
-scripts/
 sendToDevs/
 
 # Claude Code local settings
