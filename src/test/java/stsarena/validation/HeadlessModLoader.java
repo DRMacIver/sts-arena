@@ -22,7 +22,8 @@ public class HeadlessModLoader {
     private static final String[] REQUIRED_JARS = {
         "lib/desktop-1.0.jar",
         "lib/ModTheSpire.jar",
-        "lib/BaseMod.jar"
+        "lib/BaseMod.jar",
+        "lib/CommunicationMod.jar"
     };
 
     private boolean verbose = false;
@@ -109,6 +110,7 @@ public class HeadlessModLoader {
             new File("lib/desktop-1.0.jar").toURI().toURL(),
             new File("lib/ModTheSpire.jar").toURI().toURL(),
             new File("lib/BaseMod.jar").toURI().toURL(),
+            new File("lib/CommunicationMod.jar").toURI().toURL(),
             new File("target/STSArena.jar").toURI().toURL()
         };
 
@@ -137,16 +139,21 @@ public class HeadlessModLoader {
             Method readModInfo = modInfoClass.getDeclaredMethod("ReadModInfo", File.class);
 
             Object baseMod = readModInfo.invoke(null, new File("lib/BaseMod.jar"));
+            Object commMod = readModInfo.invoke(null, new File("lib/CommunicationMod.jar"));
             Object stsArena = readModInfo.invoke(null, new File("target/STSArena.jar"));
 
             if (baseMod == null) {
                 throw new RuntimeException("Failed to read BaseMod.jar ModInfo");
+            }
+            if (commMod == null) {
+                throw new RuntimeException("Failed to read CommunicationMod.jar ModInfo");
             }
             if (stsArena == null) {
                 throw new RuntimeException("Failed to read STSArena.jar ModInfo");
             }
 
             printModInfo(modInfoClass, baseMod, "BaseMod");
+            printModInfo(modInfoClass, commMod, "CommunicationMod");
             printModInfo(modInfoClass, stsArena, "STSArena");
 
             // Step 3: Set up class pool with ModTheSpire
@@ -176,13 +183,14 @@ public class HeadlessModLoader {
             // Create ModInfo array based on flags
             Object modInfoArray;
             if (stsArenaOnly) {
-                System.out.println("  (STSArena only mode - skipping BaseMod patches)");
+                System.out.println("  (STSArena only mode - skipping other mod patches)");
                 modInfoArray = Array.newInstance(modInfoClass, 1);
                 Array.set(modInfoArray, 0, stsArena);
             } else {
-                modInfoArray = Array.newInstance(modInfoClass, 2);
+                modInfoArray = Array.newInstance(modInfoClass, 3);
                 Array.set(modInfoArray, 0, baseMod);
-                Array.set(modInfoArray, 1, stsArena);
+                Array.set(modInfoArray, 1, commMod);
+                Array.set(modInfoArray, 2, stsArena);
             }
 
             // Set MODINFOS on Loader class

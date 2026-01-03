@@ -36,6 +36,9 @@ lib/*.jar
 # Mods for testing
 mods/
 
+# External dependencies (cloned repos)
+external/
+
 # Build outputs
 *.class
 
