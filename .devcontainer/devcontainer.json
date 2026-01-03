@@ -31,9 +31,10 @@
   },
   "mounts": [
     "source=${localEnv:HOME}/.m2,target=/home/vscode/.m2,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,readonly"
+    "source=${localEnv:HOME}/.claude,target=/mnt/host-claude,type=bind,readonly",
+    "source=${localEnv:HOME}/.ssh,target=/mnt/host-ssh,type=bind,readonly"
   ],
   "postCreateCommand": "npm install -g @anthropic-ai/claude-code @beads/bd && echo 'NOTE: You need to set up lib/ with game JARs. See CLAUDE.md for paths.' && mvn dependency:resolve || true",
+  "postStartCommand": "mkdir -p /home/vscode/.claude /home/vscode/.ssh && cp -r /mnt/host-claude/. /home/vscode/.claude/ 2>/dev/null || true && cp -r /mnt/host-ssh/. /home/vscode/.ssh/ 2>/dev/null || true && chmod 700 /home/vscode/.ssh && chmod 600 /home/vscode/.ssh/* 2>/dev/null || true",
   "remoteUser": "vscode"
 }
