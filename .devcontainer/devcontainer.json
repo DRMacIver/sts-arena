@@ -35,6 +35,6 @@
     "source=${localEnv:HOME}/.ssh,target=/mnt/host-ssh,type=bind,readonly"
   ],
   "postCreateCommand": "npm install -g @anthropic-ai/claude-code @beads/bd && echo 'NOTE: You need to set up lib/ with game JARs. See CLAUDE.md for paths.' && mvn dependency:resolve || true",
-  "postStartCommand": "echo '=== Mount debug ===' && ls -la /mnt/ && echo '=== host-claude ===' && sudo ls -la /mnt/host-claude/ && echo '=== host-ssh ===' && sudo ls -la /mnt/host-ssh/ && echo '=== Copying ===' && sudo mkdir -p /home/vscode/.claude /home/vscode/.ssh && sudo cp -r /mnt/host-claude/. /home/vscode/.claude/ && sudo cp -r /mnt/host-ssh/. /home/vscode/.ssh/ && sudo chown -R vscode:vscode /home/vscode/.claude /home/vscode/.ssh && chmod 700 /home/vscode/.ssh && chmod 600 /home/vscode/.ssh/* && echo '=== Result ===' && ls -la /home/vscode/.claude/ && ls -la /home/vscode/.ssh/",
+  "postStartCommand": "sudo mkdir -p /home/vscode/.claude /home/vscode/.ssh && sudo cp -r /mnt/host-claude/. /home/vscode/.claude/ && sudo cp -r /mnt/host-ssh/. /home/vscode/.ssh/ && sudo chown -R vscode:vscode /home/vscode/.claude /home/vscode/.ssh && chmod 700 /home/vscode/.ssh && chmod 600 /home/vscode/.ssh/*",
   "remoteUser": "vscode"
 }

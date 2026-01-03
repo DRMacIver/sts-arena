@@ -36,7 +36,6 @@ if [ -n "$ANTHROPIC_API_KEY" ]; then
         --remote-env "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" \
         claude --dangerously-skip-permissions "$@"
 else
-    echo "Note: Set ANTHROPIC_API_KEY env var to skip authentication"
     devcontainer exec --workspace-folder "$SCRIPT_DIR" \
         claude --dangerously-skip-permissions "$@"
 fi
