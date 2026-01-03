@@ -20,7 +20,7 @@ fi
 REBUILD_FLAG=""
 if [ "$CURRENT_HASH" != "$STORED_HASH" ]; then
     echo "Devcontainer config changed, rebuilding..."
-    REBUILD_FLAG="--remove-existing-container"
+    REBUILD_FLAG="--remove-existing-container --build-no-cache"
 fi
 
 # Ensure devcontainer is up (rebuild if config changed)
