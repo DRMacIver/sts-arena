@@ -12,7 +12,7 @@ import time
 
 from spirecomm.communication.coordinator import Coordinator
 
-# Set up logging
+# Logging is configured by run_agent.py before this is imported
 logger = logging.getLogger(__name__)
 
 # Get the original stdout that was saved by run_agent.py at the very start

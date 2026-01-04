@@ -29,11 +29,14 @@ sys.stdout = sys.stderr
 # Now it's safe to import other modules
 import pytest
 
-# Set up logging to stderr
+# Set up logging to a file (not stderr, so only test output is visible)
+log_file = Path(__file__).parent.parent / "lib" / "communication_mod_errors.log"
+log_file.parent.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='[TEST] %(levelname)s: %(message)s',
-    stream=sys.stderr
+    filename=str(log_file),
+    filemode='w',
 )
 
 logger = logging.getLogger(__name__)
