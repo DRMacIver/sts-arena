@@ -1,34 +1,36 @@
 """
 Pytest fixtures for STS Arena acceptance tests.
 
-These tests run within the subprocess that CommunicationMod spawns.
-Uses the spirecomm library for communication.
+These tests run in a subprocess spawned by run_agent.py.
+run_agent.py handles the "ready" signal and creates named pipes for communication.
 """
 
+import os
 import pytest
-import logging
-import sys
 import time
 
 from spirecomm.communication.coordinator import Coordinator
 
-# Logging is configured by run_agent.py before this is imported
-logger = logging.getLogger(__name__)
+# Get pipe paths from environment (set by run_agent.py)
+_input_pipe_path = os.environ.get("STS_GAME_INPUT_PIPE")
+_output_pipe_path = os.environ.get("STS_GAME_OUTPUT_PIPE")
 
-# Get the original stdout that was saved by run_agent.py at the very start
-import run_agent
-_original_stdout = run_agent.original_stdout
+if not _input_pipe_path or not _output_pipe_path:
+    raise RuntimeError("STS_GAME_INPUT_PIPE and STS_GAME_OUTPUT_PIPE must be set")
 
-# Initialize the coordinator IMMEDIATELY when conftest.py is imported
-# This ensures "ready" is sent before pytest starts collecting tests
-logger.info("Creating coordinator (during conftest import)...")
-_coordinator = Coordinator(output_file=_original_stdout)
-_coordinator.signal_ready()
+# Open the named pipes
+# Note: opening a FIFO blocks until the other end is also opened,
+# so run_agent.py must have its bridge threads running
+_game_input = open(_input_pipe_path, "r")
+_game_output = open(_output_pipe_path, "w")
 
-logger.info("Waiting for initial game state...")
+# Create coordinator using the pipes
+# Don't send "ready" - run_agent.py already did that
+_coordinator = Coordinator(input_file=_game_input, output_file=_game_output)
+
+# Wait for initial game state
 while not _coordinator.game_is_ready:
     _coordinator.receive_game_state_update(block=True, perform_callbacks=False)
-logger.info("Game is ready!")
 
 
 @pytest.fixture(scope="session")
