@@ -17,7 +17,7 @@ Note: These tests require the game to be running via scripts/run-acceptance-test
 
 import time
 import random
-from hypothesis import note, settings, Verbosity
+from hypothesis import note, settings, Verbosity, HealthCheck
 from hypothesis.stateful import (
     RuleBasedStateMachine,
     rule,
@@ -73,66 +73,71 @@ SAFE_UNTARGETED_CARDS = [
 ]
 
 
-def wait_for_state_update(coord: Coordinator, timeout: float = 30):
-    """Wait for game state to update."""
+def wait_for_state_update(coord: Coordinator, timeout: float = 5):
+    """Wait for game state to stabilize. Short timeout - state should update quickly."""
     coord.game_is_ready = False
     coord.send_message("state")
     wait_for_ready(coord, timeout=timeout)
 
 
-def wait_for_in_game(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
-    """Wait until we're in a game."""
-    start = time.time()
-    while not coord.in_game:
-        if time.time() - start > timeout:
-            raise GameTimeout(f"Timed out after {timeout}s waiting to be in game")
-        wait_for_state_update(coord, timeout=10)
+def assert_in_game(coord: Coordinator):
+    """Assert we're in a game after state has stabilized."""
+    wait_for_state_update(coord, timeout=5)
+    assert coord.in_game, "Expected to be in game but we're at main menu"
 
 
-def wait_for_main_menu(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
-    """Wait until we're at the main menu (not in game)."""
-    start = time.time()
-    while coord.in_game:
-        if time.time() - start > timeout:
-            raise GameTimeout(f"Timed out after {timeout}s waiting to reach main menu")
-        wait_for_state_update(coord, timeout=10)
+def assert_at_main_menu(coord: Coordinator):
+    """Assert we're at main menu after state has stabilized."""
+    wait_for_state_update(coord, timeout=5)
+    assert not coord.in_game, "Expected to be at main menu but we're in game"
 
 
-def wait_for_combat(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
-    """Wait until we're in combat with monsters and can take actions."""
-    start = time.time()
-    while True:
-        remaining = timeout - (time.time() - start)
-        if remaining <= 0:
-            raise GameTimeout(f"Timed out after {timeout}s waiting for combat")
-
-        wait_for_state_update(coord, timeout=min(10, remaining))
-
-        if coord.in_game and coord.last_game_state:
-            game = coord.last_game_state
-            if game.in_combat and game.monsters:
-                if game.play_available or game.end_available:
-                    return
+def assert_in_combat(coord: Coordinator):
+    """Assert we're in combat and can take actions after state has stabilized."""
+    wait_for_state_update(coord, timeout=5)
+    assert coord.in_game, "Expected to be in game but we're at main menu"
+    assert coord.last_game_state, "No game state available"
+    game = coord.last_game_state
+    assert game.in_combat, f"Expected to be in combat but in_combat={game.in_combat}"
+    assert game.monsters, "Expected monsters in combat but none found"
+    assert game.play_available or game.end_available, "Combat not ready for input"
 
 
-def ensure_main_menu(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
+# Simple wait-and-assert functions - one state update then check
+def wait_for_in_game(coord: Coordinator, timeout: float = 5):
+    """Wait for one state update then assert we're in game."""
+    wait_for_state_update(coord, timeout=timeout)
+    assert coord.in_game, "Expected to be in game but we're at main menu"
+
+
+def wait_for_main_menu(coord: Coordinator, timeout: float = 5):
+    """Wait for one state update then assert we're at main menu."""
+    wait_for_state_update(coord, timeout=timeout)
+    assert not coord.in_game, "Expected to be at main menu but we're in game"
+
+
+def wait_for_combat(coord: Coordinator, timeout: float = 5):
+    """Wait for one state update then assert we're in combat."""
+    wait_for_state_update(coord, timeout=timeout)
+    assert coord.in_game, "Expected to be in game"
+    assert coord.last_game_state, "No game state"
+    game = coord.last_game_state
+    assert game.in_combat, f"Expected combat, in_combat={game.in_combat}"
+    assert game.monsters, "No monsters in combat"
+    assert game.play_available or game.end_available, "Combat not ready"
+
+
+def ensure_main_menu(coord: Coordinator, timeout: float = 5):
     """Ensure we're at the main menu. Abandons any active run."""
-    start = time.time()
-
-    def time_remaining():
-        return timeout - (time.time() - start)
-
-    wait_for_state_update(coord, timeout=min(10, time_remaining()))
+    wait_for_state_update(coord, timeout=timeout)
 
     if not coord.in_game:
         return
 
+    # We're in a game, need to abandon
     coord.send_message("abandon")
-
-    while coord.in_game:
-        if time_remaining() <= 0:
-            raise GameTimeout(f"Timed out after {timeout}s waiting for abandon")
-        wait_for_state_update(coord, timeout=min(5, time_remaining()))
+    wait_for_state_update(coord, timeout=timeout)
+    assert not coord.in_game, "Abandon command did not return us to main menu"
 
 
 # =============================================================================
@@ -175,7 +180,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.coord = conftest._coordinator
 
         # Ensure we start at main menu
-        ensure_main_menu(self.coord, timeout=60)
+        ensure_main_menu(self.coord, timeout=10)
 
         # Verify model matches reality
         assert not self.coord.in_game, "Should start at main menu"
@@ -272,17 +277,8 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.action_history.append(f"arena {character} {encounter}")
 
         self.coord.send_message(f"arena {character} {encounter}")
-
-        try:
-            wait_for_in_game(self.coord, timeout=60)
-            wait_for_combat(self.coord, timeout=60)
-        except GameTimeout as e:
-            note(f"Timeout starting arena: {e}")
-            # Update model to match reality
-            wait_for_state_update(self.coord, timeout=10)
-            self.model_in_game = self.coord.in_game
-            if not self.model_in_game:
-                return
+        wait_for_in_game(self.coord, timeout=10)
+        wait_for_combat(self.coord, timeout=10)
 
         # Update model
         self.model_in_game = True
@@ -302,14 +298,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.action_history.append(f"start {character}")
 
         self.coord.send_message(f"start {character} 0")
-
-        try:
-            wait_for_in_game(self.coord, timeout=60)
-        except GameTimeout as e:
-            note(f"Timeout starting run: {e}")
-            wait_for_state_update(self.coord, timeout=10)
-            self.model_in_game = self.coord.in_game
-            return
+        wait_for_in_game(self.coord, timeout=10)
 
         # Update model
         self.model_in_game = True
@@ -329,14 +318,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.action_history.append("abandon")
 
         self.coord.send_message("abandon")
-
-        try:
-            wait_for_main_menu(self.coord, timeout=60)
-        except GameTimeout as e:
-            note(f"Timeout abandoning: {e}")
-            wait_for_state_update(self.coord, timeout=10)
-            self.model_in_game = self.coord.in_game
-            return
+        wait_for_main_menu(self.coord, timeout=10)
 
         # Update model
         self.model_in_game = False
@@ -370,10 +352,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.coord.send_message("end")
 
         # Wait for state update
-        try:
-            wait_for_state_update(self.coord, timeout=30)
-        except GameTimeout:
-            pass
+        wait_for_state_update(self.coord, timeout=10)
 
         # Check if combat ended (won or lost)
         if self.coord.in_game and self.coord.last_game_state:
@@ -429,10 +408,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
             return
 
         # Wait for state update
-        try:
-            wait_for_state_update(self.coord, timeout=30)
-        except GameTimeout:
-            pass
+        wait_for_state_update(self.coord, timeout=10)
 
         # Check if combat/game ended
         if self.coord.in_game and self.coord.last_game_state:
@@ -479,10 +455,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
             self.action_history.append(f"potion {idx}")
             self.coord.send_message(f"potion use {idx}")
 
-        try:
-            wait_for_state_update(self.coord, timeout=30)
-        except GameTimeout:
-            pass
+        wait_for_state_update(self.coord, timeout=10)
 
     @precondition(lambda self: self.model_in_game and self.model_combat_ended)
     @rule()
@@ -508,21 +481,13 @@ class ArenaStateMachine(RuleBasedStateMachine):
             note("Proceeding after combat")
             self.action_history.append("proceed")
             self.coord.send_message("proceed")
-
-            try:
-                wait_for_state_update(self.coord, timeout=30)
-            except GameTimeout:
-                pass
-
+            wait_for_state_update(self.coord, timeout=10)
             self.model_combat_ended = False
 
     def teardown(self):
         """Clean up after the test - return to main menu."""
         note(f"Teardown. Action history: {self.action_history}")
-        try:
-            ensure_main_menu(self.coord, timeout=30)
-        except GameTimeout:
-            pass
+        ensure_main_menu(self.coord, timeout=10)
 
 
 # Create the test class from the state machine
@@ -530,10 +495,11 @@ TestArenaStateful = ArenaStateMachine.TestCase
 
 # Configure the test settings
 TestArenaStateful.settings = settings(
-    max_examples=50,
-    stateful_step_count=20,
+    max_examples=1000,
+    stateful_step_count=10,
     deadline=None,
-    suppress_health_check=True,
+    suppress_health_check=list(HealthCheck),
+    verbosity=Verbosity.debug,
 )
 
 
@@ -561,7 +527,7 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         import conftest
         self.coord = conftest._coordinator
 
-        ensure_main_menu(self.coord, timeout=60)
+        ensure_main_menu(self.coord, timeout=10)
 
         character = random.choice(CHARACTERS)
         encounter = random.choice(ENCOUNTERS)
@@ -569,8 +535,8 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         note(f"Starting combat test: {character} vs {encounter}")
 
         self.coord.send_message(f"arena {character} {encounter}")
-        wait_for_in_game(self.coord, timeout=60)
-        wait_for_combat(self.coord, timeout=60)
+        wait_for_in_game(self.coord, timeout=10)
+        wait_for_combat(self.coord, timeout=10)
 
         self.in_combat = True
         self.turn_count = 1
@@ -629,10 +595,7 @@ class ArenaCombatMachine(RuleBasedStateMachine):
 
         self.cards_played_this_turn += 1
 
-        try:
-            wait_for_state_update(self.coord, timeout=30)
-        except GameTimeout:
-            pass
+        wait_for_state_update(self.coord, timeout=10)
 
         if not self.coord.in_game or (self.coord.last_game_state and
                                        not self.coord.last_game_state.in_combat):
@@ -654,10 +617,7 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         self.turn_count += 1
         self.cards_played_this_turn = 0
 
-        try:
-            wait_for_state_update(self.coord, timeout=30)
-        except GameTimeout:
-            pass
+        wait_for_state_update(self.coord, timeout=10)
 
         if not self.coord.in_game or (self.coord.last_game_state and
                                        not self.coord.last_game_state.in_combat):
@@ -665,18 +625,16 @@ class ArenaCombatMachine(RuleBasedStateMachine):
 
     def teardown(self):
         """Clean up."""
-        try:
-            ensure_main_menu(self.coord, timeout=30)
-        except GameTimeout:
-            pass
+        ensure_main_menu(self.coord, timeout=10)
 
 
 TestArenaCombat = ArenaCombatMachine.TestCase
 TestArenaCombat.settings = settings(
-    max_examples=20,
-    stateful_step_count=30,
+    max_examples=1000,
+    stateful_step_count=20,
     deadline=None,
-    suppress_health_check=True,
+    suppress_health_check=list(HealthCheck),
+    verbosity=Verbosity.debug,
 )
 
 
@@ -699,7 +657,7 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
         """Initialize at main menu."""
         import conftest
         self.coord = conftest._coordinator
-        ensure_main_menu(self.coord, timeout=60)
+        ensure_main_menu(self.coord, timeout=10)
         self.at_menu = True
         self.fights_started = 0
         self.fights_abandoned = 0
@@ -723,14 +681,8 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
         note(f"Starting fight #{self.fights_started + 1}: {character} vs {encounter}")
 
         self.coord.send_message(f"arena {character} {encounter}")
-
-        try:
-            wait_for_in_game(self.coord, timeout=60)
-            wait_for_combat(self.coord, timeout=30)
-        except GameTimeout:
-            wait_for_state_update(self.coord, timeout=10)
-            self.at_menu = not self.coord.in_game
-            return
+        wait_for_in_game(self.coord, timeout=10)
+        wait_for_combat(self.coord, timeout=10)
 
         self.at_menu = False
         self.fights_started += 1
@@ -742,13 +694,7 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
         note(f"Abandoning fight #{self.fights_started}")
 
         self.coord.send_message("abandon")
-
-        try:
-            wait_for_main_menu(self.coord, timeout=60)
-        except GameTimeout:
-            wait_for_state_update(self.coord, timeout=10)
-            self.at_menu = not self.coord.in_game
-            return
+        wait_for_main_menu(self.coord, timeout=10)
 
         self.at_menu = True
         self.fights_abandoned += 1
@@ -756,16 +702,14 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
     def teardown(self):
         """Clean up."""
         note(f"Started {self.fights_started}, abandoned {self.fights_abandoned}")
-        try:
-            ensure_main_menu(self.coord, timeout=30)
-        except GameTimeout:
-            pass
+        ensure_main_menu(self.coord, timeout=10)
 
 
 TestArenaTransitions = ArenaTransitionMachine.TestCase
 TestArenaTransitions.settings = settings(
-    max_examples=30,
-    stateful_step_count=15,
+    max_examples=1000,
+    stateful_step_count=10,
     deadline=None,
-    suppress_health_check=True,
+    suppress_health_check=list(HealthCheck),
+    verbosity=Verbosity.debug,
 )

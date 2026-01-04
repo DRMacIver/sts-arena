@@ -34,7 +34,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 ACCEPTANCE_DIR="$PROJECT_DIR/acceptance_tests"
 MARKER_FILE="/tmp/sts-arena-tests-complete"
 RESULT_FILE="/tmp/sts-arena-tests-result"
-TIMEOUT_SECONDS=300  # 5 minutes max
+TIMEOUT_SECONDS=3600  # 1 hour max for high max_examples stateful tests
 
 cd "$PROJECT_DIR"
 

@@ -67,3 +67,5 @@ sendToDevs/
 __pycache__/
 *.pyc
 .hypothesis/
+test_screenshots/
+pytest_output.txt
