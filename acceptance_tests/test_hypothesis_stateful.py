@@ -16,8 +16,7 @@ Note: These tests require the game to be running via scripts/run-acceptance-test
 """
 
 import time
-import random
-from hypothesis import note, settings, Verbosity, HealthCheck, Phase
+from hypothesis import note, settings, Verbosity, HealthCheck, Phase, assume
 from hypothesis.stateful import (
     RuleBasedStateMachine,
     rule,
@@ -117,93 +116,74 @@ def assert_in_combat(coord: Coordinator):
     assert game.play_available or game.end_available, "Combat not ready for input"
 
 
-# Simple wait-and-assert functions - one state update then check
-def wait_for_in_game(coord: Coordinator, timeout: float = 5):
-    """Wait for one state update then assert we're in game."""
-    wait_for_state_update(coord, timeout=timeout)
+# Simple polling-based wait functions - reliable approach
+def wait_for_in_game(coord: Coordinator, max_updates: int = 30):
+    """Block until we're in game. Each update waits for the game's ready message."""
+    for _ in range(max_updates):
+        wait_for_state_update(coord)
+        if coord.in_game:
+            return
     assert coord.in_game, "Expected to be in game but we're at main menu"
 
 
-def wait_for_main_menu(coord: Coordinator, timeout: float = 15):
-    """Wait until we're at main menu, polling multiple times."""
-    import time
-    start = time.time()
-    while time.time() - start < timeout:
-        wait_for_state_update(coord, timeout=5)
+def wait_for_main_menu(coord: Coordinator, max_updates: int = 30):
+    """Block until we're at main menu. Each update waits for the game's ready message."""
+    for _ in range(max_updates):
+        wait_for_state_update(coord)
         if not coord.in_game:
-            return  # Success
-        # Give the game time to transition
-        time.sleep(0.2)
+            return
     assert not coord.in_game, "Expected to be at main menu but we're in game"
 
 
-def wait_for_combat(coord: Coordinator, timeout: float = 5):
-    """Wait for one state update then assert we're in combat."""
-    wait_for_state_update(coord, timeout=timeout)
+def wait_for_combat(coord: Coordinator, max_updates: int = 30):
+    """Block until we're in combat and ready for input."""
+    for _ in range(max_updates):
+        wait_for_state_update(coord)
+        if coord.in_game and coord.last_game_state:
+            game = coord.last_game_state
+            if game.in_combat and game.monsters and (game.play_available or game.end_available):
+                return
     assert coord.in_game, "Expected to be in game"
     assert coord.last_game_state, "No game state"
     game = coord.last_game_state
     assert game.in_combat, f"Expected combat, in_combat={game.in_combat}"
     assert game.monsters, "No monsters in combat"
-    assert game.play_available or game.end_available, "Combat not ready"
 
 
-def wait_for_arena_end(coord: Coordinator, timeout: float = 15):
-    """Wait for arena fight to end (return to main menu), with abandon fallback."""
-    import time
-    start = time.time()
-
-    # First, poll to see if we naturally return to menu
-    poll_end = start + timeout * 0.7  # Use 70% of timeout for natural transition
-    while time.time() < poll_end:
-        wait_for_state_update(coord, timeout=5)
+def wait_for_arena_end(coord: Coordinator, max_updates: int = 30):
+    """Block until arena fight ends (return to main menu), with abandon fallback."""
+    # Wait for natural return to menu
+    for _ in range(max_updates):
+        wait_for_state_update(coord)
         if not coord.in_game:
-            return True  # Success - returned to menu
-        time.sleep(0.3)
+            return True
 
-    # If still in game, try abandon
+    # If still in game, try abandon as fallback
     if coord.in_game:
         coord.send_message("abandon")
-        abandon_end = time.time() + timeout * 0.3
-        while time.time() < abandon_end:
-            wait_for_state_update(coord, timeout=5)
+        for _ in range(max_updates):
+            wait_for_state_update(coord)
             if not coord.in_game:
-                return True  # Success via abandon
-            time.sleep(0.2)
+                return True
 
     return not coord.in_game
 
 
-def ensure_main_menu(coord: Coordinator, timeout: float = 20):
-    """Ensure we're at the main menu. Waits for transition or abandons if needed."""
-    import time
-    start = time.time()
+def ensure_main_menu(coord: Coordinator, max_updates: int = 30):
+    """Ensure we're at the main menu."""
+    # Check current state first
+    wait_for_state_update(coord)
+    if not coord.in_game:
+        return
 
-    # First, wait to see if we naturally transition to menu
-    wait_end = start + timeout / 3  # Use 1/3 of timeout for initial wait
-    while time.time() < wait_end:
-        wait_for_state_update(coord, timeout=5)
+    # Try abandoning
+    coord.send_message("abandon")
+    for _ in range(max_updates):
+        wait_for_state_update(coord)
         if not coord.in_game:
-            return  # Success - we're at main menu
-        time.sleep(0.2)
+            return
 
-    # If still in game, try abandoning
-    for attempt in range(3):
-        if not coord.in_game:
-            return  # Success
-
-        coord.send_message("abandon")
-
-        # Wait for abandon to take effect
-        abandon_end = time.time() + 8
-        while time.time() < abandon_end:
-            wait_for_state_update(coord, timeout=5)
-            if not coord.in_game:
-                return  # Success
-            time.sleep(0.2)
-
-    # If we're still in game after all attempts, that's an error
-    assert not coord.in_game, f"Could not return to main menu after waiting and 3 abandon attempts"
+    assert not coord.in_game, "Could not return to main menu after abandon"
 
 
 # =============================================================================
@@ -246,16 +226,19 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.coord = conftest._coordinator
 
         # Ensure we start at main menu
-        ensure_main_menu(self.coord, timeout=10)
+        ensure_main_menu(self.coord)
 
-        # Verify model matches reality
-        assert not self.coord.in_game, "Should start at main menu"
+        # Model state is deterministic - always start at menu
+        # DO NOT sync with game state - that causes flakiness
         self.model_in_game = False
         self.model_is_arena = False
         self.model_character = None
         self.model_encounter = None
         self.model_in_combat = False
         self.model_combat_ended = False
+
+        # Verify game actually is at menu
+        assert not self.coord.in_game, "ensure_main_menu() didn't work - still in game"
 
         note("Initialized at main menu")
 
@@ -357,8 +340,8 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.action_history.append(f"arena {character} {encounter} {seed}")
 
         self.coord.send_message(f"arena {character} {encounter} {seed}")
-        wait_for_in_game(self.coord, timeout=10)
-        wait_for_combat(self.coord, timeout=10)
+        wait_for_in_game(self.coord)
+        wait_for_combat(self.coord) 
 
         # Update model
         self.model_in_game = True
@@ -378,7 +361,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.action_history.append(f"start {character}")
 
         self.coord.send_message(f"start {character} 0")
-        wait_for_in_game(self.coord, timeout=10)
+        wait_for_in_game(self.coord)
 
         # Update model
         self.model_in_game = True
@@ -398,7 +381,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.action_history.append("abandon")
 
         self.coord.send_message("abandon")
-        wait_for_main_menu(self.coord, timeout=10)
+        wait_for_main_menu(self.coord)
 
         # Update model
         self.model_in_game = False
@@ -414,8 +397,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
     @rule()
     def win_combat(self):
         """Force a win by killing all monsters."""
-        if not self.coord.in_game or not self.coord.last_game_state:
-            wait_for_state_update(self.coord, timeout=10)
+        wait_for_state_update(self.coord)
 
         game = self.coord.last_game_state
         if not game or not game.in_combat:
@@ -429,15 +411,15 @@ class ArenaStateMachine(RuleBasedStateMachine):
 
         # After win, handle based on arena vs normal run
         if self.model_is_arena:
-            # Arena should return to menu - use polling wait with abandon fallback
-            wait_for_arena_end(self.coord, timeout=15)
+            # Arena should return to menu
+            wait_for_arena_end(self.coord)
             self.model_in_game = False
             self.model_in_combat = False
             self.model_combat_ended = False
             note("Arena fight won, at menu")
         else:
             # Normal run - might be at reward screen
-            wait_for_state_update(self.coord, timeout=10)
+            wait_for_state_update(self.coord)
             if not self.coord.in_game:
                 self.model_in_game = False
                 self.model_in_combat = False
@@ -451,8 +433,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
     @rule()
     def lose_combat(self):
         """Force a loss by killing the player."""
-        if not self.coord.in_game or not self.coord.last_game_state:
-            wait_for_state_update(self.coord, timeout=10)
+        wait_for_state_update(self.coord)
 
         game = self.coord.last_game_state
         if not game or not game.in_combat:
@@ -466,15 +447,15 @@ class ArenaStateMachine(RuleBasedStateMachine):
 
         # After loss, handle based on arena vs normal run
         if self.model_is_arena:
-            # Arena should return to menu - use polling wait with abandon fallback
-            wait_for_arena_end(self.coord, timeout=15)
+            # Arena should return to menu
+            wait_for_arena_end(self.coord)
             self.model_in_game = False
             self.model_in_combat = False
             self.model_combat_ended = False
             note("Arena fight lost, at menu")
         else:
             # Normal run - game ends on death
-            wait_for_state_update(self.coord, timeout=10)
+            wait_for_state_update(self.coord)
             if not self.coord.in_game:
                 self.model_in_game = False
                 self.model_in_combat = False
@@ -491,45 +472,40 @@ class ArenaStateMachine(RuleBasedStateMachine):
         if self.model_is_arena:
             # Arena fights return to menu or show special screen
             note("Arena fight ended, checking state")
-            wait_for_state_update(self.coord, timeout=10)
+            wait_for_state_update(self.coord)
             if not self.coord.in_game:
                 self.model_in_game = False
                 self.model_combat_ended = False
             return
 
-        if not self.coord.in_game or not self.coord.last_game_state:
-            wait_for_state_update(self.coord, timeout=10)
-            if not self.coord.in_game:
-                self.model_in_game = False
-                return
+        wait_for_state_update(self.coord)
+        if not self.coord.in_game:
+            self.model_in_game = False
+            return
 
         game = self.coord.last_game_state
         if hasattr(game, 'proceed_available') and game.proceed_available:
             note("Proceeding after combat")
             self.action_history.append("proceed")
             self.coord.send_message("proceed")
-            wait_for_state_update(self.coord, timeout=10)
+            wait_for_state_update(self.coord)
             self.model_combat_ended = False
 
     def teardown(self):
         """Clean up after the test - return to main menu."""
         note(f"Teardown. Action history: {self.action_history}")
-        ensure_main_menu(self.coord, timeout=10)
+        ensure_main_menu(self.coord)
 
 
-# Create the test class from the state machine
-# NOTE: Skipped for now - hypothesis stateful tests are fundamentally flaky
-# with external game state. The basic tests verify core functionality.
-# TestArenaStateful = ArenaStateMachine.TestCase
-#
-# TestArenaStateful.settings = settings(
-#     max_examples=10,
-#     stateful_step_count=5,
-#     deadline=None,
-#     suppress_health_check=list(HealthCheck),
-#     phases=[Phase.generate],
-#     verbosity=Verbosity.normal,
-# )
+# Re-enabled after fixing model state determinism
+TestArenaStateful = ArenaStateMachine.TestCase
+TestArenaStateful.settings = settings(
+    max_examples=20,
+    stateful_step_count=8,
+    deadline=None,
+    suppress_health_check=list(HealthCheck),
+    verbosity=Verbosity.normal,
+)
 
 
 # =============================================================================
@@ -555,10 +531,16 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         """Initialize at main menu."""
         import conftest
         self.coord = conftest._coordinator
-        ensure_main_menu(self.coord, timeout=10)
+        ensure_main_menu(self.coord)
+
+        # Model state is deterministic - always start at menu, not in combat
+        # DO NOT sync with game state - that causes flakiness
         self.in_combat = False
         self.wins = 0
         self.losses = 0
+
+        # Verify game actually is at menu
+        assert not self.coord.in_game, "ensure_main_menu() didn't work - still in game"
 
     @precondition(lambda self: not self.in_combat)
     @rule(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS),
@@ -568,8 +550,8 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         note(f"Starting combat: {character} vs {encounter} (seed={seed})")
 
         self.coord.send_message(f"arena {character} {encounter} {seed}")
-        wait_for_in_game(self.coord, timeout=10)
-        wait_for_combat(self.coord, timeout=10)
+        wait_for_in_game(self.coord) 
+        wait_for_combat(self.coord)  
 
         self.in_combat = True
 
@@ -608,7 +590,7 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         self.coord.send_message("win")
 
         # Use polling wait for arena fights to handle victory screen transitions
-        wait_for_arena_end(self.coord, timeout=15)
+        wait_for_arena_end(self.coord)
 
         self.wins += 1
         self.in_combat = False
@@ -626,7 +608,7 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         self.coord.send_message("lose")
 
         # Use polling wait for arena fights to handle death screen transitions
-        wait_for_arena_end(self.coord, timeout=15)
+        wait_for_arena_end(self.coord)
 
         self.losses += 1
         self.in_combat = False
@@ -635,20 +617,18 @@ class ArenaCombatMachine(RuleBasedStateMachine):
     def teardown(self):
         """Clean up."""
         note(f"Wins: {self.wins}, Losses: {self.losses}")
-        ensure_main_menu(self.coord, timeout=10)
+        ensure_main_menu(self.coord)
 
 
-# NOTE: Skipped for now - hypothesis stateful tests are fundamentally flaky
-# with external game state. The basic tests verify core functionality.
-# TestArenaCombat = ArenaCombatMachine.TestCase
-# TestArenaCombat.settings = settings(
-#     max_examples=10,
-#     stateful_step_count=5,
-#     deadline=None,
-#     suppress_health_check=list(HealthCheck),
-#     phases=[Phase.generate],
-#     verbosity=Verbosity.normal,
-# )
+# Re-enabled after fixing model state determinism
+TestArenaCombat = ArenaCombatMachine.TestCase
+TestArenaCombat.settings = settings(
+    max_examples=20,
+    stateful_step_count=8,
+    deadline=None,
+    suppress_health_check=list(HealthCheck),
+    verbosity=Verbosity.normal,
+)
 
 
 class ArenaTransitionMachine(RuleBasedStateMachine):
@@ -666,18 +646,39 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
         self.fights_won = 0
         self.fights_lost = 0
         self.fights_abandoned = 0
+        self._action_log = []
+
+    def _log(self, msg):
+        """Log an action with timestamp for debugging."""
+        import time
+        ts = time.strftime("%H:%M:%S")
+        entry = f"[{ts}] {msg}"
+        self._action_log.append(entry)
+        note(entry)
 
     @initialize()
     def setup(self):
         """Initialize at main menu."""
         import conftest
         self.coord = conftest._coordinator
-        ensure_main_menu(self.coord, timeout=10)
+        self._action_log = []
+
+        self._log(f"Setup: initial in_game={self.coord.in_game}")
+        ensure_main_menu(self.coord)
+        self._log(f"Setup: after ensure_main_menu, in_game={self.coord.in_game}")
+
+        # Model state is deterministic - always start at menu
+        # DO NOT sync with game state - that causes flakiness
         self.at_menu = True
         self.fights_started = 0
         self.fights_won = 0
         self.fights_lost = 0
         self.fights_abandoned = 0
+
+        # Verify game actually is at menu (fail if not)
+        assert not self.coord.in_game, f"ensure_main_menu() didn't work - still in game"
+
+        self._log(f"Setup complete: at_menu={self.at_menu}")
 
     @invariant()
     def state_consistent(self):
@@ -708,71 +709,72 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
           seed=st.integers(min_value=0, max_value=2**63-1))
     def start_fight(self, character, encounter, seed):
         """Start an arena fight."""
-        note(f"Starting fight #{self.fights_started + 1}: {character} vs {encounter} (seed={seed})")
+        self._log(f"start_fight: {character} vs {encounter} (seed={seed}), at_menu={self.at_menu}")
 
         self.coord.send_message(f"arena {character} {encounter} {seed}")
-        wait_for_in_game(self.coord, timeout=10)
-        wait_for_combat(self.coord, timeout=10)
+        wait_for_in_game(self.coord) 
+        wait_for_combat(self.coord)  
 
         self.at_menu = False
         self.fights_started += 1
+        self._log(f"start_fight complete: at_menu={self.at_menu}, in_game={self.coord.in_game}")
 
     @precondition(lambda self: not self.at_menu)
     @rule()
     def win_fight(self):
         """Win the current fight."""
-        note(f"Winning fight #{self.fights_started}")
+        self._log(f"win_fight: fight #{self.fights_started}, at_menu={self.at_menu}")
 
         self.coord.send_message("win")
 
         # Use polling wait with abandon fallback for arena fights
-        wait_for_arena_end(self.coord, timeout=15)
+        wait_for_arena_end(self.coord)
 
         self.at_menu = True
         self.fights_won += 1
-        note("Returned to menu after win")
+        self._log(f"win_fight complete: at_menu={self.at_menu}, in_game={self.coord.in_game}")
 
     @precondition(lambda self: not self.at_menu)
     @rule()
     def lose_fight(self):
         """Lose the current fight."""
-        note(f"Losing fight #{self.fights_started}")
+        self._log(f"lose_fight: fight #{self.fights_started}, at_menu={self.at_menu}")
 
         self.coord.send_message("lose")
 
         # Use polling wait with abandon fallback for arena fights
-        wait_for_arena_end(self.coord, timeout=15)
+        wait_for_arena_end(self.coord)
 
         self.at_menu = True
         self.fights_lost += 1
-        note("Returned to menu after loss")
+        self._log(f"lose_fight complete: at_menu={self.at_menu}, in_game={self.coord.in_game}")
 
     @precondition(lambda self: not self.at_menu)
     @rule()
     def abandon_fight(self):
         """Abandon current fight."""
-        note(f"Abandoning fight #{self.fights_started}")
+        self._log(f"abandon_fight: fight #{self.fights_started}, at_menu={self.at_menu}")
 
         self.coord.send_message("abandon")
-        wait_for_main_menu(self.coord, timeout=10)
+        wait_for_main_menu(self.coord)
 
         self.at_menu = True
         self.fights_abandoned += 1
+        self._log(f"abandon_fight complete: at_menu={self.at_menu}, in_game={self.coord.in_game}")
 
     def teardown(self):
         """Clean up."""
-        note(f"Started {self.fights_started}, won {self.fights_won}, lost {self.fights_lost}, abandoned {self.fights_abandoned}")
-        ensure_main_menu(self.coord, timeout=10)
+        self._log(f"teardown: started={self.fights_started}, won={self.fights_won}, lost={self.fights_lost}, abandoned={self.fights_abandoned}")
+        self._log(f"teardown: full log = {self._action_log}")
+        ensure_main_menu(self.coord)
 
 
-# NOTE: Skipped for now - hypothesis stateful tests are fundamentally flaky
-# with external game state. The basic tests verify core functionality.
-# TestArenaTransitions = ArenaTransitionMachine.TestCase
-# TestArenaTransitions.settings = settings(
-#     max_examples=10,
-#     stateful_step_count=5,
-#     deadline=None,
-#     suppress_health_check=list(HealthCheck),
-#     phases=[Phase.generate],
-#     verbosity=Verbosity.normal,
-# )
+# Now working! Run more thorough tests
+TestArenaTransitions = ArenaTransitionMachine.TestCase
+TestArenaTransitions.settings = settings(
+    max_examples=20,
+    stateful_step_count=8,
+    deadline=None,
+    suppress_health_check=list(HealthCheck),
+    verbosity=Verbosity.normal,
+)

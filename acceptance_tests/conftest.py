@@ -130,23 +130,44 @@ def at_main_menu(coordinator):
     _ensure_main_menu(coordinator)
 
 
+def wait_for_state_update(coordinator, timeout=DEFAULT_TIMEOUT):
+    """Request state and wait for response."""
+    coordinator.game_is_ready = False
+    coordinator.send_message("state")
+    wait_for_ready(coordinator, timeout=timeout)
+
+
+def wait_for_in_game(coordinator, max_updates=30, timeout=DEFAULT_TIMEOUT):
+    """Block until we're in game using polling."""
+    for _ in range(max_updates):
+        wait_for_state_update(coordinator, timeout=timeout)
+        if coordinator.in_game:
+            return
+    raise GameTimeout("Expected to be in game but we're at main menu")
+
+
+def wait_for_main_menu(coordinator, max_updates=30, timeout=DEFAULT_TIMEOUT):
+    """Block until we're at main menu using polling."""
+    for _ in range(max_updates):
+        wait_for_state_update(coordinator, timeout=timeout)
+        if not coordinator.in_game:
+            return
+    raise GameTimeout("Expected to be at main menu but we're in game")
+
+
+def wait_for_combat(coordinator, max_updates=30, timeout=DEFAULT_TIMEOUT):
+    """Block until we're in combat using polling."""
+    for _ in range(max_updates):
+        wait_for_state_update(coordinator, timeout=timeout)
+        if coordinator.in_game and coordinator.last_game_state and coordinator.last_game_state.in_combat:
+            return
+    raise GameTimeout("Expected to be in combat")
+
+
 def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
     """Ensure we're at the main menu. Abandons any active run."""
-    start = time.time()
-
-    def time_remaining():
-        return timeout - (time.time() - start)
-
     # Get current state
-    coordinator.send_message("state")
-    try:
-        wait_for_ready(coordinator, timeout=min(10, time_remaining()))
-    except GameTimeout:
-        # Game might be in transition, try again
-        if time_remaining() <= 0:
-            raise
-        coordinator.send_message("state")
-        wait_for_ready(coordinator, timeout=min(10, time_remaining()))
+    wait_for_state_update(coordinator, timeout=10)
 
     if not coordinator.in_game:
         return
@@ -154,15 +175,8 @@ def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
     # We're in a game - need to abandon
     coordinator.send_message("abandon")
 
-    # Wait for abandon to complete - poll until we're out of game
-    while coordinator.in_game:
-        if time_remaining() <= 0:
-            raise GameTimeout(f"Timed out after {timeout}s waiting for abandon to complete")
-        coordinator.send_message("state")
-        try:
-            wait_for_ready(coordinator, timeout=min(5, time_remaining()))
-        except GameTimeout:
-            continue
+    # Wait for return to main menu using polling
+    wait_for_main_menu(coordinator, timeout=timeout)
 
     assert not coordinator.in_game, "Should be at main menu after abandon"
 
