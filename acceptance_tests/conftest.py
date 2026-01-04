@@ -93,9 +93,21 @@ def at_main_menu(coordinator):
 
 def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
     """Ensure we're at the main menu. Abandons any active run."""
+    start = time.time()
+
+    def time_remaining():
+        return timeout - (time.time() - start)
+
     # Get current state
     coordinator.send_message("state")
-    wait_for_ready(coordinator, timeout)
+    try:
+        wait_for_ready(coordinator, timeout=min(10, time_remaining()))
+    except GameTimeout:
+        # Game might be in transition, try again
+        if time_remaining() <= 0:
+            raise
+        coordinator.send_message("state")
+        wait_for_ready(coordinator, timeout=min(10, time_remaining()))
 
     if not coordinator.in_game:
         return
@@ -104,12 +116,13 @@ def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
     coordinator.send_message("abandon")
 
     # Wait for abandon to complete - poll until we're out of game
-    start = time.time()
     while coordinator.in_game:
-        elapsed = time.time() - start
-        if elapsed > timeout:
+        if time_remaining() <= 0:
             raise GameTimeout(f"Timed out after {timeout}s waiting for abandon to complete")
         coordinator.send_message("state")
-        wait_for_ready(coordinator, timeout=5)
+        try:
+            wait_for_ready(coordinator, timeout=min(5, time_remaining()))
+        except GameTimeout:
+            continue
 
     assert not coordinator.in_game, "Should be at main menu after abandon"

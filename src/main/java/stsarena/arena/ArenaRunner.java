@@ -67,11 +67,13 @@ public class ArenaRunner {
     public static void startFight(RandomLoadoutGenerator.GeneratedLoadout loadout, String encounter) {
         STSArena.logger.info("=== ARENA: startFight() called ===");
         STSArena.logger.info("ARENA: Loadout: " + loadout.name + ", Encounter: " + encounter);
+        STSArena.logger.info("ARENA: BEFORE - arenaRunInProgress=" + arenaRunInProgress + ", isArenaRun=" + isArenaRun);
 
         pendingLoadout = loadout;
         pendingEncounter = encounter;
         arenaRunInProgress = true;
         isArenaRun = true;
+        STSArena.logger.info("ARENA: AFTER setting flags - arenaRunInProgress=" + arenaRunInProgress + ", isArenaRun=" + isArenaRun);
 
         // Store for later tracking
         currentLoadout = loadout;
@@ -146,6 +148,7 @@ public class ArenaRunner {
         CardCrawlGame.mode = CardCrawlGame.GameMode.CHAR_SELECT;
 
         STSArena.logger.info("Arena save created, transitioning to load it");
+        STSArena.logger.info("ARENA: END startFight() - arenaRunInProgress=" + arenaRunInProgress + ", isArenaRun=" + isArenaRun);
     }
 
     /**
@@ -210,6 +213,11 @@ public class ArenaRunner {
 
         STSArena.logger.info("ARENA: Preconditions OK. Player: " + AbstractDungeon.player.chosenClass);
         STSArena.logger.info("ARENA: Current currMapNode: " + AbstractDungeon.currMapNode);
+        STSArena.logger.info("ARENA: Monster list size BEFORE add: " + AbstractDungeon.monsterList.size());
+        if (AbstractDungeon.monsterList.size() > 0) {
+            STSArena.logger.info("ARENA: Monster list first 3 entries: " +
+                AbstractDungeon.monsterList.subList(0, Math.min(3, AbstractDungeon.monsterList.size())));
+        }
 
         // Clear any lingering visual effects
         AbstractDungeon.topLevelEffects.clear();
@@ -217,7 +225,10 @@ public class ArenaRunner {
 
         // Add encounter to monster list
         AbstractDungeon.monsterList.add(0, encounterName);
-        STSArena.logger.info("ARENA: Added " + encounterName + " to monster list");
+        STSArena.logger.info("ARENA: Added " + encounterName + " to monster list. List size now: " +
+            AbstractDungeon.monsterList.size());
+        STSArena.logger.info("ARENA: Monster list first 3 entries AFTER add: " +
+            AbstractDungeon.monsterList.subList(0, Math.min(3, AbstractDungeon.monsterList.size())));
 
         // Get current node (should exist from dungeon creation)
         MapRoomNode cur = AbstractDungeon.currMapNode;
@@ -282,6 +293,11 @@ public class ArenaRunner {
      * Also restores the original save file if one was backed up.
      */
     public static void clearArenaRun() {
+        STSArena.logger.info("=== ARENA: clearArenaRun() called ===");
+        STSArena.logger.info("ARENA: BEFORE clear - arenaRunInProgress=" + arenaRunInProgress + ", isArenaRun=" + isArenaRun);
+        // Log stack trace to see who called us
+        STSArena.logger.info("ARENA: clearArenaRun called from: " + new Exception().getStackTrace()[1]);
+
         // Restore the original save file (or delete arena save if there was no original)
         SaveFileManager.restoreOriginalSave();
 

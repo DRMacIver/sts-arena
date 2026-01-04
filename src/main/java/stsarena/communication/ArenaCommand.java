@@ -5,6 +5,7 @@ import communicationmod.CommandExecutor;
 import communicationmod.InvalidCommandException;
 import stsarena.STSArena;
 import stsarena.arena.ArenaRunner;
+import stsarena.arena.LoadoutConfig;
 import stsarena.arena.RandomLoadoutGenerator;
 
 /**
@@ -56,9 +57,13 @@ public class ArenaCommand implements CommandExecutor.CommandExtension {
             if (i > 2) encounterBuilder.append(" ");
             encounterBuilder.append(tokens[i]);
         }
-        String encounter = encounterBuilder.toString();
+        String rawEncounter = encounterBuilder.toString();
 
-        STSArena.logger.info("Arena command: " + characterName + " vs " + encounter);
+        // Normalize encounter name to match LoadoutConfig.ENCOUNTERS (case-insensitive lookup)
+        // CommunicationMod may lowercase the command, so we need to find the correct case
+        String encounter = normalizeEncounterName(rawEncounter);
+
+        STSArena.logger.info("Arena command: " + characterName + " vs " + encounter + " (raw: " + rawEncounter + ")");
 
         // Get PlayerClass from character name
         AbstractPlayer.PlayerClass playerClass;
@@ -75,5 +80,42 @@ public class ArenaCommand implements CommandExecutor.CommandExtension {
 
         // Start the arena fight
         ArenaRunner.startFight(loadout, encounter);
+    }
+
+    /**
+     * Normalize an encounter name to match the correct case from LoadoutConfig.ENCOUNTERS.
+     * CommunicationMod may lowercase commands, so we need case-insensitive lookup.
+     *
+     * @param rawEncounter The raw encounter name (possibly lowercase)
+     * @return The correctly-cased encounter name, or the original if not found
+     */
+    private static String normalizeEncounterName(String rawEncounter) {
+        if (rawEncounter == null || rawEncounter.isEmpty()) {
+            return rawEncounter;
+        }
+
+        String lowerRaw = rawEncounter.toLowerCase();
+
+        // Search through all encounter categories
+        for (LoadoutConfig.EncounterCategory category : LoadoutConfig.ENCOUNTER_CATEGORIES) {
+            for (String encounter : category.encounters) {
+                if (encounter.toLowerCase().equals(lowerRaw)) {
+                    STSArena.logger.info("ARENA: Normalized encounter '" + rawEncounter + "' -> '" + encounter + "'");
+                    return encounter;
+                }
+            }
+        }
+
+        // Also check the flat ENCOUNTERS array (for any stragglers)
+        for (String encounter : LoadoutConfig.ENCOUNTERS) {
+            if (encounter.toLowerCase().equals(lowerRaw)) {
+                STSArena.logger.info("ARENA: Normalized encounter '" + rawEncounter + "' -> '" + encounter + "'");
+                return encounter;
+            }
+        }
+
+        // Not found - return as-is (will likely fail, but with a clear error)
+        STSArena.logger.warn("ARENA: Unknown encounter name: " + rawEncounter);
+        return rawEncounter;
     }
 }
