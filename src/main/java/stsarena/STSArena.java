@@ -58,6 +58,11 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     public STSArena() {
         logger.info("Initializing STS Arena");
         BaseMod.subscribe(this);
+
+        // Register arena command with CommunicationMod early (during mod initialization)
+        // This must happen before PostInitialize because CommunicationMod starts
+        // accepting commands as soon as it receives "ready" during mod init
+        ArenaCommand.register();
     }
 
     /**
