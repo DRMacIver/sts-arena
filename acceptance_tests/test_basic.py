@@ -109,12 +109,17 @@ class TestArenaMode:
         coord.send_message("arena IRONCLAD Cultist")
 
         # Wait for arena fight to initialize - poll until we're in game
+        # Use longer timeout because arena involves loading a save file
         start = time.time()
         while not coord.in_game:
             if time.time() - start > DEFAULT_TIMEOUT:
                 raise GameTimeout("Timed out waiting for arena fight to start")
             coord.send_message("state")
-            wait_for_ready(coord, timeout=5)
+            try:
+                wait_for_ready(coord, timeout=10)
+            except GameTimeout:
+                # Game may be loading/transitioning - continue polling
+                pass
 
         # Verify we're in an arena fight
         assert coord.in_game, "Should be in arena fight"
