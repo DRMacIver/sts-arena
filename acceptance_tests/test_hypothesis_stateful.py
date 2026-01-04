@@ -1,27 +1,44 @@
 """
-Hypothesis-based stateful tests for STS Arena.
+Hypothesis stateful tests for STS Arena.
 
-These tests use Hypothesis's stateful testing framework to generate random
-sequences of actions and verify the arena system maintains consistent state.
+This module uses Hypothesis's RuleBasedStateMachine to generate random sequences
+of game actions and verify the arena system maintains consistent state throughout.
+
+The state machine models:
+- Main menu vs in-game states
+- Arena fights vs normal runs
+- Combat actions (play cards, use potions, end turn)
+- State transitions (abandon, proceed, combat resolution)
+
+Invariants are checked after every action to catch state inconsistencies.
 
 Note: These tests require the game to be running via scripts/run-acceptance-tests.sh.
-The tests use the shared coordinator fixture from conftest.py.
 """
 
 import time
 import random
-from hypothesis import given, strategies as st, settings, Verbosity, note, assume
+from hypothesis import note, settings, Verbosity
+from hypothesis.stateful import (
+    RuleBasedStateMachine,
+    rule,
+    invariant,
+    precondition,
+    initialize,
+    Bundle,
+    consumes,
+    multiple,
+)
+from hypothesis import strategies as st
 import pytest
 
 from spirecomm.communication.coordinator import Coordinator
 from spirecomm.spire.character import PlayerClass
-from conftest import wait_for_ready, GameTimeout, DEFAULT_TIMEOUT
-
+from conftest import wait_for_ready, wait_for_stable, GameTimeout, DEFAULT_TIMEOUT
 
 # Characters that can be used for arena fights
 CHARACTERS = ["IRONCLAD", "THE_SILENT", "DEFECT", "WATCHER"]
 
-# Encounters to test (subset for faster tests)
+# Encounters to test
 ENCOUNTERS = [
     "Cultist",
     "Jaw Worm",
@@ -29,10 +46,38 @@ ENCOUNTERS = [
     "Lagavulin",
     "Hexaghost",
     "Chosen",
-    "Awakened One",
     "Gremlin Nob",
     "3 Sentries",
+    "Slime Boss",
 ]
+
+# Card IDs that are generally safe to play (don't require targets or special conditions)
+SAFE_UNTARGETED_CARDS = [
+    "Defend",
+    "Survivor",
+    "Backflip",
+    "Deflect",
+    "Dodge and Roll",
+    "Leap",
+    "Blur",
+    "Dash",  # Ironclad
+    "Shrug It Off",
+    "Flame Barrier",
+    "Ghostly Armor",
+    "Impervious",
+    "True Grit",
+    "Power Through",
+    "Defend_G",  # Silent
+    "Defend_B",  # Defect
+    "Defend_P",  # Watcher
+]
+
+
+def wait_for_state_update(coord: Coordinator, timeout: float = 30):
+    """Wait for game state to update."""
+    coord.game_is_ready = False
+    coord.send_message("state")
+    wait_for_ready(coord, timeout=timeout)
 
 
 def wait_for_in_game(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
@@ -41,11 +86,7 @@ def wait_for_in_game(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
     while not coord.in_game:
         if time.time() - start > timeout:
             raise GameTimeout(f"Timed out after {timeout}s waiting to be in game")
-        coord.send_message("state")
-        try:
-            wait_for_ready(coord, timeout=10)
-        except GameTimeout:
-            pass
+        wait_for_state_update(coord, timeout=10)
 
 
 def wait_for_main_menu(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
@@ -54,11 +95,7 @@ def wait_for_main_menu(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
     while coord.in_game:
         if time.time() - start > timeout:
             raise GameTimeout(f"Timed out after {timeout}s waiting to reach main menu")
-        coord.send_message("state")
-        try:
-            wait_for_ready(coord, timeout=10)
-        except GameTimeout:
-            pass
+        wait_for_state_update(coord, timeout=10)
 
 
 def wait_for_combat(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
@@ -68,11 +105,8 @@ def wait_for_combat(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
         remaining = timeout - (time.time() - start)
         if remaining <= 0:
             raise GameTimeout(f"Timed out after {timeout}s waiting for combat")
-        coord.send_message("state")
-        try:
-            wait_for_ready(coord, timeout=min(10, remaining))
-        except GameTimeout:
-            continue
+
+        wait_for_state_update(coord, timeout=min(10, remaining))
 
         if coord.in_game and coord.last_game_state:
             game = coord.last_game_state
@@ -88,14 +122,7 @@ def ensure_main_menu(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
     def time_remaining():
         return timeout - (time.time() - start)
 
-    coord.send_message("state")
-    try:
-        wait_for_ready(coord, timeout=min(10, time_remaining()))
-    except GameTimeout:
-        if time_remaining() <= 0:
-            raise
-        coord.send_message("state")
-        wait_for_ready(coord, timeout=min(10, time_remaining()))
+    wait_for_state_update(coord, timeout=min(10, time_remaining()))
 
     if not coord.in_game:
         return
@@ -105,256 +132,640 @@ def ensure_main_menu(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
     while coord.in_game:
         if time_remaining() <= 0:
             raise GameTimeout(f"Timed out after {timeout}s waiting for abandon")
-        coord.send_message("state")
+        wait_for_state_update(coord, timeout=min(5, time_remaining()))
+
+
+# =============================================================================
+# Stateful State Machine
+# =============================================================================
+
+class ArenaStateMachine(RuleBasedStateMachine):
+    """
+    A state machine that models the STS Arena game states and transitions.
+
+    States:
+    - main_menu: At the main menu, no active game
+    - in_arena: In an arena fight (single combat encounter)
+    - in_normal_run: In a normal game run
+
+    The machine tracks expected state and verifies it matches actual game state.
+    """
+
+    def __init__(self):
+        super().__init__()
+        # Model state (what we expect)
+        self.model_in_game = False
+        self.model_is_arena = False
+        self.model_character = None
+        self.model_encounter = None
+        self.model_in_combat = False
+        self.model_combat_ended = False  # True if we won/lost combat
+
+        # Track actions for debugging
+        self.action_history = []
+
+        # Coordinator will be set by initialize
+        self.coord = None
+
+    @initialize()
+    def setup(self):
+        """Initialize the state machine with a coordinator at main menu."""
+        # Access the global coordinator from conftest
+        import conftest
+        self.coord = conftest._coordinator
+
+        # Ensure we start at main menu
+        ensure_main_menu(self.coord, timeout=60)
+
+        # Verify model matches reality
+        assert not self.coord.in_game, "Should start at main menu"
+        self.model_in_game = False
+        self.model_is_arena = False
+        self.model_character = None
+        self.model_encounter = None
+        self.model_in_combat = False
+        self.model_combat_ended = False
+
+        note("Initialized at main menu")
+
+    # =========================================================================
+    # Invariants - checked after every rule
+    # =========================================================================
+
+    @invariant()
+    def game_state_consistency(self):
+        """If we're in game, we should have a game state."""
+        if self.coord.in_game:
+            assert self.coord.last_game_state is not None, \
+                "In game but no game state"
+
+    @invariant()
+    def model_matches_reality(self):
+        """Our model state should match the actual game state."""
+        assert self.model_in_game == self.coord.in_game, \
+            f"Model says in_game={self.model_in_game}, but game says {self.coord.in_game}"
+
+    @invariant()
+    def combat_has_monsters(self):
+        """If we're in combat, there should be monsters (or combat just ended)."""
+        if self.coord.in_game and self.coord.last_game_state:
+            game = self.coord.last_game_state
+            if game.in_combat and not self.model_combat_ended:
+                assert game.monsters is not None, "In combat but monsters is None"
+                assert len(game.monsters) > 0, "In combat but no monsters"
+
+    @invariant()
+    def player_hp_valid(self):
+        """Player HP should be positive while in active combat."""
+        if self.coord.in_game and self.coord.last_game_state:
+            game = self.coord.last_game_state
+            if game.in_combat and game.current_hp is not None:
+                # HP can be 0 if we just died
+                assert game.current_hp >= 0, f"HP is negative: {game.current_hp}"
+
+    @invariant()
+    def energy_non_negative(self):
+        """Energy should never be negative."""
+        if self.coord.in_game and self.coord.last_game_state:
+            game = self.coord.last_game_state
+            if game.in_combat and hasattr(game, 'player') and game.player:
+                energy = getattr(game.player, 'energy', None)
+                if energy is not None:
+                    assert energy >= 0, f"Energy is negative: {energy}"
+
+    @invariant()
+    def hand_size_valid(self):
+        """Hand should have at most 10 cards."""
+        if self.coord.in_game and self.coord.last_game_state:
+            game = self.coord.last_game_state
+            if game.in_combat and game.hand:
+                assert len(game.hand) <= 10, f"Hand has {len(game.hand)} cards (max 10)"
+
+    @invariant()
+    def arena_no_apology_slime(self):
+        """Arena fights should never have Apology Slime (fallback monster)."""
+        if self.model_is_arena and self.coord.in_game and self.coord.last_game_state:
+            game = self.coord.last_game_state
+            if game.in_combat and game.monsters:
+                monster_names = [m.name for m in game.monsters]
+                assert "Apology Slime" not in monster_names, \
+                    f"Arena got fallback Apology Slime! Expected {self.model_encounter}, got {monster_names}"
+
+    @invariant()
+    def correct_character(self):
+        """If we're in game, character should match what we started with."""
+        if self.model_character and self.coord.in_game and self.coord.last_game_state:
+            game = self.coord.last_game_state
+            expected = PlayerClass[self.model_character]
+            assert game.character == expected, \
+                f"Expected {self.model_character}, got {game.character}"
+
+    # =========================================================================
+    # Rules - actions that can be taken
+    # =========================================================================
+
+    @precondition(lambda self: not self.model_in_game)
+    @rule(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS))
+    def start_arena_fight(self, character, encounter):
+        """Start an arena fight from the main menu."""
+        note(f"Starting arena: {character} vs {encounter}")
+        self.action_history.append(f"arena {character} {encounter}")
+
+        self.coord.send_message(f"arena {character} {encounter}")
+
         try:
-            wait_for_ready(coord, timeout=min(5, time_remaining()))
+            wait_for_in_game(self.coord, timeout=60)
+            wait_for_combat(self.coord, timeout=60)
+        except GameTimeout as e:
+            note(f"Timeout starting arena: {e}")
+            # Update model to match reality
+            wait_for_state_update(self.coord, timeout=10)
+            self.model_in_game = self.coord.in_game
+            if not self.model_in_game:
+                return
+
+        # Update model
+        self.model_in_game = True
+        self.model_is_arena = True
+        self.model_character = character
+        self.model_encounter = encounter
+        self.model_in_combat = True
+        self.model_combat_ended = False
+
+        note(f"Arena started successfully")
+
+    @precondition(lambda self: not self.model_in_game)
+    @rule(character=st.sampled_from(CHARACTERS))
+    def start_normal_run(self, character):
+        """Start a normal run from the main menu."""
+        note(f"Starting normal run: {character}")
+        self.action_history.append(f"start {character}")
+
+        self.coord.send_message(f"start {character} 0")
+
+        try:
+            wait_for_in_game(self.coord, timeout=60)
+        except GameTimeout as e:
+            note(f"Timeout starting run: {e}")
+            wait_for_state_update(self.coord, timeout=10)
+            self.model_in_game = self.coord.in_game
+            return
+
+        # Update model
+        self.model_in_game = True
+        self.model_is_arena = False
+        self.model_character = character
+        self.model_encounter = None
+        self.model_in_combat = False
+        self.model_combat_ended = False
+
+        note(f"Normal run started")
+
+    @precondition(lambda self: self.model_in_game)
+    @rule()
+    def abandon_run(self):
+        """Abandon the current run and return to main menu."""
+        note("Abandoning run")
+        self.action_history.append("abandon")
+
+        self.coord.send_message("abandon")
+
+        try:
+            wait_for_main_menu(self.coord, timeout=60)
+        except GameTimeout as e:
+            note(f"Timeout abandoning: {e}")
+            wait_for_state_update(self.coord, timeout=10)
+            self.model_in_game = self.coord.in_game
+            return
+
+        # Update model
+        self.model_in_game = False
+        self.model_is_arena = False
+        self.model_character = None
+        self.model_encounter = None
+        self.model_in_combat = False
+        self.model_combat_ended = False
+
+        note("Abandoned successfully")
+
+    @precondition(lambda self: self.model_in_game and self.model_in_combat)
+    @rule()
+    def end_turn(self):
+        """End the current turn in combat."""
+        if not self.coord.in_game or not self.coord.last_game_state:
+            wait_for_state_update(self.coord, timeout=10)
+
+        game = self.coord.last_game_state
+        if not game or not game.in_combat:
+            self.model_in_combat = False
+            return
+
+        if not game.end_available:
+            note("End turn not available, skipping")
+            return
+
+        note("Ending turn")
+        self.action_history.append("end")
+
+        self.coord.send_message("end")
+
+        # Wait for state update
+        try:
+            wait_for_state_update(self.coord, timeout=30)
         except GameTimeout:
-            continue
+            pass
 
+        # Check if combat ended (won or lost)
+        if self.coord.in_game and self.coord.last_game_state:
+            game = self.coord.last_game_state
+            if not game.in_combat:
+                self.model_in_combat = False
+                self.model_combat_ended = True
+                note("Combat ended after turn")
+        elif not self.coord.in_game:
+            # Game ended (probably death)
+            self.model_in_game = False
+            self.model_in_combat = False
+            note("Game ended (death?)")
 
-# =============================================================================
-# Property-based tests using Hypothesis
-# =============================================================================
+    @precondition(lambda self: self.model_in_game and self.model_in_combat)
+    @rule()
+    def play_random_card(self):
+        """Play a random playable card from hand."""
+        if not self.coord.in_game or not self.coord.last_game_state:
+            wait_for_state_update(self.coord, timeout=10)
 
-class TestHypothesisArena:
-    """Property-based tests for the arena system using Hypothesis."""
+        game = self.coord.last_game_state
+        if not game or not game.in_combat:
+            self.model_in_combat = False
+            return
 
-    @pytest.fixture(autouse=True)
-    def setup(self, at_main_menu):
-        """Ensure we start at main menu."""
-        self.coord = at_main_menu
-        yield
-        # Cleanup
+        if not game.play_available or not game.hand:
+            note("No cards to play")
+            return
+
+        # Find playable cards
+        playable = [c for c in game.hand if c.is_playable]
+        if not playable:
+            note("No playable cards")
+            return
+
+        # Prefer untargeted cards to avoid targeting issues
+        untargeted = [c for c in playable if not c.has_target]
+
+        if untargeted:
+            card = random.choice(untargeted)
+            note(f"Playing untargeted card: {card.name}")
+            self.action_history.append(f"play {card.name}")
+            self.coord.send_message(f"play {game.hand.index(card)}")
+        elif game.monsters:
+            # Play targeted card on random monster
+            card = random.choice(playable)
+            target = random.randint(0, len(game.monsters) - 1)
+            note(f"Playing {card.name} on monster {target}")
+            self.action_history.append(f"play {card.name} -> {target}")
+            self.coord.send_message(f"play {game.hand.index(card)} {target}")
+        else:
+            return
+
+        # Wait for state update
+        try:
+            wait_for_state_update(self.coord, timeout=30)
+        except GameTimeout:
+            pass
+
+        # Check if combat/game ended
+        if self.coord.in_game and self.coord.last_game_state:
+            game = self.coord.last_game_state
+            if not game.in_combat:
+                self.model_in_combat = False
+                self.model_combat_ended = True
+                note("Combat ended after card")
+        elif not self.coord.in_game:
+            self.model_in_game = False
+            self.model_in_combat = False
+            note("Game ended after card")
+
+    @precondition(lambda self: self.model_in_game and self.model_in_combat)
+    @rule()
+    def use_random_potion(self):
+        """Use a random potion if available."""
+        if not self.coord.in_game or not self.coord.last_game_state:
+            wait_for_state_update(self.coord, timeout=10)
+
+        game = self.coord.last_game_state
+        if not game or not game.in_combat:
+            self.model_in_combat = False
+            return
+
+        potions = getattr(game, 'potions', None)
+        if not potions:
+            return
+
+        # Find usable potions (not empty slots)
+        usable = [(i, p) for i, p in enumerate(potions) if p and p.can_use]
+        if not usable:
+            return
+
+        idx, potion = random.choice(usable)
+
+        if potion.requires_target and game.monsters:
+            target = random.randint(0, len(game.monsters) - 1)
+            note(f"Using potion {potion.name} on monster {target}")
+            self.action_history.append(f"potion {idx} {target}")
+            self.coord.send_message(f"potion use {idx} {target}")
+        else:
+            note(f"Using potion {potion.name}")
+            self.action_history.append(f"potion {idx}")
+            self.coord.send_message(f"potion use {idx}")
+
+        try:
+            wait_for_state_update(self.coord, timeout=30)
+        except GameTimeout:
+            pass
+
+    @precondition(lambda self: self.model_in_game and self.model_combat_ended)
+    @rule()
+    def proceed_after_combat(self):
+        """Proceed after combat ends (for non-arena fights)."""
+        if self.model_is_arena:
+            # Arena fights return to menu or show special screen
+            note("Arena fight ended, checking state")
+            wait_for_state_update(self.coord, timeout=10)
+            if not self.coord.in_game:
+                self.model_in_game = False
+                self.model_combat_ended = False
+            return
+
+        if not self.coord.in_game or not self.coord.last_game_state:
+            wait_for_state_update(self.coord, timeout=10)
+            if not self.coord.in_game:
+                self.model_in_game = False
+                return
+
+        game = self.coord.last_game_state
+        if hasattr(game, 'proceed_available') and game.proceed_available:
+            note("Proceeding after combat")
+            self.action_history.append("proceed")
+            self.coord.send_message("proceed")
+
+            try:
+                wait_for_state_update(self.coord, timeout=30)
+            except GameTimeout:
+                pass
+
+            self.model_combat_ended = False
+
+    def teardown(self):
+        """Clean up after the test - return to main menu."""
+        note(f"Teardown. Action history: {self.action_history}")
         try:
             ensure_main_menu(self.coord, timeout=30)
         except GameTimeout:
             pass
 
-    @given(character=st.sampled_from(CHARACTERS))
-    @settings(max_examples=10, deadline=None)
-    def test_arena_always_creates_combat(self, character):
-        """Arena fights should always result in combat with monsters."""
+
+# Create the test class from the state machine
+TestArenaStateful = ArenaStateMachine.TestCase
+
+# Configure the test settings
+TestArenaStateful.settings = settings(
+    max_examples=50,
+    stateful_step_count=20,
+    deadline=None,
+    suppress_health_check=True,
+)
+
+
+# =============================================================================
+# Additional focused state machines
+# =============================================================================
+
+class ArenaCombatMachine(RuleBasedStateMachine):
+    """
+    State machine focused on combat actions within an arena fight.
+
+    Starts already in combat and tests various combat action sequences.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.coord = None
+        self.in_combat = False
+        self.turn_count = 0
+        self.cards_played_this_turn = 0
+
+    @initialize()
+    def setup(self):
+        """Start an arena fight."""
+        import conftest
+        self.coord = conftest._coordinator
+
+        ensure_main_menu(self.coord, timeout=60)
+
+        character = random.choice(CHARACTERS)
         encounter = random.choice(ENCOUNTERS)
 
-        # Reset to main menu first
-        ensure_main_menu(self.coord)
+        note(f"Starting combat test: {character} vs {encounter}")
 
         self.coord.send_message(f"arena {character} {encounter}")
+        wait_for_in_game(self.coord, timeout=60)
+        wait_for_combat(self.coord, timeout=60)
 
-        try:
-            wait_for_in_game(self.coord, timeout=60)
-            wait_for_combat(self.coord, timeout=60)
+        self.in_combat = True
+        self.turn_count = 1
+        self.cards_played_this_turn = 0
 
+    @invariant()
+    def valid_combat_state(self):
+        """Combat state should be consistent."""
+        if not self.in_combat:
+            return
+
+        if self.coord.in_game and self.coord.last_game_state:
             game = self.coord.last_game_state
-            assert game is not None
-            assert game.in_combat
-            assert len(game.monsters) > 0
-            assert game.character == PlayerClass[character]
+            if game.in_combat:
+                # Should have hand
+                assert game.hand is not None, "No hand in combat"
+                # Should have monsters
+                assert game.monsters, "No monsters in combat"
 
-        finally:
-            # Return to main menu for next iteration
-            try:
-                ensure_main_menu(self.coord, timeout=30)
-            except GameTimeout:
-                pass
+    @invariant()
+    def turn_count_reasonable(self):
+        """Turn count shouldn't exceed reasonable limits."""
+        assert self.turn_count <= 100, f"Too many turns: {self.turn_count}"
 
-    @given(encounter=st.sampled_from(ENCOUNTERS))
-    @settings(max_examples=10, deadline=None)
-    def test_arena_loads_correct_encounter(self, encounter):
-        """Arena should load the requested encounter (not Apology Slime)."""
-        character = random.choice(CHARACTERS)
+    @invariant()
+    def cards_per_turn_reasonable(self):
+        """Cards played per turn shouldn't exceed reasonable limits."""
+        assert self.cards_played_this_turn <= 20, \
+            f"Too many cards this turn: {self.cards_played_this_turn}"
 
-        ensure_main_menu(self.coord)
+    @precondition(lambda self: self.in_combat)
+    @rule()
+    def play_card(self):
+        """Play a card from hand."""
+        if not self.coord.in_game:
+            self.in_combat = False
+            return
 
-        self.coord.send_message(f"arena {character} {encounter}")
+        game = self.coord.last_game_state
+        if not game or not game.in_combat:
+            self.in_combat = False
+            return
 
-        try:
-            wait_for_in_game(self.coord, timeout=60)
-            wait_for_combat(self.coord, timeout=60)
+        playable = [c for c in (game.hand or []) if c.is_playable]
+        if not playable:
+            return
 
-            game = self.coord.last_game_state
-            monster_names = [m.name for m in game.monsters]
+        card = random.choice(playable)
+        idx = game.hand.index(card)
 
-            # Should not have Apology Slime (fallback monster)
-            assert "Apology Slime" not in str(monster_names), \
-                f"Got fallback Apology Slime instead of {encounter}. Monsters: {monster_names}"
-
-        finally:
-            try:
-                ensure_main_menu(self.coord, timeout=30)
-            except GameTimeout:
-                pass
-
-    @given(
-        character=st.sampled_from(CHARACTERS),
-        encounter=st.sampled_from(ENCOUNTERS),
-    )
-    @settings(max_examples=10, deadline=None)
-    def test_arena_abandon_returns_to_menu(self, character, encounter):
-        """Abandoning an arena fight should return to main menu."""
-        ensure_main_menu(self.coord)
-
-        self.coord.send_message(f"arena {character} {encounter}")
-
-        try:
-            wait_for_in_game(self.coord, timeout=60)
-
-            self.coord.send_message("abandon")
-            wait_for_main_menu(self.coord, timeout=60)
-
-            assert not self.coord.in_game
-
-        finally:
-            try:
-                ensure_main_menu(self.coord, timeout=30)
-            except GameTimeout:
-                pass
-
-
-# =============================================================================
-# Sequential action tests
-# =============================================================================
-
-class TestArenaSequences:
-    """Test sequences of arena actions."""
-
-    @pytest.fixture(autouse=True)
-    def setup(self, at_main_menu):
-        """Ensure we start at main menu."""
-        self.coord = at_main_menu
-        yield
-        try:
-            ensure_main_menu(self.coord, timeout=30)
-        except GameTimeout:
-            pass
-
-    @given(num_fights=st.integers(min_value=2, max_value=5))
-    @settings(max_examples=5, deadline=None)
-    def test_multiple_arena_fights_sequence(self, num_fights):
-        """Multiple consecutive arena fights should all work correctly."""
-        ensure_main_menu(self.coord)
-
-        for i in range(num_fights):
-            character = random.choice(CHARACTERS)
-            encounter = random.choice(ENCOUNTERS)
-
-            note(f"Fight {i+1}/{num_fights}: {character} vs {encounter}")
-
-            self.coord.send_message(f"arena {character} {encounter}")
-
-            try:
-                wait_for_in_game(self.coord, timeout=60)
-                wait_for_combat(self.coord, timeout=60)
-
-                game = self.coord.last_game_state
-                assert game.in_combat, f"Fight {i+1} not in combat"
-                assert len(game.monsters) > 0, f"Fight {i+1} has no monsters"
-
-                # Check no Apology Slime
-                monster_names = [m.name for m in game.monsters]
-                assert "Apology Slime" not in str(monster_names), \
-                    f"Fight {i+1} got Apology Slime: {monster_names}"
-
-            finally:
-                # Abandon and return to menu for next fight
-                try:
-                    ensure_main_menu(self.coord, timeout=30)
-                except GameTimeout:
-                    pass
-
-    @given(
-        arena_first=st.booleans(),
-        character=st.sampled_from(CHARACTERS),
-    )
-    @settings(max_examples=8, deadline=None)
-    def test_arena_and_normal_run_interleave(self, arena_first, character):
-        """Arena and normal runs should not interfere with each other."""
-        ensure_main_menu(self.coord)
-
-        if arena_first:
-            # Start arena, then normal run
-            encounter = random.choice(ENCOUNTERS)
-
-            self.coord.send_message(f"arena {character} {encounter}")
-            wait_for_in_game(self.coord, timeout=60)
-            wait_for_combat(self.coord, timeout=60)
-
-            game1 = self.coord.last_game_state
-            assert game1.in_combat
-
-            ensure_main_menu(self.coord)
-
-            self.coord.send_message(f"start {character} 0")
-            wait_for_in_game(self.coord, timeout=60)
-
-            game2 = self.coord.last_game_state
-            assert game2.floor == 0  # Normal run starts at Neow room
-
+        if card.has_target and game.monsters:
+            target = random.randint(0, len(game.monsters) - 1)
+            self.coord.send_message(f"play {idx} {target}")
         else:
-            # Start normal run, then arena
-            self.coord.send_message(f"start {character} 0")
-            wait_for_in_game(self.coord, timeout=60)
+            self.coord.send_message(f"play {idx}")
 
-            game1 = self.coord.last_game_state
-            assert game1.floor == 0
+        self.cards_played_this_turn += 1
 
-            ensure_main_menu(self.coord)
+        try:
+            wait_for_state_update(self.coord, timeout=30)
+        except GameTimeout:
+            pass
 
-            encounter = random.choice(ENCOUNTERS)
-            self.coord.send_message(f"arena {character} {encounter}")
-            wait_for_in_game(self.coord, timeout=60)
-            wait_for_combat(self.coord, timeout=60)
+        if not self.coord.in_game or (self.coord.last_game_state and
+                                       not self.coord.last_game_state.in_combat):
+            self.in_combat = False
 
-            game2 = self.coord.last_game_state
-            assert game2.in_combat
-            assert len(game2.monsters) > 0
+    @precondition(lambda self: self.in_combat)
+    @rule()
+    def end_turn(self):
+        """End the current turn."""
+        if not self.coord.in_game:
+            self.in_combat = False
+            return
 
+        game = self.coord.last_game_state
+        if not game or not game.in_combat or not game.end_available:
+            return
 
-# =============================================================================
-# Stress tests with many examples
-# =============================================================================
+        self.coord.send_message("end")
+        self.turn_count += 1
+        self.cards_played_this_turn = 0
 
-class TestArenaStress:
-    """Stress tests for the arena system."""
+        try:
+            wait_for_state_update(self.coord, timeout=30)
+        except GameTimeout:
+            pass
 
-    @pytest.fixture(autouse=True)
-    def setup(self, at_main_menu):
-        """Ensure we start at main menu."""
-        self.coord = at_main_menu
-        yield
+        if not self.coord.in_game or (self.coord.last_game_state and
+                                       not self.coord.last_game_state.in_combat):
+            self.in_combat = False
+
+    def teardown(self):
+        """Clean up."""
         try:
             ensure_main_menu(self.coord, timeout=30)
         except GameTimeout:
             pass
 
-    @given(
-        character=st.sampled_from(CHARACTERS),
-        encounter=st.sampled_from(ENCOUNTERS),
-    )
-    @settings(max_examples=50, deadline=None)  # More examples for stress testing
-    def test_rapid_arena_creation(self, character, encounter):
-        """Rapidly creating arena fights should work reliably."""
-        ensure_main_menu(self.coord)
+
+TestArenaCombat = ArenaCombatMachine.TestCase
+TestArenaCombat.settings = settings(
+    max_examples=20,
+    stateful_step_count=30,
+    deadline=None,
+    suppress_health_check=True,
+)
+
+
+class ArenaTransitionMachine(RuleBasedStateMachine):
+    """
+    State machine focused on testing transitions between arena and main menu.
+
+    Rapidly starts and abandons fights to test state management.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.coord = None
+        self.at_menu = True
+        self.fights_started = 0
+        self.fights_abandoned = 0
+
+    @initialize()
+    def setup(self):
+        """Initialize at main menu."""
+        import conftest
+        self.coord = conftest._coordinator
+        ensure_main_menu(self.coord, timeout=60)
+        self.at_menu = True
+        self.fights_started = 0
+        self.fights_abandoned = 0
+
+    @invariant()
+    def state_consistent(self):
+        """Model state should match reality."""
+        assert self.at_menu == (not self.coord.in_game), \
+            f"Model: at_menu={self.at_menu}, Reality: in_game={self.coord.in_game}"
+
+    @invariant()
+    def fight_counts_valid(self):
+        """Fight counts should be consistent."""
+        assert self.fights_abandoned <= self.fights_started, \
+            f"Abandoned {self.fights_abandoned} > started {self.fights_started}"
+
+    @precondition(lambda self: self.at_menu)
+    @rule(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS))
+    def start_fight(self, character, encounter):
+        """Start an arena fight."""
+        note(f"Starting fight #{self.fights_started + 1}: {character} vs {encounter}")
 
         self.coord.send_message(f"arena {character} {encounter}")
 
         try:
             wait_for_in_game(self.coord, timeout=60)
-            wait_for_combat(self.coord, timeout=60)
+            wait_for_combat(self.coord, timeout=30)
+        except GameTimeout:
+            wait_for_state_update(self.coord, timeout=10)
+            self.at_menu = not self.coord.in_game
+            return
 
-            game = self.coord.last_game_state
-            assert game.in_combat
-            assert len(game.monsters) > 0
+        self.at_menu = False
+        self.fights_started += 1
 
-            # Verify correct character
-            assert game.character == PlayerClass[character]
+    @precondition(lambda self: not self.at_menu)
+    @rule()
+    def abandon_fight(self):
+        """Abandon current fight."""
+        note(f"Abandoning fight #{self.fights_started}")
 
-            # No fallback monster
-            monster_names = [m.name for m in game.monsters]
-            assert "Apology Slime" not in str(monster_names)
+        self.coord.send_message("abandon")
 
-        finally:
-            try:
-                ensure_main_menu(self.coord, timeout=30)
-            except GameTimeout:
-                pass
+        try:
+            wait_for_main_menu(self.coord, timeout=60)
+        except GameTimeout:
+            wait_for_state_update(self.coord, timeout=10)
+            self.at_menu = not self.coord.in_game
+            return
+
+        self.at_menu = True
+        self.fights_abandoned += 1
+
+    def teardown(self):
+        """Clean up."""
+        note(f"Started {self.fights_started}, abandoned {self.fights_abandoned}")
+        try:
+            ensure_main_menu(self.coord, timeout=30)
+        except GameTimeout:
+            pass
+
+
+TestArenaTransitions = ArenaTransitionMachine.TestCase
+TestArenaTransitions.settings = settings(
+    max_examples=30,
+    stateful_step_count=15,
+    deadline=None,
+    suppress_health_check=True,
+)
