@@ -7,9 +7,44 @@ run_agent.py handles the "ready" signal and creates named pipes for communicatio
 
 import os
 import pytest
+import sys
 import time
 
 from spirecomm.communication.coordinator import Coordinator
+
+
+DEFAULT_TIMEOUT = 60  # seconds - game takes time to initialize
+
+
+class GameTimeout(Exception):
+    """Raised when waiting for game state times out."""
+    pass
+
+
+def wait_for_ready(coordinator, timeout=DEFAULT_TIMEOUT):
+    """Wait for the game to be ready for commands, with timeout."""
+    start = time.time()
+    while not coordinator.game_is_ready:
+        remaining = timeout - (time.time() - start)
+        if remaining <= 0:
+            raise GameTimeout(f"Timed out after {timeout}s waiting for game to be ready")
+        # Block for up to 1 second at a time, checking timeout between
+        msg = coordinator.get_next_raw_message(block=True, timeout=min(1.0, remaining))
+        if msg is not None:
+            # Process the message manually since receive_game_state_update expects to call get_next_raw_message
+            import json
+            communication_state = json.loads(msg)
+            coordinator.last_error = communication_state.get("error", None)
+            coordinator.game_is_ready = communication_state.get("ready_for_command")
+            if coordinator.last_error is None:
+                coordinator.in_game = communication_state.get("in_game")
+                if coordinator.in_game:
+                    from spirecomm.spire.game import Game
+                    coordinator.last_game_state = Game.from_json(
+                        communication_state.get("game_state"),
+                        communication_state.get("available_commands")
+                    )
+
 
 # Get pipe paths from environment (set by run_agent.py)
 _input_pipe_path = os.environ.get("STS_GAME_INPUT_PIPE")
@@ -29,8 +64,7 @@ _game_output = open(_output_pipe_path, "w")
 _coordinator = Coordinator(input_file=_game_input, output_file=_game_output)
 
 # Wait for initial game state
-while not _coordinator.game_is_ready:
-    _coordinator.receive_game_state_update(block=True, perform_callbacks=False)
+wait_for_ready(_coordinator)
 
 
 @pytest.fixture(scope="session")
@@ -57,24 +91,25 @@ def at_main_menu(coordinator):
     _ensure_main_menu(coordinator)
 
 
-def _ensure_main_menu(coordinator) -> bool:
+def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
     """Ensure we're at the main menu. Abandons any active run."""
     # Get current state
     coordinator.send_message("state")
-    while not coordinator.game_is_ready:
-        coordinator.receive_game_state_update(block=True, perform_callbacks=False)
+    wait_for_ready(coordinator, timeout)
 
     if not coordinator.in_game:
-        return True
+        return
 
     # We're in a game - need to abandon
     coordinator.send_message("abandon")
 
-    # Wait for state update
-    time.sleep(1.0)
+    # Wait for abandon to complete - poll until we're out of game
+    start = time.time()
+    while coordinator.in_game:
+        elapsed = time.time() - start
+        if elapsed > timeout:
+            raise GameTimeout(f"Timed out after {timeout}s waiting for abandon to complete")
+        coordinator.send_message("state")
+        wait_for_ready(coordinator, timeout=5)
 
-    coordinator.send_message("state")
-    while not coordinator.game_is_ready:
-        coordinator.receive_game_state_update(block=True, perform_callbacks=False)
-
-    return not coordinator.in_game
+    assert not coordinator.in_game, "Should be at main menu after abandon"

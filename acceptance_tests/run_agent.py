@@ -44,10 +44,7 @@ def bridge_output(source_path, dest):
 
 def main():
     """Main entry point."""
-    # Send ready signal immediately - this is what CommunicationMod waits for
-    print("ready", flush=True)
-
-    # Create named pipes in a temp directory
+    # Create named pipes in a temp directory FIRST
     pipe_dir = tempfile.mkdtemp(prefix="sts-arena-")
     game_to_test = os.path.join(pipe_dir, "game_to_test")  # game state from CommunicationMod
     test_to_game = os.path.join(pipe_dir, "test_to_game")  # commands to CommunicationMod
@@ -55,23 +52,6 @@ def main():
     os.mkfifo(test_to_game)
 
     try:
-        # Start bridge threads
-        # Bridge: stdin (from game) -> game_to_test pipe
-        input_thread = threading.Thread(
-            target=bridge_input,
-            args=(sys.stdin, game_to_test),
-            daemon=True
-        )
-        input_thread.start()
-
-        # Bridge: test_to_game pipe -> stdout (to game)
-        output_thread = threading.Thread(
-            target=bridge_output,
-            args=(test_to_game, sys.stdout),
-            daemon=True
-        )
-        output_thread.start()
-
         # Run pytest in a subprocess
         # pytest can use stdout/stderr freely - we communicate via pipes
         test_dir = Path(__file__).parent
@@ -83,18 +63,42 @@ def main():
         env["STS_GAME_OUTPUT_PIPE"] = test_to_game
 
         # Write pytest output to a file so the test script can display it
-        with open(pytest_output_file, "w") as outfile:
+        # stderr goes to a separate debug file
+        pytest_debug_file = project_dir / "lib" / "pytest_debug.txt"
+        with open(pytest_output_file, "w") as outfile, open(pytest_debug_file, "w") as debugfile:
+            # Start bridge threads BEFORE sending ready
+            # Bridge: stdin (from game) -> game_to_test pipe
+            input_thread = threading.Thread(
+                target=bridge_input,
+                args=(sys.stdin, game_to_test),
+                daemon=True
+            )
+            input_thread.start()
+
+            # Bridge: test_to_game pipe -> stdout (to game)
+            output_thread = threading.Thread(
+                target=bridge_output,
+                args=(test_to_game, sys.stdout),
+                daemon=True
+            )
+            output_thread.start()
+
+            # NOW send ready - CommunicationMod will respond to stdin,
+            # which bridge_input is now ready to receive
+            print("ready", flush=True)
+
             result = subprocess.run(
                 [
                     sys.executable, "-m", "pytest",
                     str(test_dir),
                     "-v",
+                    "-s",  # Disable output capturing
                     "--tb=short",
                     "-p", "no:cacheprovider",
                 ],
                 env=env,
                 stdout=outfile,
-                stderr=subprocess.STDOUT,
+                stderr=debugfile,
             )
 
         sys.exit(result.returncode)

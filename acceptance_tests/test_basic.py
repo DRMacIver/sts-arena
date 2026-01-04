@@ -12,6 +12,7 @@ import pytest
 
 from spirecomm.communication.coordinator import Coordinator
 from spirecomm.spire.character import PlayerClass
+from conftest import wait_for_ready, GameTimeout, DEFAULT_TIMEOUT
 
 
 class TestCommunication:
@@ -20,10 +21,7 @@ class TestCommunication:
     def test_state_command(self, coordinator: Coordinator):
         """Verify the state command returns valid data."""
         coordinator.send_message("state")
-
-        # Wait for response
-        while not coordinator.game_is_ready:
-            coordinator.receive_game_state_update(block=True, perform_callbacks=False)
+        wait_for_ready(coordinator)
 
         assert coordinator.last_error is None, f"State command returned error: {coordinator.last_error}"
         assert coordinator.game_is_ready, "Game should be ready for commands"
@@ -39,13 +37,13 @@ class TestGameLifecycle:
         # Start a game as Ironclad
         coord.send_message("start IRONCLAD 0")
 
-        # Wait for game to initialize
-        time.sleep(2.0)
-
-        # Wait for state update
-        coord.send_message("state")
-        while not coord.game_is_ready:
-            coord.receive_game_state_update(block=True, perform_callbacks=False)
+        # Wait for game to initialize - poll until we're in game
+        start = time.time()
+        while not coord.in_game:
+            if time.time() - start > DEFAULT_TIMEOUT:
+                raise GameTimeout("Timed out waiting for game to start")
+            coord.send_message("state")
+            wait_for_ready(coord, timeout=5)
 
         # Verify we're in a game
         assert coord.in_game, "Should be in game after start command"
@@ -59,22 +57,27 @@ class TestGameLifecycle:
 
         # Start a game
         coord.send_message("start IRONCLAD 0")
-        time.sleep(2.0)
 
-        coord.send_message("state")
-        while not coord.game_is_ready:
-            coord.receive_game_state_update(block=True, perform_callbacks=False)
+        # Wait for game to start
+        start = time.time()
+        while not coord.in_game:
+            if time.time() - start > DEFAULT_TIMEOUT:
+                raise GameTimeout("Timed out waiting for game to start")
+            coord.send_message("state")
+            wait_for_ready(coord, timeout=5)
 
         assert coord.in_game, "Should be in game"
 
         # Abandon the run
         coord.send_message("abandon")
-        time.sleep(1.0)
 
-        # Verify we're back at main menu
-        coord.send_message("state")
-        while not coord.game_is_ready:
-            coord.receive_game_state_update(block=True, perform_callbacks=False)
+        # Wait for abandon to complete
+        start = time.time()
+        while coord.in_game:
+            if time.time() - start > DEFAULT_TIMEOUT:
+                raise GameTimeout("Timed out waiting for abandon to complete")
+            coord.send_message("state")
+            wait_for_ready(coord, timeout=5)
 
         assert not coord.in_game, "Should be at main menu after abandon"
 
