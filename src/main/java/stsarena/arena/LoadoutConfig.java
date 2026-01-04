@@ -637,7 +637,7 @@ public class LoadoutConfig {
 
     private static final List<String> DEFECT_CARDS = Arrays.asList(
         // Commons
-        "Ball Lightning", "Barrage", "Beam Cell", "Charge Battery", "Claw",
+        "Ball Lightning", "Barrage", "Beam Cell", "Charge Battery", "Gash",
         "Cold Snap", "Compile Driver", "Coolheaded", "Go for the Eyes", "Hologram",
         "Leap", "Rebound", "Recursion", "Stack", "Steam", "Streamline", "Sweeping Beam", "Turbo",
         // Uncommons
