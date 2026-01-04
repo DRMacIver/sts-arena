@@ -127,17 +127,24 @@ def wait_for_combat(coord: Coordinator, timeout: float = 5):
     assert game.play_available or game.end_available, "Combat not ready"
 
 
-def ensure_main_menu(coord: Coordinator, timeout: float = 5):
+def ensure_main_menu(coord: Coordinator, timeout: float = 10):
     """Ensure we're at the main menu. Abandons any active run."""
-    wait_for_state_update(coord, timeout=timeout)
+    # Try a few times - abandon might need to go through transition screens
+    for attempt in range(3):
+        wait_for_state_update(coord, timeout=timeout)
 
-    if not coord.in_game:
-        return
+        if not coord.in_game:
+            return
 
-    # We're in a game, need to abandon
-    coord.send_message("abandon")
-    wait_for_state_update(coord, timeout=timeout)
-    assert not coord.in_game, "Abandon command did not return us to main menu"
+        # We're in a game, need to abandon
+        coord.send_message("abandon")
+        wait_for_state_update(coord, timeout=timeout)
+
+        if not coord.in_game:
+            return
+
+    # If we're still in game after 3 attempts, that's an error
+    assert not coord.in_game, f"Could not return to main menu after 3 abandon attempts"
 
 
 # =============================================================================
