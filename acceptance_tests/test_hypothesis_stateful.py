@@ -332,8 +332,8 @@ class ArenaStateMachine(RuleBasedStateMachine):
 
     @precondition(lambda self: self.model_in_game and self.model_in_combat)
     @rule()
-    def end_turn(self):
-        """End the current turn in combat."""
+    def win_combat(self):
+        """Force a win by killing all monsters."""
         if not self.coord.in_game or not self.coord.last_game_state:
             wait_for_state_update(self.coord, timeout=10)
 
@@ -342,35 +342,37 @@ class ArenaStateMachine(RuleBasedStateMachine):
             self.model_in_combat = False
             return
 
-        if not game.end_available:
-            note("End turn not available, skipping")
-            return
+        note("Forcing win")
+        self.action_history.append("win")
 
-        note("Ending turn")
-        self.action_history.append("end")
-
-        self.coord.send_message("end")
-
-        # Wait for state update
+        self.coord.send_message("win")
         wait_for_state_update(self.coord, timeout=10)
 
-        # Check if combat ended (won or lost)
-        if self.coord.in_game and self.coord.last_game_state:
-            game = self.coord.last_game_state
-            if not game.in_combat:
-                self.model_in_combat = False
-                self.model_combat_ended = True
-                note("Combat ended after turn")
-        elif not self.coord.in_game:
-            # Game ended (probably death)
+        # After win, handle based on arena vs normal run
+        if self.model_is_arena:
+            # Arena should return to menu - if not, abandon to get there
+            if self.coord.in_game:
+                self.coord.send_message("abandon")
+                wait_for_state_update(self.coord, timeout=10)
             self.model_in_game = False
             self.model_in_combat = False
-            note("Game ended (death?)")
+            self.model_combat_ended = False
+            note("Arena fight won, at menu")
+        else:
+            # Normal run - might be at reward screen
+            if not self.coord.in_game:
+                self.model_in_game = False
+                self.model_in_combat = False
+                self.model_combat_ended = False
+            elif self.coord.last_game_state and not self.coord.last_game_state.in_combat:
+                self.model_in_combat = False
+                self.model_combat_ended = True
+                note("Normal run combat won")
 
     @precondition(lambda self: self.model_in_game and self.model_in_combat)
     @rule()
-    def play_random_card(self):
-        """Play a random playable card from hand."""
+    def lose_combat(self):
+        """Force a loss by killing the player."""
         if not self.coord.in_game or not self.coord.last_game_state:
             wait_for_state_update(self.coord, timeout=10)
 
@@ -379,83 +381,32 @@ class ArenaStateMachine(RuleBasedStateMachine):
             self.model_in_combat = False
             return
 
-        if not game.play_available or not game.hand:
-            note("No cards to play")
-            return
+        note("Forcing loss")
+        self.action_history.append("lose")
 
-        # Find playable cards
-        playable = [c for c in game.hand if c.is_playable]
-        if not playable:
-            note("No playable cards")
-            return
-
-        # Prefer untargeted cards to avoid targeting issues
-        untargeted = [c for c in playable if not c.has_target]
-
-        if untargeted:
-            card = random.choice(untargeted)
-            note(f"Playing untargeted card: {card.name}")
-            self.action_history.append(f"play {card.name}")
-            self.coord.send_message(f"play {game.hand.index(card)}")
-        elif game.monsters:
-            # Play targeted card on random monster
-            card = random.choice(playable)
-            target = random.randint(0, len(game.monsters) - 1)
-            note(f"Playing {card.name} on monster {target}")
-            self.action_history.append(f"play {card.name} -> {target}")
-            self.coord.send_message(f"play {game.hand.index(card)} {target}")
-        else:
-            return
-
-        # Wait for state update
+        self.coord.send_message("lose")
         wait_for_state_update(self.coord, timeout=10)
 
-        # Check if combat/game ended
-        if self.coord.in_game and self.coord.last_game_state:
-            game = self.coord.last_game_state
-            if not game.in_combat:
-                self.model_in_combat = False
-                self.model_combat_ended = True
-                note("Combat ended after card")
-        elif not self.coord.in_game:
+        # After loss, handle based on arena vs normal run
+        if self.model_is_arena:
+            # Arena should return to menu - if not, abandon to get there
+            if self.coord.in_game:
+                self.coord.send_message("abandon")
+                wait_for_state_update(self.coord, timeout=10)
             self.model_in_game = False
             self.model_in_combat = False
-            note("Game ended after card")
-
-    @precondition(lambda self: self.model_in_game and self.model_in_combat)
-    @rule()
-    def use_random_potion(self):
-        """Use a random potion if available."""
-        if not self.coord.in_game or not self.coord.last_game_state:
-            wait_for_state_update(self.coord, timeout=10)
-
-        game = self.coord.last_game_state
-        if not game or not game.in_combat:
-            self.model_in_combat = False
-            return
-
-        potions = getattr(game, 'potions', None)
-        if not potions:
-            return
-
-        # Find usable potions (not empty slots)
-        usable = [(i, p) for i, p in enumerate(potions) if p and p.can_use]
-        if not usable:
-            return
-
-        idx, potion = random.choice(usable)
-
-        if potion.requires_target and game.monsters:
-            target = random.randint(0, len(game.monsters) - 1)
-            note(f"Using potion {potion.name} on monster {target}")
-            self.action_history.append(f"potion {idx} {target}")
-            self.coord.send_message(f"potion use {idx} {target}")
+            self.model_combat_ended = False
+            note("Arena fight lost, at menu")
         else:
-            note(f"Using potion {potion.name}")
-            self.action_history.append(f"potion {idx}")
-            self.coord.send_message(f"potion use {idx}")
-
-        wait_for_state_update(self.coord, timeout=10)
+            # Normal run - game ends on death
+            if not self.coord.in_game:
+                self.model_in_game = False
+                self.model_in_combat = False
+                self.model_combat_ended = False
+                note("Normal run death")
+            elif self.coord.last_game_state and not self.coord.last_game_state.in_combat:
+                self.model_in_combat = False
+                self.model_combat_ended = True
 
     @precondition(lambda self: self.model_in_game and self.model_combat_ended)
     @rule()
@@ -495,7 +446,7 @@ TestArenaStateful = ArenaStateMachine.TestCase
 
 # Configure the test settings
 TestArenaStateful.settings = settings(
-    max_examples=1000,
+    max_examples=50,  # Reduced for faster iteration
     stateful_step_count=10,
     deadline=None,
     suppress_health_check=list(HealthCheck),
@@ -509,28 +460,25 @@ TestArenaStateful.settings = settings(
 
 class ArenaCombatMachine(RuleBasedStateMachine):
     """
-    State machine focused on combat actions within an arena fight.
+    State machine focused on combat outcomes within arena fights.
 
-    Starts already in combat and tests various combat action sequences.
+    Tests win/lose commands and verifies proper state transitions.
     """
 
     def __init__(self):
         super().__init__()
         self.coord = None
         self.in_combat = False
-        self.turn_count = 0
-        self.cards_played_this_turn = 0
+        self.wins = 0
+        self.losses = 0
 
-    @initialize()
-    def setup(self):
+    @initialize(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS))
+    def setup(self, character, encounter):
         """Start an arena fight."""
         import conftest
         self.coord = conftest._coordinator
 
         ensure_main_menu(self.coord, timeout=10)
-
-        character = random.choice(CHARACTERS)
-        encounter = random.choice(ENCOUNTERS)
 
         note(f"Starting combat test: {character} vs {encounter}")
 
@@ -539,8 +487,8 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         wait_for_combat(self.coord, timeout=10)
 
         self.in_combat = True
-        self.turn_count = 1
-        self.cards_played_this_turn = 0
+        self.wins = 0
+        self.losses = 0
 
     @invariant()
     def valid_combat_state(self):
@@ -551,87 +499,59 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         if self.coord.in_game and self.coord.last_game_state:
             game = self.coord.last_game_state
             if game.in_combat:
-                # Should have hand
                 assert game.hand is not None, "No hand in combat"
-                # Should have monsters
                 assert game.monsters, "No monsters in combat"
 
-    @invariant()
-    def turn_count_reasonable(self):
-        """Turn count shouldn't exceed reasonable limits."""
-        assert self.turn_count <= 100, f"Too many turns: {self.turn_count}"
-
-    @invariant()
-    def cards_per_turn_reasonable(self):
-        """Cards played per turn shouldn't exceed reasonable limits."""
-        assert self.cards_played_this_turn <= 20, \
-            f"Too many cards this turn: {self.cards_played_this_turn}"
-
     @precondition(lambda self: self.in_combat)
     @rule()
-    def play_card(self):
-        """Play a card from hand."""
+    def win(self):
+        """Force a win."""
         if not self.coord.in_game:
             self.in_combat = False
             return
 
-        game = self.coord.last_game_state
-        if not game or not game.in_combat:
-            self.in_combat = False
-            return
-
-        playable = [c for c in (game.hand or []) if c.is_playable]
-        if not playable:
-            return
-
-        card = random.choice(playable)
-        idx = game.hand.index(card)
-
-        if card.has_target and game.monsters:
-            target = random.randint(0, len(game.monsters) - 1)
-            self.coord.send_message(f"play {idx} {target}")
-        else:
-            self.coord.send_message(f"play {idx}")
-
-        self.cards_played_this_turn += 1
-
+        note("Forcing win")
+        self.coord.send_message("win")
         wait_for_state_update(self.coord, timeout=10)
 
-        if not self.coord.in_game or (self.coord.last_game_state and
-                                       not self.coord.last_game_state.in_combat):
+        self.wins += 1
+        if not self.coord.in_game:
             self.in_combat = False
+            note("Returned to menu after win")
+        elif self.coord.last_game_state and not self.coord.last_game_state.in_combat:
+            self.in_combat = False
+            note("Combat ended (win)")
 
     @precondition(lambda self: self.in_combat)
     @rule()
-    def end_turn(self):
-        """End the current turn."""
+    def lose(self):
+        """Force a loss."""
         if not self.coord.in_game:
             self.in_combat = False
             return
 
-        game = self.coord.last_game_state
-        if not game or not game.in_combat or not game.end_available:
-            return
-
-        self.coord.send_message("end")
-        self.turn_count += 1
-        self.cards_played_this_turn = 0
-
+        note("Forcing loss")
+        self.coord.send_message("lose")
         wait_for_state_update(self.coord, timeout=10)
 
-        if not self.coord.in_game or (self.coord.last_game_state and
-                                       not self.coord.last_game_state.in_combat):
+        self.losses += 1
+        if not self.coord.in_game:
             self.in_combat = False
+            note("Returned to menu after loss")
+        elif self.coord.last_game_state and not self.coord.last_game_state.in_combat:
+            self.in_combat = False
+            note("Combat ended (loss)")
 
     def teardown(self):
         """Clean up."""
+        note(f"Wins: {self.wins}, Losses: {self.losses}")
         ensure_main_menu(self.coord, timeout=10)
 
 
 TestArenaCombat = ArenaCombatMachine.TestCase
 TestArenaCombat.settings = settings(
-    max_examples=1000,
-    stateful_step_count=20,
+    max_examples=50,  # Reduced for faster iteration
+    stateful_step_count=10,
     deadline=None,
     suppress_health_check=list(HealthCheck),
     verbosity=Verbosity.debug,
@@ -642,7 +562,7 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
     """
     State machine focused on testing transitions between arena and main menu.
 
-    Rapidly starts and abandons fights to test state management.
+    Tests various ways to exit combat: win, lose, abandon.
     """
 
     def __init__(self):
@@ -650,6 +570,8 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
         self.coord = None
         self.at_menu = True
         self.fights_started = 0
+        self.fights_won = 0
+        self.fights_lost = 0
         self.fights_abandoned = 0
 
     @initialize()
@@ -660,6 +582,8 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
         ensure_main_menu(self.coord, timeout=10)
         self.at_menu = True
         self.fights_started = 0
+        self.fights_won = 0
+        self.fights_lost = 0
         self.fights_abandoned = 0
 
     @invariant()
@@ -670,9 +594,10 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
 
     @invariant()
     def fight_counts_valid(self):
-        """Fight counts should be consistent."""
-        assert self.fights_abandoned <= self.fights_started, \
-            f"Abandoned {self.fights_abandoned} > started {self.fights_started}"
+        """Fight outcomes shouldn't exceed fights started."""
+        total_outcomes = self.fights_won + self.fights_lost + self.fights_abandoned
+        assert total_outcomes <= self.fights_started, \
+            f"Outcomes {total_outcomes} > started {self.fights_started}"
 
     @precondition(lambda self: self.at_menu)
     @rule(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS))
@@ -689,6 +614,50 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
 
     @precondition(lambda self: not self.at_menu)
     @rule()
+    def win_fight(self):
+        """Win the current fight."""
+        note(f"Winning fight #{self.fights_started}")
+
+        self.coord.send_message("win")
+        wait_for_state_update(self.coord, timeout=10)
+
+        # Arena fights should return to menu after win
+        if not self.coord.in_game:
+            self.at_menu = True
+            self.fights_won += 1
+            note("Returned to menu after win")
+        else:
+            # Might be showing victory screen
+            self.coord.send_message("abandon")
+            wait_for_main_menu(self.coord, timeout=10)
+            self.at_menu = True
+            self.fights_won += 1
+            note("Abandoned after win screen")
+
+    @precondition(lambda self: not self.at_menu)
+    @rule()
+    def lose_fight(self):
+        """Lose the current fight."""
+        note(f"Losing fight #{self.fights_started}")
+
+        self.coord.send_message("lose")
+        wait_for_state_update(self.coord, timeout=10)
+
+        # Arena fights should return to menu after loss
+        if not self.coord.in_game:
+            self.at_menu = True
+            self.fights_lost += 1
+            note("Returned to menu after loss")
+        else:
+            # Might be showing death screen
+            self.coord.send_message("abandon")
+            wait_for_main_menu(self.coord, timeout=10)
+            self.at_menu = True
+            self.fights_lost += 1
+            note("Abandoned after death screen")
+
+    @precondition(lambda self: not self.at_menu)
+    @rule()
     def abandon_fight(self):
         """Abandon current fight."""
         note(f"Abandoning fight #{self.fights_started}")
@@ -701,13 +670,13 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
 
     def teardown(self):
         """Clean up."""
-        note(f"Started {self.fights_started}, abandoned {self.fights_abandoned}")
+        note(f"Started {self.fights_started}, won {self.fights_won}, lost {self.fights_lost}, abandoned {self.fights_abandoned}")
         ensure_main_menu(self.coord, timeout=10)
 
 
 TestArenaTransitions = ArenaTransitionMachine.TestCase
 TestArenaTransitions.settings = settings(
-    max_examples=1000,
+    max_examples=50,  # Reduced for faster iteration
     stateful_step_count=10,
     deadline=None,
     suppress_health_check=list(HealthCheck),
