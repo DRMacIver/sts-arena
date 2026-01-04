@@ -277,13 +277,14 @@ class ArenaStateMachine(RuleBasedStateMachine):
     # =========================================================================
 
     @precondition(lambda self: not self.model_in_game)
-    @rule(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS))
-    def start_arena_fight(self, character, encounter):
+    @rule(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS),
+          seed=st.integers(min_value=0, max_value=2**63-1))
+    def start_arena_fight(self, character, encounter, seed):
         """Start an arena fight from the main menu."""
-        note(f"Starting arena: {character} vs {encounter}")
-        self.action_history.append(f"arena {character} {encounter}")
+        note(f"Starting arena: {character} vs {encounter} (seed={seed})")
+        self.action_history.append(f"arena {character} {encounter} {seed}")
 
-        self.coord.send_message(f"arena {character} {encounter}")
+        self.coord.send_message(f"arena {character} {encounter} {seed}")
         wait_for_in_game(self.coord, timeout=10)
         wait_for_combat(self.coord, timeout=10)
 
@@ -479,17 +480,18 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         self.wins = 0
         self.losses = 0
 
-    @initialize(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS))
-    def setup(self, character, encounter):
+    @initialize(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS),
+                seed=st.integers(min_value=0, max_value=2**63-1))
+    def setup(self, character, encounter, seed):
         """Start an arena fight."""
         import conftest
         self.coord = conftest._coordinator
 
         ensure_main_menu(self.coord, timeout=10)
 
-        note(f"Starting combat test: {character} vs {encounter}")
+        note(f"Starting combat test: {character} vs {encounter} (seed={seed})")
 
-        self.coord.send_message(f"arena {character} {encounter}")
+        self.coord.send_message(f"arena {character} {encounter} {seed}")
         wait_for_in_game(self.coord, timeout=10)
         wait_for_combat(self.coord, timeout=10)
 
@@ -607,12 +609,13 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
             f"Outcomes {total_outcomes} > started {self.fights_started}"
 
     @precondition(lambda self: self.at_menu)
-    @rule(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS))
-    def start_fight(self, character, encounter):
+    @rule(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS),
+          seed=st.integers(min_value=0, max_value=2**63-1))
+    def start_fight(self, character, encounter, seed):
         """Start an arena fight."""
-        note(f"Starting fight #{self.fights_started + 1}: {character} vs {encounter}")
+        note(f"Starting fight #{self.fights_started + 1}: {character} vs {encounter} (seed={seed})")
 
-        self.coord.send_message(f"arena {character} {encounter}")
+        self.coord.send_message(f"arena {character} {encounter} {seed}")
         wait_for_in_game(self.coord, timeout=10)
         wait_for_combat(self.coord, timeout=10)
 

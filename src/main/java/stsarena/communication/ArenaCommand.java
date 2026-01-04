@@ -11,11 +11,15 @@ import stsarena.arena.RandomLoadoutGenerator;
 /**
  * CommunicationMod command extension for arena mode.
  *
- * Usage: arena <CHARACTER> <ENCOUNTER>
+ * Usage: arena <CHARACTER> <ENCOUNTER> [SEED]
  * Example: arena IRONCLAD Cultist
+ * Example: arena IRONCLAD Cultist 12345
  *
  * This command starts an arena fight with a randomly generated loadout
  * for the specified character (with random ascension level).
+ *
+ * The optional SEED parameter allows reproducible loadout generation
+ * for testing purposes.
  */
 public class ArenaCommand implements CommandExecutor.CommandExtension {
 
@@ -51,9 +55,20 @@ public class ArenaCommand implements CommandExecutor.CommandExtension {
 
         String characterName = tokens[1].toUpperCase();
 
+        // Check if last token is a numeric seed
+        Long seed = null;
+        int encounterEndIndex = tokens.length;
+        String lastToken = tokens[tokens.length - 1];
+        try {
+            seed = Long.parseLong(lastToken);
+            encounterEndIndex = tokens.length - 1;  // Exclude seed from encounter name
+        } catch (NumberFormatException e) {
+            // Last token is not a seed, include it in encounter name
+        }
+
         // Combine remaining tokens for encounter name (may have spaces)
         StringBuilder encounterBuilder = new StringBuilder();
-        for (int i = 2; i < tokens.length; i++) {
+        for (int i = 2; i < encounterEndIndex; i++) {
             if (i > 2) encounterBuilder.append(" ");
             encounterBuilder.append(tokens[i]);
         }
@@ -63,7 +78,8 @@ public class ArenaCommand implements CommandExecutor.CommandExtension {
         // CommunicationMod may lowercase the command, so we need to find the correct case
         String encounter = normalizeEncounterName(rawEncounter);
 
-        STSArena.logger.info("Arena command: " + characterName + " vs " + encounter + " (raw: " + rawEncounter + ")");
+        STSArena.logger.info("Arena command: " + characterName + " vs " + encounter +
+            " (raw: " + rawEncounter + ")" + (seed != null ? " seed=" + seed : ""));
 
         // Get PlayerClass from character name
         AbstractPlayer.PlayerClass playerClass;
@@ -76,7 +92,7 @@ public class ArenaCommand implements CommandExecutor.CommandExtension {
 
         // Generate a loadout for the specified character (random ascension)
         RandomLoadoutGenerator.GeneratedLoadout loadout =
-            RandomLoadoutGenerator.generateForClass(playerClass);
+            RandomLoadoutGenerator.generateForClass(playerClass, seed);
 
         // Start the arena fight
         ArenaRunner.startFight(loadout, encounter);

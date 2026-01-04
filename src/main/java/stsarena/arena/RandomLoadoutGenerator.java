@@ -78,11 +78,25 @@ public class RandomLoadoutGenerator {
      * Generate a random loadout for a specific character class.
      */
     public static GeneratedLoadout generateForClass(AbstractPlayer.PlayerClass playerClass) {
-        STSArena.logger.info("Generating random loadout for: " + playerClass);
+        return generateForClass(playerClass, null);
+    }
+
+    /**
+     * Generate a random loadout for a specific character class with an optional seed.
+     *
+     * @param playerClass The character class to generate for
+     * @param seed Optional seed for reproducibility. If null, uses system random.
+     */
+    public static GeneratedLoadout generateForClass(AbstractPlayer.PlayerClass playerClass, Long seed) {
+        STSArena.logger.info("Generating random loadout for: " + playerClass +
+            (seed != null ? " (seed: " + seed + ")" : ""));
+
+        // Use seeded random if provided, otherwise use the shared instance
+        Random rng = seed != null ? new Random(seed) : random;
 
         // Use the LoadoutBuilder to create the loadout
         LoadoutBuilder.BuiltLoadout built = LoadoutBuilder.generateForClass(
-            playerClass.name(), random);
+            playerClass.name(), rng);
 
         // Generate unique ID and name
         String id = UUID.randomUUID().toString();
@@ -152,7 +166,7 @@ public class RandomLoadoutGenerator {
             STSArena.logger.warn("Deck has no attacks, adding Strikes");
             // Add 3-5 Strikes
             String strikeId = getStrikeIdForClass(playerClass.name());
-            int strikesToAdd = 3 + random.nextInt(3);
+            int strikesToAdd = 3 + rng.nextInt(3);
             for (int i = 0; i < strikesToAdd; i++) {
                 AbstractCard strike = getCard(strikeId);
                 if (strike != null) {
