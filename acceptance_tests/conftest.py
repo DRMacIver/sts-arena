@@ -28,6 +28,22 @@ class GameTimeout(Exception):
     pass
 
 
+def _process_message(coordinator, msg):
+    """Process a raw message from the game and update coordinator state."""
+    import json
+    communication_state = json.loads(msg)
+    coordinator.last_error = communication_state.get("error", None)
+    coordinator.game_is_ready = communication_state.get("ready_for_command")
+    if coordinator.last_error is None:
+        coordinator.in_game = communication_state.get("in_game")
+        if coordinator.in_game:
+            from spirecomm.spire.game import Game
+            coordinator.last_game_state = Game.from_json(
+                communication_state.get("game_state"),
+                communication_state.get("available_commands")
+            )
+
+
 def wait_for_ready(coordinator, timeout=DEFAULT_TIMEOUT):
     """Wait for the game to be ready for commands, with timeout."""
     start = time.time()
@@ -38,19 +54,35 @@ def wait_for_ready(coordinator, timeout=DEFAULT_TIMEOUT):
         # Block for up to 1 second at a time, checking timeout between
         msg = coordinator.get_next_raw_message(block=True, timeout=min(1.0, remaining))
         if msg is not None:
-            # Process the message manually since receive_game_state_update expects to call get_next_raw_message
-            import json
-            communication_state = json.loads(msg)
-            coordinator.last_error = communication_state.get("error", None)
-            coordinator.game_is_ready = communication_state.get("ready_for_command")
-            if coordinator.last_error is None:
-                coordinator.in_game = communication_state.get("in_game")
-                if coordinator.in_game:
-                    from spirecomm.spire.game import Game
-                    coordinator.last_game_state = Game.from_json(
-                        communication_state.get("game_state"),
-                        communication_state.get("available_commands")
-                    )
+            _process_message(coordinator, msg)
+
+
+def wait_for_stable(coordinator, timeout=DEFAULT_TIMEOUT):
+    """
+    Wait for the game to stabilize after an action.
+
+    This is the primary synchronization primitive for tests. Use this instead
+    of time.sleep() to wait for the game state to settle.
+
+    The function:
+    1. Resets the ready flag so we wait for a fresh response
+    2. Requests the current state from the game
+    3. Blocks until the game is ready for the next command
+
+    Args:
+        coordinator: The game coordinator
+        timeout: Maximum time to wait in seconds
+
+    Returns:
+        The coordinator (for chaining)
+
+    Raises:
+        GameTimeout: If the game doesn't stabilize within timeout
+    """
+    coordinator.game_is_ready = False
+    coordinator.send_message("state")
+    wait_for_ready(coordinator, timeout=timeout)
+    return coordinator
 
 
 # Get pipe paths from environment (set by run_agent.py)

@@ -16,6 +16,7 @@ import org.apache.logging.log4j.Logger;
 import stsarena.arena.ArenaRunner;
 import stsarena.arena.SaveFileManager;
 import stsarena.communication.ArenaCommand;
+import stsarena.communication.LoseCommand;
 import stsarena.data.ArenaDatabase;
 import stsarena.data.ArenaRepository;
 import stsarena.screens.ArenaEncounterSelectScreen;
@@ -59,10 +60,11 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         logger.info("Initializing STS Arena");
         BaseMod.subscribe(this);
 
-        // Register arena command with CommunicationMod early (during mod initialization)
+        // Register commands with CommunicationMod early (during mod initialization)
         // This must happen before PostInitialize because CommunicationMod starts
         // accepting commands as soon as it receives "ready" during mod init
         ArenaCommand.register();
+        LoseCommand.register();
     }
 
     /**
@@ -94,8 +96,9 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         loadoutCreatorScreen = new LoadoutCreatorScreen();
         statsScreen = new ArenaStatsScreen();
 
-        // Register arena command with CommunicationMod (if loaded)
+        // Register commands with CommunicationMod (if loaded)
         ArenaCommand.register();
+        LoseCommand.register();
 
         // Arena Mode button is added via patches/MainMenuArenaPatch
     }

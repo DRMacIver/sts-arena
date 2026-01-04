@@ -6,12 +6,13 @@ Each test class corresponds to a section in USER_STORIES.md.
 """
 
 import time
+
 import pytest
 
 from spirecomm.communication.coordinator import Coordinator
 from spirecomm.spire.character import PlayerClass
 from spirecomm.spire.screen import ScreenType
-from conftest import wait_for_ready, GameTimeout, DEFAULT_TIMEOUT
+from conftest import wait_for_ready, wait_for_stable, GameTimeout, DEFAULT_TIMEOUT
 
 
 # =============================================================================
@@ -258,66 +259,28 @@ class TestStory3_2_TryAgainAfterDefeat:
     """Story 3.2: Try Again After Arena Defeat"""
 
     def test_can_lose_arena_fight(self, at_main_menu: Coordinator):
-        """Verify we can lose an arena fight by taking damage without blocking."""
+        """Verify we can lose an arena fight using the lose command."""
         coord = at_main_menu
 
-        # Start an arena fight against a strong enemy
-        coord.send_message("arena IRONCLAD Hexaghost")
+        # Start an arena fight
+        coord.send_message("arena IRONCLAD Cultist")
         wait_for_in_game(coord)
         wait_for_combat(coord)
 
         game = coord.last_game_state
-        initial_hp = game.current_hp
+        assert game.in_combat, "Should be in combat"
+        assert game.current_hp > 0, "Should have HP"
 
-        # End turns without playing cards to take damage
-        # Hexaghost does significant damage, so this should be fast
-        max_turns = 20  # Safety limit
-        turns_taken = 0
+        # Use the lose command to immediately kill the player
+        coord.send_message("lose")
+        wait_for_stable(coord)
 
-        while turns_taken < max_turns:
-            # Refresh state
-            coord.send_message("state")
-            try:
-                wait_for_ready(coord, timeout=10)
-            except GameTimeout:
-                break
-
-            game = coord.last_game_state
-            if not game:
-                break
-
-            # Check if we died
-            if game.current_hp <= 0:
-                break
-
-            # Check if combat ended (we somehow won or died)
-            if not game.in_combat:
-                break
-
-            # End the turn to take damage
-            if game.end_available:
-                coord.send_message("end")
-                turns_taken += 1
-                try:
-                    wait_for_ready(coord, timeout=15)
-                except GameTimeout:
-                    pass
-            else:
-                # Wait for actions to be available
-                time.sleep(0.5)
-
-        # Verify we took damage (even if we didn't fully die)
-        coord.send_message("state")
-        try:
-            wait_for_ready(coord, timeout=10)
-        except GameTimeout:
-            pass
-
+        # Verify we lost - should no longer be in combat
         game = coord.last_game_state
+        # After death, we might still be "in_game" but with 0 HP or not in combat
         if game:
-            # Either we died or took significant damage
-            assert game.current_hp < initial_hp or game.current_hp <= 0, \
-                f"Should have taken damage: started at {initial_hp}, now at {game.current_hp}"
+            assert game.current_hp <= 0 or not game.in_combat, \
+                f"Should have died or left combat: HP={game.current_hp}, in_combat={game.in_combat}"
 
 
 # =============================================================================
@@ -503,11 +466,9 @@ class TestErrorHandling:
 
         coord.send_message("arena IRONCLAD NonExistentMonster")
 
-        # Give it time to process
-        time.sleep(2)
-        coord.send_message("state")
+        # Wait for the game to process the command
         try:
-            wait_for_ready(coord, timeout=10)
+            wait_for_stable(coord, timeout=10)
         except GameTimeout:
             pass
 
