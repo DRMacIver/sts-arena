@@ -33,7 +33,16 @@ import pytest
 from spirecomm.communication.coordinator import Coordinator
 from spirecomm.spire.character import PlayerClass
 from spirecomm.spire.screen import ScreenType
-from conftest import wait_for_ready, wait_for_stable, GameTimeout, DEFAULT_TIMEOUT
+from conftest import (
+    wait_for_ready,
+    wait_for_stable,
+    wait_for_in_game,
+    wait_for_main_menu,
+    wait_for_combat,
+    wait_for_state_update,
+    GameTimeout,
+    DEFAULT_TIMEOUT,
+)
 
 # Screen types that should NEVER appear during or after arena fights
 FORBIDDEN_ARENA_SCREENS = {
@@ -86,13 +95,6 @@ SAFE_UNTARGETED_CARDS = [
 ]
 
 
-def wait_for_state_update(coord: Coordinator, timeout: float = 5):
-    """Wait for game state to stabilize. Short timeout - state should update quickly."""
-    coord.game_is_ready = False
-    coord.send_message("state")
-    wait_for_ready(coord, timeout=timeout)
-
-
 def assert_in_game(coord: Coordinator):
     """Assert we're in a game after state has stabilized."""
     wait_for_state_update(coord, timeout=5)
@@ -116,73 +118,21 @@ def assert_in_combat(coord: Coordinator):
     assert game.play_available or game.end_available, "Combat not ready for input"
 
 
-# Simple polling-based wait functions - reliable approach
-def wait_for_in_game(coord: Coordinator, max_updates: int = 30):
-    """Block until we're in game. Each update waits for the game's ready message."""
-    for _ in range(max_updates):
-        wait_for_state_update(coord)
-        if coord.in_game:
-            return
-    assert coord.in_game, "Expected to be in game but we're at main menu"
+def wait_for_arena_end(coord: Coordinator, timeout: float = 60):
+    """Block until arena fight ends (return to main menu)."""
+    wait_for_main_menu(coord, timeout=timeout)
 
 
-def wait_for_main_menu(coord: Coordinator, max_updates: int = 30):
-    """Block until we're at main menu. Each update waits for the game's ready message."""
-    for _ in range(max_updates):
-        wait_for_state_update(coord)
-        if not coord.in_game:
-            return
-    assert not coord.in_game, "Expected to be at main menu but we're in game"
-
-
-def wait_for_combat(coord: Coordinator, max_updates: int = 30):
-    """Block until we're in combat and ready for input."""
-    for _ in range(max_updates):
-        wait_for_state_update(coord)
-        if coord.in_game and coord.last_game_state:
-            game = coord.last_game_state
-            if game.in_combat and game.monsters and (game.play_available or game.end_available):
-                return
-    assert coord.in_game, "Expected to be in game"
-    assert coord.last_game_state, "No game state"
-    game = coord.last_game_state
-    assert game.in_combat, f"Expected combat, in_combat={game.in_combat}"
-    assert game.monsters, "No monsters in combat"
-
-
-def wait_for_arena_end(coord: Coordinator, max_updates: int = 30):
-    """Block until arena fight ends (return to main menu), with abandon fallback."""
-    # Wait for natural return to menu
-    for _ in range(max_updates):
-        wait_for_state_update(coord)
-        if not coord.in_game:
-            return True
-
-    # If still in game, try abandon as fallback
-    if coord.in_game:
-        coord.send_message("abandon")
-        for _ in range(max_updates):
-            wait_for_state_update(coord)
-            if not coord.in_game:
-                return True
-
-    return not coord.in_game
-
-
-def ensure_main_menu(coord: Coordinator, max_updates: int = 30):
-    """Ensure we're at the main menu."""
+def ensure_main_menu(coord: Coordinator, timeout: float = 60):
+    """Ensure we're at the main menu. Abandons any active run."""
     # Check current state first
-    wait_for_state_update(coord)
+    wait_for_state_update(coord, timeout=5)
     if not coord.in_game:
         return
 
-    # Try abandoning
+    # We're in a game - need to abandon
     coord.send_message("abandon")
-    for _ in range(max_updates):
-        wait_for_state_update(coord)
-        if not coord.in_game:
-            return
-
+    wait_for_main_menu(coord, timeout=timeout)
     assert not coord.in_game, "Could not return to main menu after abandon"
 
 

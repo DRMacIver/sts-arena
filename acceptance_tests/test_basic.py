@@ -7,7 +7,6 @@ These tests verify:
 - Runs can be abandoned
 """
 
-import time
 import pytest
 
 from spirecomm.communication.coordinator import Coordinator

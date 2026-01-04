@@ -5,68 +5,20 @@ These tests verify the complete user workflows for STS Arena mod.
 Each test class corresponds to a section in USER_STORIES.md.
 """
 
-import time
-
 import pytest
 
 from spirecomm.communication.coordinator import Coordinator
 from spirecomm.spire.character import PlayerClass
 from spirecomm.spire.screen import ScreenType
-from conftest import wait_for_ready, wait_for_stable, GameTimeout, DEFAULT_TIMEOUT
-
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-def wait_for_in_game(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
-    """Wait until we're in a game."""
-    start = time.time()
-    while not coord.in_game:
-        if time.time() - start > timeout:
-            raise GameTimeout(f"Timed out after {timeout}s waiting to be in game")
-        coord.send_message("state")
-        try:
-            wait_for_ready(coord, timeout=10)
-        except GameTimeout:
-            pass
-
-
-def wait_for_main_menu(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
-    """Wait until we're at the main menu (not in game)."""
-    start = time.time()
-    while coord.in_game:
-        if time.time() - start > timeout:
-            raise GameTimeout(f"Timed out after {timeout}s waiting to reach main menu")
-        coord.send_message("state")
-        try:
-            wait_for_ready(coord, timeout=10)
-        except GameTimeout:
-            pass
-
-
-def wait_for_combat(coord: Coordinator, timeout: float = DEFAULT_TIMEOUT):
-    """Wait until we're in combat with monsters and can take actions."""
-    start = time.time()
-    while True:
-        remaining = timeout - (time.time() - start)
-        if remaining <= 0:
-            raise GameTimeout(f"Timed out after {timeout}s waiting for combat")
-        coord.send_message("state")
-        try:
-            wait_for_ready(coord, timeout=min(10, remaining))
-        except GameTimeout:
-            continue
-
-        if coord.in_game and coord.last_game_state:
-            game = coord.last_game_state
-            # Wait until we're in combat AND can actually take actions
-            if game.in_combat and game.monsters:
-                # Check if we can actually do something (not in animation/transition)
-                if game.play_available or game.end_available:
-                    return
-                # Still in combat but can't act yet - keep polling
-
+from conftest import (
+    wait_for_ready,
+    wait_for_stable,
+    wait_for_in_game,
+    wait_for_main_menu,
+    wait_for_combat,
+    GameTimeout,
+    DEFAULT_TIMEOUT,
+)
 
 
 # =============================================================================

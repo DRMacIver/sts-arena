@@ -137,31 +137,31 @@ def wait_for_state_update(coordinator, timeout=DEFAULT_TIMEOUT):
     wait_for_ready(coordinator, timeout=timeout)
 
 
-def wait_for_in_game(coordinator, max_updates=30, timeout=DEFAULT_TIMEOUT):
-    """Block until we're in game using polling."""
-    for _ in range(max_updates):
-        wait_for_state_update(coordinator, timeout=timeout)
-        if coordinator.in_game:
-            return
-    raise GameTimeout("Expected to be in game but we're at main menu")
+def wait_for_in_game(coordinator, timeout=DEFAULT_TIMEOUT):
+    """Block until we're in game using the wait_for command."""
+    coordinator.game_is_ready = False
+    coordinator.send_message("wait_for in_game true")
+    wait_for_ready(coordinator, timeout=timeout)
+    if not coordinator.in_game:
+        raise GameTimeout("Expected to be in game but we're at main menu")
 
 
-def wait_for_main_menu(coordinator, max_updates=30, timeout=DEFAULT_TIMEOUT):
-    """Block until we're at main menu using polling."""
-    for _ in range(max_updates):
-        wait_for_state_update(coordinator, timeout=timeout)
-        if not coordinator.in_game:
-            return
-    raise GameTimeout("Expected to be at main menu but we're in game")
+def wait_for_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
+    """Block until we're at main menu using the wait_for command."""
+    coordinator.game_is_ready = False
+    coordinator.send_message("wait_for main_menu")
+    wait_for_ready(coordinator, timeout=timeout)
+    if coordinator.in_game:
+        raise GameTimeout("Expected to be at main menu but we're in game")
 
 
-def wait_for_combat(coordinator, max_updates=30, timeout=DEFAULT_TIMEOUT):
-    """Block until we're in combat using polling."""
-    for _ in range(max_updates):
-        wait_for_state_update(coordinator, timeout=timeout)
-        if coordinator.in_game and coordinator.last_game_state and coordinator.last_game_state.in_combat:
-            return
-    raise GameTimeout("Expected to be in combat")
+def wait_for_combat(coordinator, timeout=DEFAULT_TIMEOUT):
+    """Block until we're in combat using the wait_for command."""
+    coordinator.game_is_ready = False
+    coordinator.send_message("wait_for in_combat true")
+    wait_for_ready(coordinator, timeout=timeout)
+    if not (coordinator.in_game and coordinator.last_game_state and coordinator.last_game_state.in_combat):
+        raise GameTimeout("Expected to be in combat")
 
 
 def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
@@ -175,7 +175,7 @@ def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
     # We're in a game - need to abandon
     coordinator.send_message("abandon")
 
-    # Wait for return to main menu using polling
+    # Wait for return to main menu using wait_for command
     wait_for_main_menu(coordinator, timeout=timeout)
 
     assert not coordinator.in_game, "Should be at main menu after abandon"
