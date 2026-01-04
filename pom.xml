@@ -48,6 +48,16 @@
             <systemPath>${project.basedir}/lib/BaseMod.jar</systemPath>
         </dependency>
 
+        <!-- CommunicationMod - optional dependency for external process communication -->
+        <dependency>
+            <groupId>communicationmod</groupId>
+            <artifactId>CommunicationMod</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/CommunicationMod.jar</systemPath>
+            <optional>true</optional>
+        </dependency>
+
         <!-- SQLite JDBC driver for data persistence -->
         <dependency>
             <groupId>org.xerial</groupId>

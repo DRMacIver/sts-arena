@@ -15,6 +15,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import stsarena.arena.ArenaRunner;
 import stsarena.arena.SaveFileManager;
+import stsarena.communication.ArenaCommand;
 import stsarena.data.ArenaDatabase;
 import stsarena.data.ArenaRepository;
 import stsarena.screens.ArenaEncounterSelectScreen;
@@ -87,6 +88,9 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         loadoutSelectScreen = new ArenaLoadoutSelectScreen();
         loadoutCreatorScreen = new LoadoutCreatorScreen();
         statsScreen = new ArenaStatsScreen();
+
+        // Register arena command with CommunicationMod (if loaded)
+        ArenaCommand.register();
 
         // Arena Mode button is added via patches/MainMenuArenaPatch
     }
