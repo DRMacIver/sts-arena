@@ -175,6 +175,9 @@ def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
     # We're in a game - need to abandon
     coordinator.send_message("abandon")
 
+    # Wait for abandon command response first
+    wait_for_ready(coordinator)
+
     # Wait for return to main menu using wait_for command
     wait_for_main_menu(coordinator, timeout=timeout)
 

@@ -87,15 +87,22 @@ def main():
             # which bridge_input is now ready to receive
             print("ready", flush=True)
 
+            # Allow passing additional pytest arguments via command line
+            pytest_args = [
+                sys.executable, "-m", "pytest",
+                "-v",
+                "-s",  # Disable output capturing
+                "--tb=short",
+                "-p", "no:cacheprovider",
+            ]
+            # Add test directory or specific test files from command line
+            if len(sys.argv) > 1:
+                pytest_args.extend(sys.argv[1:])
+            else:
+                pytest_args.append(str(test_dir))
+
             result = subprocess.run(
-                [
-                    sys.executable, "-m", "pytest",
-                    str(test_dir),
-                    "-v",
-                    "-s",  # Disable output capturing
-                    "--tb=short",
-                    "-p", "no:cacheprovider",
-                ],
+                pytest_args,
                 env=env,
                 stdout=outfile,
                 stderr=debugfile,

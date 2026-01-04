@@ -125,13 +125,15 @@ def wait_for_arena_end(coord: Coordinator, timeout: float = 60):
 
 def ensure_main_menu(coord: Coordinator, timeout: float = 60):
     """Ensure we're at the main menu. Abandons any active run."""
-    # Check current state first
-    wait_for_state_update(coord, timeout=5)
+    # Check current state first - use longer timeout for recovery scenarios
+    wait_for_state_update(coord, timeout=30)
     if not coord.in_game:
         return
 
     # We're in a game - need to abandon
     coord.send_message("abandon")
+    # Wait for abandon command response first
+    wait_for_ready(coord)
     wait_for_main_menu(coord, timeout=timeout)
     assert not coord.in_game, "Could not return to main menu after abandon"
 
@@ -290,8 +292,11 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.action_history.append(f"arena {character} {encounter} {seed}")
 
         self.coord.send_message(f"arena {character} {encounter} {seed}")
+        # Wait for arena command's response first (just consume it, don't request state)
+        wait_for_ready(self.coord)
+        # Then wait for in_game and combat conditions
         wait_for_in_game(self.coord)
-        wait_for_combat(self.coord) 
+        wait_for_combat(self.coord)
 
         # Update model
         self.model_in_game = True
@@ -311,6 +316,9 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.action_history.append(f"start {character}")
 
         self.coord.send_message(f"start {character} 0")
+        # Wait for start command's response first (just consume it, don't request state)
+        wait_for_ready(self.coord)
+        # Then wait for in_game condition
         wait_for_in_game(self.coord)
 
         # Update model
@@ -331,6 +339,8 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.action_history.append("abandon")
 
         self.coord.send_message("abandon")
+        # Wait for abandon command response first
+        wait_for_ready(self.coord)
         wait_for_main_menu(self.coord)
 
         # Update model
@@ -358,6 +368,8 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.action_history.append("win")
 
         self.coord.send_message("win")
+        # Wait for win command response first
+        wait_for_ready(self.coord)
 
         # After win, handle based on arena vs normal run
         if self.model_is_arena:
@@ -394,6 +406,8 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.action_history.append("lose")
 
         self.coord.send_message("lose")
+        # Wait for lose command response first
+        wait_for_ready(self.coord)
 
         # After loss, handle based on arena vs normal run
         if self.model_is_arena:
@@ -500,8 +514,11 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         note(f"Starting combat: {character} vs {encounter} (seed={seed})")
 
         self.coord.send_message(f"arena {character} {encounter} {seed}")
-        wait_for_in_game(self.coord) 
-        wait_for_combat(self.coord)  
+        # Wait for arena command's response first (just consume it, don't request state)
+        wait_for_ready(self.coord)
+        # Then wait for in_game and combat conditions
+        wait_for_in_game(self.coord)
+        wait_for_combat(self.coord)
 
         self.in_combat = True
 
@@ -538,6 +555,8 @@ class ArenaCombatMachine(RuleBasedStateMachine):
 
         note("Forcing win")
         self.coord.send_message("win")
+        # Wait for win command response first
+        wait_for_ready(self.coord)
 
         # Use polling wait for arena fights to handle victory screen transitions
         wait_for_arena_end(self.coord)
@@ -556,6 +575,8 @@ class ArenaCombatMachine(RuleBasedStateMachine):
 
         note("Forcing loss")
         self.coord.send_message("lose")
+        # Wait for lose command response first
+        wait_for_ready(self.coord)
 
         # Use polling wait for arena fights to handle death screen transitions
         wait_for_arena_end(self.coord)
@@ -662,8 +683,11 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
         self._log(f"start_fight: {character} vs {encounter} (seed={seed}), at_menu={self.at_menu}")
 
         self.coord.send_message(f"arena {character} {encounter} {seed}")
-        wait_for_in_game(self.coord) 
-        wait_for_combat(self.coord)  
+        # Wait for arena command's response first (just consume it, don't request state)
+        wait_for_ready(self.coord)
+        # Then wait for in_game and combat conditions
+        wait_for_in_game(self.coord)
+        wait_for_combat(self.coord)
 
         self.at_menu = False
         self.fights_started += 1
@@ -676,6 +700,8 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
         self._log(f"win_fight: fight #{self.fights_started}, at_menu={self.at_menu}")
 
         self.coord.send_message("win")
+        # Wait for win command response first
+        wait_for_ready(self.coord)
 
         # Use polling wait with abandon fallback for arena fights
         wait_for_arena_end(self.coord)
@@ -691,6 +717,8 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
         self._log(f"lose_fight: fight #{self.fights_started}, at_menu={self.at_menu}")
 
         self.coord.send_message("lose")
+        # Wait for lose command response first
+        wait_for_ready(self.coord)
 
         # Use polling wait with abandon fallback for arena fights
         wait_for_arena_end(self.coord)
@@ -706,6 +734,8 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
         self._log(f"abandon_fight: fight #{self.fights_started}, at_menu={self.at_menu}")
 
         self.coord.send_message("abandon")
+        # Wait for abandon command response first
+        wait_for_ready(self.coord)
         wait_for_main_menu(self.coord)
 
         self.at_menu = True

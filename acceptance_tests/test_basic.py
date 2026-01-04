@@ -45,7 +45,8 @@ class TestGameLifecycle:
         # Start a game as Ironclad
         coord.send_message("start IRONCLAD 0")
 
-        # Wait for game to initialize
+        # Wait for start command response first, then for game to initialize
+        wait_for_ready(coord)
         wait_for_in_game(coord)
 
         # Verify we're in a game
@@ -61,7 +62,8 @@ class TestGameLifecycle:
         # Start a game
         coord.send_message("start IRONCLAD 0")
 
-        # Wait for game to start
+        # Wait for start command response first, then for game to start
+        wait_for_ready(coord)
         wait_for_in_game(coord)
         assert coord.in_game, "Should be in game"
 
@@ -99,7 +101,9 @@ class TestArenaMode:
         # Start an arena fight as Ironclad vs Cultist
         coord.send_message("arena IRONCLAD Cultist")
 
-        # Wait for arena fight to initialize
+        # Wait for arena command response first, then for combat to start
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
         wait_for_combat(coord)
 
         # Verify we're in an arena fight
@@ -122,13 +126,18 @@ class TestArenaMode:
             # Start an arena fight
             coord.send_message(f"arena IRONCLAD Cultist {12345 + fight_num}")
 
-            # Wait for combat to be ready
+            # Wait for arena command response first, then for combat to be ready
+            wait_for_ready(coord)
+            wait_for_in_game(coord)
             wait_for_combat(coord)
             assert coord.in_game, f"Fight {fight_num+1}: Should be in arena fight"
             assert coord.last_game_state.in_combat, f"Fight {fight_num+1}: Should be in combat"
 
             # Win the fight using the win command
             coord.send_message("win")
+
+            # Wait for win command response first
+            wait_for_ready(coord)
 
             # Wait for return to main menu
             wait_for_main_menu(coord)
@@ -146,13 +155,18 @@ class TestArenaMode:
             # Start an arena fight
             coord.send_message(f"arena IRONCLAD Gremlin Nob {54321 + fight_num}")
 
-            # Wait for combat to be ready
+            # Wait for arena command response first, then for combat to be ready
+            wait_for_ready(coord)
+            wait_for_in_game(coord)
             wait_for_combat(coord)
             assert coord.in_game, f"Fight {fight_num+1}: Should be in arena fight"
             assert coord.last_game_state.in_combat, f"Fight {fight_num+1}: Should be in combat"
 
             # Lose the fight using the lose command
             coord.send_message("lose")
+
+            # Wait for lose command response first
+            wait_for_ready(coord)
 
             # Wait for return to main menu
             wait_for_main_menu(coord)
@@ -171,12 +185,17 @@ class TestArenaMode:
         # Start an arena fight
         coord.send_message("arena IRONCLAD Cultist 12345")
 
-        # Wait for combat to be ready
+        # Wait for arena command response first, then for combat to be ready
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
         wait_for_combat(coord)
         assert coord.in_game, "Should be in arena fight"
 
         # Lose the fight using the lose command
         coord.send_message("lose")
+
+        # Wait for lose command response first
+        wait_for_ready(coord)
 
         # Wait for return to main menu - should happen automatically
         wait_for_main_menu(coord)

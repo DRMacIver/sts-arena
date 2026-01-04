@@ -137,13 +137,20 @@ echo "Configuring CommunicationMod..."
 CONFIG_DIR="$HOME/.config/ModTheSpire/CommunicationMod"
 mkdir -p "$CONFIG_DIR"
 
+# Collect test arguments (pass through to pytest)
+TEST_ARGS=""
+if [ $# -gt 0 ]; then
+    TEST_ARGS="$@"
+    echo "Test arguments: $TEST_ARGS"
+fi
+
 # Wrapper script that runs tests and signals completion
 WRAPPER_SCRIPT="/tmp/sts-arena-test-wrapper.sh"
 cat > "$WRAPPER_SCRIPT" << EOF
 #!/bin/bash
 cd "$ACCEPTANCE_DIR"
-# Run pytest via run_agent.py
-uv run python run_agent.py
+# Run pytest via run_agent.py with any passed arguments
+uv run python run_agent.py $TEST_ARGS
 RESULT=\$?
 echo \$RESULT > "$RESULT_FILE"
 touch "$MARKER_FILE"

@@ -34,6 +34,8 @@ class TestStory1_1_RandomLoadout:
 
         # Start arena fight
         coord.send_message("arena IRONCLAD Cultist")
+        # Wait for arena command response first, then wait for in_game
+        wait_for_ready(coord)
         wait_for_in_game(coord)
 
         game = coord.last_game_state
@@ -45,6 +47,8 @@ class TestStory1_1_RandomLoadout:
         coord = at_main_menu
 
         coord.send_message("arena IRONCLAD Cultist")
+        # Wait for arena command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
         wait_for_combat(coord)
 
@@ -59,6 +63,8 @@ class TestStory1_1_RandomLoadout:
         coord = at_main_menu
 
         coord.send_message("arena IRONCLAD Cultist")
+        # Wait for arena command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
 
         game = coord.last_game_state
@@ -69,6 +75,8 @@ class TestStory1_1_RandomLoadout:
         coord = at_main_menu
 
         coord.send_message("arena IRONCLAD Cultist")
+        # Wait for arena command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
 
         game = coord.last_game_state
@@ -82,6 +90,8 @@ class TestStory1_1_RandomLoadout:
 
         # Test Silent
         coord.send_message("arena THE_SILENT Cultist")
+        # Wait for arena command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
 
         game = coord.last_game_state
@@ -101,6 +111,8 @@ class TestStory1_2_SavedLoadout:
 
         # Start and complete an arena fight
         coord.send_message("arena IRONCLAD Cultist")
+        # Wait for arena command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
         wait_for_combat(coord)
 
@@ -123,6 +135,8 @@ class TestStory1_5_1_6_LoadoutManagement:
 
         # First create a loadout by starting an arena fight
         coord.send_message("arena IRONCLAD Cultist")
+        # Wait for arena command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
 
         # Try to rename it - this command doesn't exist yet
@@ -162,6 +176,8 @@ class TestStory2_1_PracticeFromPauseMenu:
         coord = at_main_menu
 
         coord.send_message("start IRONCLAD 0")
+        # Wait for start command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
 
         game = coord.last_game_state
@@ -174,6 +190,8 @@ class TestStory2_1_PracticeFromPauseMenu:
         coord = at_main_menu
 
         coord.send_message("start IRONCLAD 0")
+        # Wait for start command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
 
         coord.send_message("abandon")
@@ -195,6 +213,8 @@ class TestStory3_1_TryAgainAfterVictory:
 
         # Cultist is a simple enemy
         coord.send_message("arena IRONCLAD Cultist")
+        # Wait for arena command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
         wait_for_combat(coord)
 
@@ -216,6 +236,8 @@ class TestStory3_2_TryAgainAfterDefeat:
 
         # Start an arena fight
         coord.send_message("arena IRONCLAD Cultist")
+        # Wait for arena command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
         wait_for_combat(coord)
 
@@ -249,6 +271,8 @@ class TestStory5_1_EncountersByAct:
         """
         # Start the arena fight - same pattern as passing tests
         coord.send_message(f"arena IRONCLAD {encounter}")
+        # Wait for arena command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
         wait_for_combat(coord)
 
@@ -294,6 +318,8 @@ class TestStory5_1_EncountersByAct:
         assert not coord.in_game, "Should be at main menu before starting arena"
 
         coord.send_message("arena IRONCLAD Awakened One")
+        # Wait for arena command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
         wait_for_combat(coord)
 
@@ -324,6 +350,8 @@ class TestStory6_2_AbandonVsDeath:
         coord = at_main_menu
 
         coord.send_message("arena IRONCLAD Cultist")
+        # Wait for arena command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
 
         # Abandon the arena run
@@ -338,6 +366,8 @@ class TestStory6_2_AbandonVsDeath:
 
         # Start a normal run
         coord.send_message("start IRONCLAD 0")
+        # Wait for start command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
 
         normal_run_floor = coord.last_game_state.floor
@@ -348,6 +378,8 @@ class TestStory6_2_AbandonVsDeath:
 
         # Start an arena fight
         coord.send_message("arena IRONCLAD Cultist")
+        # Wait for arena command response first
+        wait_for_ready(coord)
         wait_for_in_game(coord)
 
         # Abandon arena
@@ -369,6 +401,7 @@ class TestAllCharacterClasses:
         """Test arena with Ironclad."""
         coord = at_main_menu
         coord.send_message("arena IRONCLAD Cultist")
+        wait_for_ready(coord)
         wait_for_in_game(coord)
         assert coord.last_game_state.character == PlayerClass.IRONCLAD
 
@@ -376,6 +409,7 @@ class TestAllCharacterClasses:
         """Test arena with Silent."""
         coord = at_main_menu
         coord.send_message("arena THE_SILENT Cultist")
+        wait_for_ready(coord)
         wait_for_in_game(coord)
         assert coord.last_game_state.character == PlayerClass.THE_SILENT
 
@@ -383,6 +417,7 @@ class TestAllCharacterClasses:
         """Test arena with Defect."""
         coord = at_main_menu
         coord.send_message("arena DEFECT Cultist")
+        wait_for_ready(coord)
         wait_for_in_game(coord)
         assert coord.last_game_state.character == PlayerClass.DEFECT
 
@@ -390,6 +425,7 @@ class TestAllCharacterClasses:
         """Test arena with Watcher."""
         coord = at_main_menu
         coord.send_message("arena WATCHER Cultist")
+        wait_for_ready(coord)
         wait_for_in_game(coord)
         assert coord.last_game_state.character == PlayerClass.WATCHER
 
