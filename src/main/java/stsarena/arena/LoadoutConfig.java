@@ -231,11 +231,11 @@ public class LoadoutConfig {
 
     public static final List<String> GOOD_UNCOMMON_RELICS = Arrays.asList(
         "Blue Candle", "Bottled Flame", "Bottled Lightning", "Bottled Tornado",
-        "Darkstone Periapt", "Eternal Feather", "Frozen Egg", "Horn Cleat",
+        "Darkstone Periapt", "Eternal Feather", "Frozen Egg 2", "Horn Cleat",
         "Ink Bottle", "Kunai", "Letter Opener", "Meat on the Bone",
-        "Mercury Hourglass", "Molten Egg", "Mummified Hand", "Ornamental Fan",
+        "Mercury Hourglass", "Molten Egg 2", "Mummified Hand", "Ornamental Fan",
         "Paper Krane", "Pear", "Shuriken", "Singing Bowl",
-        "Strike Dummy", "Sundial", "Toxic Egg", "White Beast Statue",
+        "Strike Dummy", "Sundial", "Toxic Egg 2", "White Beast Statue",
         "Gambling Chip", "Gremlin Horn", "The Courier", "Ninja Scroll",
         "Ice Cream", "Cables", "Symbiotic Virus", "Nunchaku",
         "Thread and Needle", "Torii"
@@ -694,7 +694,7 @@ public class LoadoutConfig {
         "Madness", "Mind Blast", "Panacea", "Panic Button", "Purity",
         "Swift Strike", "Trip",
         // Rare
-        "Apotheosis", "Chrysalis", "Hand of Greed", "Magnetism", "Master of Strategy",
+        "Apotheosis", "Chrysalis", "HandOfGreed", "Magnetism", "Master of Strategy",
         "Mayhem", "Metamorphosis", "Panache", "Sadistic Nature", "Secret Technique",
         "Secret Weapon", "The Bomb", "Thinking Ahead", "Transmutation", "Violence"
     );

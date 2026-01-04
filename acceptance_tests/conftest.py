@@ -142,24 +142,29 @@ def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     """
-    Hook to capture screenshots on test failures.
+    Hook to capture screenshots on test completion (both success and failure).
 
     This runs after each test phase (setup, call, teardown) and captures
-    a screenshot if the test failed.
+    a screenshot when the test call completes.
     """
     outcome = yield
     report = outcome.get_result()
 
-    # Only capture on test call failures (not setup/teardown)
-    if report.when == "call" and report.failed and SCREENSHOTS_ENABLED:
+    # Capture on test call completion (not setup/teardown)
+    if report.when == "call" and SCREENSHOTS_ENABLED:
         test_name = item.nodeid
         try:
-            exc_info = call.excinfo
-            exception = exc_info.value if exc_info else None
-            screenshot_on_failure(test_name, exception)
+            if report.failed:
+                exc_info = call.excinfo
+                exception = exc_info.value if exc_info else None
+                screenshot_on_failure(test_name, exception)
+            else:
+                # Also capture on success
+                from screenshot import take_screenshot
+                take_screenshot(name="success", test_name=test_name)
         except Exception as e:
             # Don't fail the test because of screenshot issues
-            print(f"Warning: Failed to capture failure screenshot: {e}")
+            print(f"Warning: Failed to capture screenshot: {e}")
 
 
 def pytest_sessionfinish(session, exitstatus):
