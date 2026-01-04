@@ -217,8 +217,14 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
             !CardCrawlGame.loadingSave) {
             returnToArenaOnMainMenu = false;
             logger.info("ARENA: Returned to main menu, opening encounter selection");
-            if (encounterSelectScreen != null && !encounterSelectScreen.isOpen) {
-                openEncounterSelectScreen();
+            if (encounterSelectScreen != null) {
+                if (!encounterSelectScreen.isOpen) {
+                    openEncounterSelectScreen();
+                } else {
+                    // Screen is already open - just refresh the outcomes to show new victories
+                    logger.info("ARENA: Encounter screen already open, refreshing outcomes");
+                    encounterSelectScreen.refreshEncounterOutcomes();
+                }
             }
         }
     }

@@ -842,7 +842,7 @@ public class LoadoutConfig {
         "Bandage Up", "Blind", "Dark Shackles", "Deep Breath", "Discovery",
         "Dramatic Entrance", "Enlightenment", "Finesse", "Flash of Steel",
         "Forethought", "Good Instincts", "Impatience", "Jack Of All Trades",
-        "Madness", "Mind Blast", "Panacea", "Panic Button", "Purity",
+        "Madness", "Mind Blast", "Panacea", "PanicButton", "Purity",
         "Swift Strike", "Trip",
         // Rare
         "Apotheosis", "Chrysalis", "HandOfGreed", "Magnetism", "Master of Strategy",

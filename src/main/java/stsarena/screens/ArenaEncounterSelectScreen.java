@@ -159,16 +159,27 @@ public class ArenaEncounterSelectScreen {
         applyFilter();
 
         // Load encounter outcomes for the selected loadout
+        refreshEncounterOutcomes();
+    }
+
+    /**
+     * Refresh the encounter outcomes from the database.
+     * Called on open() and can be called to force refresh after fights.
+     */
+    public void refreshEncounterOutcomes() {
         encounterOutcomes.clear();
         if (ArenaLoadoutSelectScreen.selectedSavedLoadout != null) {
             try {
                 ArenaRepository repo = new ArenaRepository(ArenaDatabase.getInstance());
                 encounterOutcomes = repo.getEncounterOutcomesForLoadout(
                     ArenaLoadoutSelectScreen.selectedSavedLoadout.dbId);
-                STSArena.logger.info("Loaded " + encounterOutcomes.size() + " encounter outcomes for loadout");
+                STSArena.logger.info("Loaded " + encounterOutcomes.size() + " encounter outcomes for loadout " +
+                    ArenaLoadoutSelectScreen.selectedSavedLoadout.dbId);
             } catch (Exception e) {
                 STSArena.logger.error("Failed to load encounter outcomes", e);
             }
+        } else {
+            STSArena.logger.info("No selectedSavedLoadout, cannot load encounter outcomes");
         }
     }
 
