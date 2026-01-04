@@ -12,6 +12,13 @@ import time
 
 from spirecomm.communication.coordinator import Coordinator
 
+# Import screenshot utilities (optional - may not be available if mss not installed)
+try:
+    from screenshot import get_capture, screenshot_on_failure, generate_screenshot_index
+    SCREENSHOTS_ENABLED = True
+except ImportError:
+    SCREENSHOTS_ENABLED = False
+
 
 DEFAULT_TIMEOUT = 60  # seconds - game takes time to initialize
 
@@ -126,3 +133,78 @@ def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
             continue
 
     assert not coordinator.in_game, "Should be at main menu after abandon"
+
+
+# =============================================================================
+# Screenshot capture hooks
+# =============================================================================
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """
+    Hook to capture screenshots on test failures.
+
+    This runs after each test phase (setup, call, teardown) and captures
+    a screenshot if the test failed.
+    """
+    outcome = yield
+    report = outcome.get_result()
+
+    # Only capture on test call failures (not setup/teardown)
+    if report.when == "call" and report.failed and SCREENSHOTS_ENABLED:
+        test_name = item.nodeid
+        try:
+            exc_info = call.excinfo
+            exception = exc_info.value if exc_info else None
+            screenshot_on_failure(test_name, exception)
+        except Exception as e:
+            # Don't fail the test because of screenshot issues
+            print(f"Warning: Failed to capture failure screenshot: {e}")
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """
+    Hook to generate screenshot index at the end of the test session.
+    """
+    if SCREENSHOTS_ENABLED:
+        try:
+            index_path = generate_screenshot_index()
+            if index_path:
+                print(f"\nScreenshot index generated: {index_path}")
+        except Exception as e:
+            print(f"Warning: Failed to generate screenshot index: {e}")
+
+        # Cleanup
+        try:
+            get_capture().cleanup()
+        except Exception:
+            pass
+
+
+@pytest.fixture
+def screenshot(request):
+    """
+    Fixture to take screenshots during a test.
+
+    Usage:
+        def test_something(screenshot):
+            # Do some setup
+            screenshot("after_setup")
+
+            # Do something
+            screenshot("after_action")
+    """
+    if not SCREENSHOTS_ENABLED:
+        # Return a no-op function if screenshots aren't available
+        def noop(name=None):
+            pass
+        yield noop
+        return
+
+    test_name = request.node.nodeid
+
+    def take(name=None):
+        from screenshot import take_screenshot
+        return take_screenshot(name=name, test_name=test_name)
+
+    yield take
