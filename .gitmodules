@@ -1,0 +1,6 @@
+[submodule "external/CommunicationMod"]
+	path = external/CommunicationMod
+	url = git@github.com:DRMacIver/CommunicationMod.git
+[submodule "external/spirecomm"]
+	path = external/spirecomm
+	url = git@github.com:DRMacIver/spirecomm.git

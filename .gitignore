@@ -39,8 +39,11 @@ info.displayconfig
 # Mods for testing
 mods/
 
-# External dependencies (cloned repos)
-external/
+# External dependencies (git submodules)
+# Note: submodules are tracked, but their build outputs are not
+external/*/target/
+external/*/dependency-reduced-pom.xml
+external/*/spirecomm.egg-info/
 
 # Build outputs
 *.class
