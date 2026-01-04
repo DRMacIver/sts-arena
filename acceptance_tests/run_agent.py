@@ -88,6 +88,8 @@ def main():
                 "-p", "no:cacheprovider",
             ],
             env=env,
+            # Redirect pytest stdout to stderr so it doesn't go to CommunicationMod
+            stdout=sys.stderr,
         )
 
         sys.exit(result.returncode)

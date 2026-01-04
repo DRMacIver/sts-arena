@@ -65,11 +65,9 @@ def _ensure_main_menu(coordinator) -> bool:
         coordinator.receive_game_state_update(block=True, perform_callbacks=False)
 
     if not coordinator.in_game:
-        logger.info("Already at main menu")
         return True
 
     # We're in a game - need to abandon
-    logger.info("Abandoning current run...")
     coordinator.send_message("abandon")
 
     # Wait for state update
@@ -79,9 +77,4 @@ def _ensure_main_menu(coordinator) -> bool:
     while not coordinator.game_is_ready:
         coordinator.receive_game_state_update(block=True, perform_callbacks=False)
 
-    if not coordinator.in_game:
-        logger.info("Successfully returned to main menu")
-        return True
-    else:
-        logger.warning("Still in game after abandon")
-        return False
+    return not coordinator.in_game
