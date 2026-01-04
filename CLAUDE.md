@@ -261,6 +261,97 @@ acceptance_tests/
 2. **CardLibrary/RelicLibrary may not be loaded** - Catch `NoClassDefFoundError` when using game libraries.
 3. **Use `wait_for_stable()` not `time.sleep()`** - For acceptance tests, wait for game state, not arbitrary time.
 
+## Debugging Mod Problems
+
+### Attitude and Approach
+
+**You are the sole author of this codebase. Every bug is your bug. Every broken test is something you broke.**
+
+- **Never explain away errors** - If something fails, fix it. Don't claim it "can't work" or "isn't important."
+- **If the user says it worked before, it did** - Your job is to find what you broke, not explain why it's impossible.
+- **Don't dig for spurious explanations** - When something breaks, identify the specific change that broke it.
+- **Run the actual tests** - Don't assume tests pass. Run them and verify.
+- **Use git bisect** - When a test breaks, use `git bisect run ./test-command` to find the breaking commit.
+
+### Consulting Mod Sources
+
+**Clone source repos from GitHub. Never decompile JARs when source is available.**
+
+Key mod repositories:
+- **ModTheSpire**: https://github.com/kiooeht/ModTheSpire
+- **BaseMod**: https://github.com/daviscook477/BaseMod
+- **CommunicationMod**: (in external/CommunicationMod submodule)
+
+```bash
+# Clone for reference (don't commit to project)
+cd external && git clone --depth 1 https://github.com/kiooeht/ModTheSpire.git
+```
+
+Read the actual source to understand how mods work. The decompiled code is harder to read and may have decompilation artifacts.
+
+### ClassLoader Issues
+
+ModTheSpire uses a complex classloader hierarchy. Common issues:
+
+**LinkageError: duplicate class definition**
+- Caused by a class being loaded by multiple classloaders
+- MTS uses TWO classloaders: `tmpPatchingLoader` (for patching) and `loader` (for compilation)
+- If you're testing patching, mirror this architecture
+
+**Classes loaded too early**
+- Check script classpaths - game jars on JVM classpath get loaded by system classloader
+- Game jars should be loaded dynamically via URLClassLoader so MTSClassLoader can patch first
+- Use `cls = "fully.qualified.Name"` not `clz = ClassName.class` in patches (prevents early loading)
+
+**Debugging classloader issues**:
+```java
+// Check which classloader loaded a class
+System.out.println(someClass.getClassLoader().getClass().getSimpleName());
+// MTSClassLoader = good (patched)
+// AppClassLoader = bad (loaded before patching)
+```
+
+### Script and Classpath Problems
+
+**Check script classpaths carefully:**
+```bash
+# Bad - game jar on JVM classpath, can't be patched
+CLASSPATH="$CLASSPATH:lib/desktop-1.0.jar"
+
+# Good - only loader classes on classpath, game jars loaded dynamically
+CLASSPATH="target/test-classes:lib/ModTheSpire.jar"
+```
+
+**Check for alternative jar versions:**
+```bash
+ls -la lib/*.orig lib/*.new lib/*.backup 2>/dev/null
+```
+
+### HeadlessModLoader Architecture
+
+The headless test must mirror MTS's two-classloader approach:
+
+```java
+// 1. tmpPatchingLoader - used during inject/finalize
+Object tmpPatchingLoader = mtsLoaderCtor.newInstance(...);
+pool = new MTSClassPool(tmpPatchingLoader);
+injectPatches(tmpPatchingLoader, pool, patches);
+finalizePatches(tmpPatchingLoader);
+
+// 2. loader - fresh classloader for compilation (no classes pre-loaded)
+Object loader = mtsLoaderCtor.newInstance(...);
+compilePatches(loader, pool);  // Uses fresh loader!
+```
+
+### Common Debugging Workflow
+
+1. **Reproduce the failure**: Run the exact failing command
+2. **Check recent changes**: `git diff HEAD~5 --name-only`
+3. **Isolate the issue**: Use flags like `--stsarena-only` to narrow scope
+4. **Find breaking commit**: `git bisect run ./test-script.sh`
+5. **Read upstream source**: Clone the mod repo and understand the expected behavior
+6. **Fix and verify**: Run ALL relevant tests, not just the one that failed
+
 # Agent Instructions
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
