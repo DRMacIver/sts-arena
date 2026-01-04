@@ -6,7 +6,6 @@ This sends "ready" immediately and runs basic tests.
 
 import sys
 import time
-import logging
 
 # Save original stdout BEFORE any imports
 _original_stdout = sys.stdout
@@ -14,18 +13,20 @@ sys.stdout = sys.stderr
 
 from spirecomm.communication.coordinator import Coordinator
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='[TEST] %(levelname)s: %(message)s',
-    stream=sys.stderr
-)
-logger = logging.getLogger(__name__)
+# ANSI color codes
+GREEN = "\033[32m"
+RED = "\033[31m"
+YELLOW = "\033[33m"
+RESET = "\033[0m"
+
+
+def log(msg):
+    """Print a log message to stderr."""
+    print(msg, file=sys.stderr, flush=True)
 
 
 def test_state_command(coord):
     """Test that state command works."""
-    logger.info("Testing state command...")
     coord.send_message("state")
 
     timeout = 30
@@ -35,16 +36,12 @@ def test_state_command(coord):
 
     assert coord.game_is_ready, "Game should be ready"
     assert coord.last_error is None, f"Should have no error: {coord.last_error}"
-    logger.info("PASSED: state command works")
 
 
 def test_start_game(coord):
     """Test that we can start a game."""
-    logger.info("Testing start game...")
-
     # If we're in a game, abandon first
     if coord.in_game:
-        logger.info("Abandoning current run...")
         coord.send_message("abandon")
         time.sleep(2.0)
         coord.send_message("state")
@@ -62,15 +59,10 @@ def test_start_game(coord):
     assert coord.in_game, "Should be in game"
     assert coord.last_game_state is not None, "Should have game state"
     assert coord.last_game_state.current_hp > 0, "Should have HP"
-    logger.info("PASSED: can start game")
-
-    return True
 
 
 def test_abandon_game(coord):
     """Test that we can abandon a game."""
-    logger.info("Testing abandon game...")
-
     # Make sure we're in a game first
     if not coord.in_game:
         coord.send_message("start IRONCLAD 0")
@@ -90,28 +82,27 @@ def test_abandon_game(coord):
         coord.receive_game_state_update(block=True, perform_callbacks=False)
 
     assert not coord.in_game, "Should not be in game after abandon"
-    logger.info("PASSED: can abandon game")
-
-    return True
 
 
 def main():
     """Run simple tests."""
-    logger.info("Starting simple acceptance tests...")
+    log("=" * 60)
+    log("simple_test.py - STS Arena Acceptance Tests")
+    log("=" * 60)
 
     # Create coordinator and signal ready IMMEDIATELY
-    logger.info("Creating coordinator...")
+    log("Setting up game connection...")
     coord = Coordinator(output_file=_original_stdout)
     coord.signal_ready()
 
-    logger.info("Waiting for game to be ready...")
     while not coord.game_is_ready:
         coord.receive_game_state_update(block=True, perform_callbacks=False)
-    logger.info("Game is ready!")
+    log("Game is ready!\n")
 
     # Run tests
     passed = 0
     failed = 0
+    errors = []
 
     tests = [
         test_state_command,
@@ -120,17 +111,38 @@ def main():
     ]
 
     for test in tests:
+        test_name = f"simple_test.py::{test.__name__}"
         try:
             test(coord)
+            log(f"{test_name} {GREEN}PASSED{RESET}")
             passed += 1
         except AssertionError as e:
-            logger.error(f"FAILED: {test.__name__}: {e}")
+            log(f"{test_name} {RED}FAILED{RESET}")
+            errors.append((test.__name__, "FAILED", str(e)))
             failed += 1
         except Exception as e:
-            logger.error(f"ERROR: {test.__name__}: {e}")
+            log(f"{test_name} {RED}ERROR{RESET}")
+            errors.append((test.__name__, "ERROR", f"{type(e).__name__}: {e}"))
             failed += 1
 
-    logger.info(f"Results: {passed} passed, {failed} failed")
+    # Print summary
+    log("")
+    log("=" * 60)
+
+    # Print errors if any
+    if errors:
+        log(f"{RED}FAILURES:{RESET}")
+        for name, status, msg in errors:
+            log(f"  {name}: {msg}")
+        log("")
+
+    # Final summary line (pytest style)
+    total = passed + failed
+    if failed == 0:
+        log(f"{GREEN}{passed} passed{RESET} in simple_test.py")
+    else:
+        log(f"{RED}{failed} failed{RESET}, {GREEN}{passed} passed{RESET} in simple_test.py")
+    log("=" * 60)
 
     sys.exit(0 if failed == 0 else 1)
 
