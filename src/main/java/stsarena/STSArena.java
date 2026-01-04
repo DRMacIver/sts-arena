@@ -63,8 +63,28 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         // Register commands with CommunicationMod early (during mod initialization)
         // This must happen before PostInitialize because CommunicationMod starts
         // accepting commands as soon as it receives "ready" during mod init
-        ArenaCommand.register();
-        LoseCommand.register();
+        //
+        // IMPORTANT: We must check for CommunicationMod BEFORE loading our command classes,
+        // because they implement CommandExtension and can't be loaded without it.
+        registerCommunicationModCommands();
+    }
+
+    /**
+     * Register commands with CommunicationMod if it's available.
+     * Uses reflection to avoid loading command classes when CommunicationMod isn't present.
+     */
+    private void registerCommunicationModCommands() {
+        try {
+            // Check if CommunicationMod is loaded by trying to load its class
+            Class.forName("communicationmod.CommandExecutor");
+
+            // CommunicationMod is available - now safe to load and register our commands
+            ArenaCommand.register();
+            LoseCommand.register();
+            logger.info("CommunicationMod detected - commands registered");
+        } catch (ClassNotFoundException e) {
+            logger.info("CommunicationMod not loaded - arena/lose commands not available");
+        }
     }
 
     /**
@@ -97,8 +117,8 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         statsScreen = new ArenaStatsScreen();
 
         // Register commands with CommunicationMod (if loaded)
-        ArenaCommand.register();
-        LoseCommand.register();
+        // Note: Already registered in constructor, but safe to call again
+        registerCommunicationModCommands();
 
         // Arena Mode button is added via patches/MainMenuArenaPatch
     }
