@@ -52,15 +52,15 @@ echo "Build successful"
 echo
 
 # Build classpath for the test
-CLASSPATH="src/test/resources"
-CLASSPATH="$CLASSPATH:target/test-classes"
+# IMPORTANT: Only include test classes and ModTheSpire on the JVM classpath.
+# Game jars (desktop-1.0.jar) and mod jars (BaseMod, STSArena) are loaded dynamically
+# by HeadlessModLoader via URLClassLoader to ensure MTSClassLoader can patch them
+# before they're loaded by the system classloader.
+CLASSPATH="target/test-classes"
 CLASSPATH="$CLASSPATH:target/classes"
-CLASSPATH="$CLASSPATH:lib/desktop-1.0.jar"
 CLASSPATH="$CLASSPATH:lib/ModTheSpire.jar"
-CLASSPATH="$CLASSPATH:lib/BaseMod.jar"
-CLASSPATH="$CLASSPATH:target/STSArena.jar"
 
-# Add Maven dependencies
+# Add Maven dependencies needed by MTS
 for jar in ~/.m2/repository/org/javassist/javassist/3.29.2-GA/javassist-3.29.2-GA.jar \
            ~/.m2/repository/com/google/code/gson/gson/2.*/gson-*.jar; do
     if [ -f "$jar" ]; then
