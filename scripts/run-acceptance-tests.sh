@@ -222,7 +222,17 @@ if [ -f "$RESULT_FILE" ]; then
     EXIT_CODE=$(cat "$RESULT_FILE")
 fi
 
+# Display pytest output
+PYTEST_OUTPUT="$PROJECT_DIR/lib/pytest_output.txt"
 echo
+echo "=== Test Output ==="
+if [ -f "$PYTEST_OUTPUT" ]; then
+    cat "$PYTEST_OUTPUT"
+else
+    echo "(No pytest output found)"
+fi
+echo
+
 if [ "$EXIT_CODE" -eq 0 ]; then
     echo "=== Acceptance tests passed! ==="
 else

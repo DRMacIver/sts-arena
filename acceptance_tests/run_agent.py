@@ -75,22 +75,27 @@ def main():
         # Run pytest in a subprocess
         # pytest can use stdout/stderr freely - we communicate via pipes
         test_dir = Path(__file__).parent
+        project_dir = test_dir.parent
+        pytest_output_file = project_dir / "lib" / "pytest_output.txt"
+
         env = os.environ.copy()
         env["STS_GAME_INPUT_PIPE"] = game_to_test
         env["STS_GAME_OUTPUT_PIPE"] = test_to_game
 
-        result = subprocess.run(
-            [
-                sys.executable, "-m", "pytest",
-                str(test_dir),
-                "-v",
-                "--tb=short",
-                "-p", "no:cacheprovider",
-            ],
-            env=env,
-            # Redirect pytest stdout to stderr so it doesn't go to CommunicationMod
-            stdout=sys.stderr,
-        )
+        # Write pytest output to a file so the test script can display it
+        with open(pytest_output_file, "w") as outfile:
+            result = subprocess.run(
+                [
+                    sys.executable, "-m", "pytest",
+                    str(test_dir),
+                    "-v",
+                    "--tb=short",
+                    "-p", "no:cacheprovider",
+                ],
+                env=env,
+                stdout=outfile,
+                stderr=subprocess.STDOUT,
+            )
 
         sys.exit(result.returncode)
     finally:
