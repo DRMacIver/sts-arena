@@ -20,7 +20,7 @@ public class DisableArenaSavePatch {
      * Patch SaveAndContinue.save() to skip saving during arena runs.
      */
     @SpirePatch(
-        clz = SaveAndContinue.class,
+        cls = "com.megacrit.cardcrawl.saveAndContinue.SaveAndContinue",
         method = "save"
     )
     public static class DisableSave {

@@ -33,7 +33,7 @@ public class NormalDeathScreenButtonPatch {
     /**
      * Update the arena retry button.
      */
-    @SpirePatch(clz = DeathScreen.class, method = "update")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.DeathScreen", method = "update")
     public static class UpdatePatch {
         @SpirePostfixPatch
         public static void Postfix(DeathScreen __instance) {
@@ -102,7 +102,7 @@ public class NormalDeathScreenButtonPatch {
     /**
      * Render the arena retry button.
      */
-    @SpirePatch(clz = DeathScreen.class, method = "render")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.DeathScreen", method = "render")
     public static class RenderPatch {
         @SpirePostfixPatch
         public static void Postfix(DeathScreen __instance, SpriteBatch sb) {

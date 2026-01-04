@@ -25,7 +25,7 @@ public class ArenaPauseMenuPatch {
      * We intercept updateLabel and replace the incoming label.
      */
     @SpirePatch(
-        clz = ExitGameButton.class,
+        cls = "com.megacrit.cardcrawl.screens.options.ExitGameButton",
         method = "updateLabel"
     )
     public static class ChangeExitButtonLabel {
@@ -40,7 +40,7 @@ public class ArenaPauseMenuPatch {
      * Change the popup description for arena mode.
      */
     @SpirePatch(
-        clz = SettingsScreen.class,
+        cls = "com.megacrit.cardcrawl.screens.options.SettingsScreen",
         method = "popup"
     )
     public static class ChangePopupDescription {
@@ -60,7 +60,7 @@ public class ArenaPauseMenuPatch {
      * Hide the Abandon Run button during arena mode - don't update it.
      */
     @SpirePatch(
-        clz = AbandonRunButton.class,
+        cls = "com.megacrit.cardcrawl.screens.options.AbandonRunButton",
         method = "update"
     )
     public static class HideAbandonButtonUpdate {
@@ -76,7 +76,7 @@ public class ArenaPauseMenuPatch {
      * Hide the Abandon Run button during arena mode - don't render it.
      */
     @SpirePatch(
-        clz = AbandonRunButton.class,
+        cls = "com.megacrit.cardcrawl.screens.options.AbandonRunButton",
         method = "render"
     )
     public static class HideAbandonButtonRender {
@@ -93,7 +93,7 @@ public class ArenaPauseMenuPatch {
      * If we came from a normal run (Practice in Arena), resume that run.
      */
     @SpirePatch(
-        clz = ConfirmPopup.class,
+        cls = "com.megacrit.cardcrawl.screens.options.ConfirmPopup",
         method = "yesButtonEffect"
     )
     public static class HandleArenaExit {

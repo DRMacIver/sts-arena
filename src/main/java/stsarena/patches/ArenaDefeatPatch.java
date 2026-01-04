@@ -10,7 +10,7 @@ import stsarena.arena.ArenaRunner;
 /**
  * Patch to detect defeat in arena combat.
  */
-@SpirePatch(clz = DeathScreen.class, method = SpirePatch.CONSTRUCTOR, paramtypez = {MonsterGroup.class})
+@SpirePatch(cls = "com.megacrit.cardcrawl.screens.DeathScreen", method = SpirePatch.CONSTRUCTOR, paramtypez = {MonsterGroup.class})
 public class ArenaDefeatPatch {
     @SpirePostfixPatch
     public static void Postfix(DeathScreen __instance, MonsterGroup m) {

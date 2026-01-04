@@ -15,7 +15,7 @@ import stsarena.arena.ArenaRunner;
 public class ClearArenaOnMainMenuPatch {
 
     @SpirePatch(
-        clz = MainMenuScreen.class,
+        cls = "com.megacrit.cardcrawl.screens.mainMenu.MainMenuScreen",
         method = SpirePatch.CONSTRUCTOR,
         paramtypez = {boolean.class}
     )

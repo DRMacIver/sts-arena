@@ -41,7 +41,7 @@ public class ArenaDeathScreenButtonsPatch {
     /**
      * Intercept update to handle our custom buttons in arena mode.
      */
-    @SpirePatch(clz = DeathScreen.class, method = "update")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.DeathScreen", method = "update")
     public static class UpdatePatch {
         @SpirePostfixPatch
         public static void Postfix(DeathScreen __instance) {
@@ -136,7 +136,7 @@ public class ArenaDeathScreenButtonsPatch {
     /**
      * Render our custom buttons instead of (or in addition to) the normal return button.
      */
-    @SpirePatch(clz = DeathScreen.class, method = "render")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.DeathScreen", method = "render")
     public static class RenderPatch {
         @SpirePostfixPatch
         public static void Postfix(DeathScreen __instance, SpriteBatch sb) {
@@ -199,7 +199,7 @@ public class ArenaDeathScreenButtonsPatch {
     /**
      * Hide the default return button in arena mode by intercepting its render.
      */
-    @SpirePatch(clz = com.megacrit.cardcrawl.ui.buttons.ReturnToMenuButton.class, method = "render")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.ui.buttons.ReturnToMenuButton", method = "render")
     public static class HideDefaultButtonPatch {
         @SpirePrefixPatch
         public static SpireReturn<Void> Prefix(com.megacrit.cardcrawl.ui.buttons.ReturnToMenuButton __instance, SpriteBatch sb) {
@@ -214,7 +214,7 @@ public class ArenaDeathScreenButtonsPatch {
     /**
      * Skip rendering the stats screen in arena mode - we don't want to show run scores.
      */
-    @SpirePatch(clz = GameOverScreen.class, method = "renderStatsScreen")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.GameOverScreen", method = "renderStatsScreen")
     public static class HideStatsScreenPatch {
         @SpirePrefixPatch
         public static SpireReturn<Void> Prefix(GameOverScreen __instance, SpriteBatch sb) {
@@ -228,7 +228,7 @@ public class ArenaDeathScreenButtonsPatch {
     /**
      * Skip updating the stats screen animations in arena mode.
      */
-    @SpirePatch(clz = DeathScreen.class, method = "updateStatsScreen")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.DeathScreen", method = "updateStatsScreen")
     public static class SkipStatsUpdatePatch {
         @SpirePrefixPatch
         public static SpireReturn<Void> Prefix(DeathScreen __instance) {

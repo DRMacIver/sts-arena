@@ -82,7 +82,7 @@ public class ArenaPauseButtonPatch {
     /**
      * Update the arena practice button during pause menu update.
      */
-    @SpirePatch(clz = OptionsPanel.class, method = "update")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.options.OptionsPanel", method = "update")
     public static class UpdatePatch {
         @SpirePostfixPatch
         public static void Postfix(OptionsPanel __instance) {
@@ -116,7 +116,7 @@ public class ArenaPauseButtonPatch {
      * Render the arena practice button during pause menu render.
      * Styled to match the AbandonRunButton.
      */
-    @SpirePatch(clz = OptionsPanel.class, method = "render")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.options.OptionsPanel", method = "render")
     public static class RenderPatch {
         @SpirePostfixPatch
         public static void Postfix(OptionsPanel __instance, SpriteBatch sb) {
@@ -289,7 +289,7 @@ public class ArenaPauseButtonPatch {
      * Move the Abandon Run button up to make room and avoid overlapping settings.
      * Also track when it's clicked to prevent loadout creation.
      */
-    @SpirePatch(clz = AbandonRunButton.class, method = "update")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.options.AbandonRunButton", method = "update")
     public static class AbandonRunButtonUpdatePatch {
         private static Field yField = null;
         private static Field hbField = null;
@@ -348,7 +348,7 @@ public class ArenaPauseButtonPatch {
     /**
      * Move the Abandon Run button rendering up.
      */
-    @SpirePatch(clz = AbandonRunButton.class, method = "render")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.options.AbandonRunButton", method = "render")
     public static class AbandonRunButtonRenderPatch {
         private static Field yField = null;
         private static boolean fieldInitialized = false;

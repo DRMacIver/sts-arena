@@ -10,7 +10,7 @@ import stsarena.arena.ArenaRunner;
 /**
  * Patch to detect victory in arena combat.
  */
-@SpirePatch(clz = AbstractRoom.class, method = "endBattle")
+@SpirePatch(cls = "com.megacrit.cardcrawl.rooms.AbstractRoom", method = "endBattle")
 public class ArenaVictoryPatch {
     @SpirePostfixPatch
     public static void Postfix(AbstractRoom __instance) {

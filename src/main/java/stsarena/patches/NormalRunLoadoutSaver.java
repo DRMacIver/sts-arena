@@ -51,7 +51,7 @@ public class NormalRunLoadoutSaver {
      * Capture player state at the start of combat.
      * This is used for defeats so the loadout reflects pre-combat state.
      */
-    @SpirePatch(clz = MonsterRoom.class, method = "onPlayerEntry")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.rooms.MonsterRoom", method = "onPlayerEntry")
     public static class OnCombatStart {
         @SpirePostfixPatch
         public static void Postfix() {
@@ -62,7 +62,7 @@ public class NormalRunLoadoutSaver {
     /**
      * Also patch elite rooms in case they override onPlayerEntry.
      */
-    @SpirePatch(clz = MonsterRoomElite.class, method = "onPlayerEntry")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.rooms.MonsterRoomElite", method = "onPlayerEntry")
     public static class OnEliteCombatStart {
         @SpirePostfixPatch
         public static void Postfix() {
@@ -73,7 +73,7 @@ public class NormalRunLoadoutSaver {
     /**
      * Also patch boss rooms in case they override onPlayerEntry.
      */
-    @SpirePatch(clz = MonsterRoomBoss.class, method = "onPlayerEntry")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.rooms.MonsterRoomBoss", method = "onPlayerEntry")
     public static class OnBossCombatStart {
         @SpirePostfixPatch
         public static void Postfix() {
@@ -198,7 +198,7 @@ public class NormalRunLoadoutSaver {
      * Uses the pre-combat state (HP and potions from before the fatal fight).
      * Does NOT save if the run was abandoned.
      */
-    @SpirePatch(clz = DeathScreen.class, method = SpirePatch.CONSTRUCTOR, paramtypez = {MonsterGroup.class})
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.DeathScreen", method = SpirePatch.CONSTRUCTOR, paramtypez = {MonsterGroup.class})
     public static class OnDefeat {
         @SpirePostfixPatch
         public static void Postfix(DeathScreen __instance, MonsterGroup m) {
@@ -221,7 +221,7 @@ public class NormalRunLoadoutSaver {
      * Save loadout when player wins a normal run.
      * Uses the current state (post-victory).
      */
-    @SpirePatch(clz = VictoryScreen.class, method = SpirePatch.CONSTRUCTOR, paramtypez = {MonsterGroup.class})
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.VictoryScreen", method = SpirePatch.CONSTRUCTOR, paramtypez = {MonsterGroup.class})
     public static class OnVictory {
         @SpirePostfixPatch
         public static void Postfix(VictoryScreen __instance, MonsterGroup m) {

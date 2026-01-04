@@ -28,7 +28,7 @@ public class ArenaMenuButton {
      * Patch to set the label text for our custom buttons.
      */
     @SpirePatch(
-        clz = MenuButton.class,
+        cls = "com.megacrit.cardcrawl.screens.mainMenu.MenuButton",
         method = "setLabel"
     )
     public static class SetLabel {
@@ -52,7 +52,7 @@ public class ArenaMenuButton {
      * Patch to handle clicks on our custom buttons.
      */
     @SpirePatch(
-        clz = MenuButton.class,
+        cls = "com.megacrit.cardcrawl.screens.mainMenu.MenuButton",
         method = "buttonEffect"
     )
     public static class ButtonEffect {

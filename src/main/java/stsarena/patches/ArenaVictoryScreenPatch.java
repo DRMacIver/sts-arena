@@ -69,7 +69,7 @@ public class ArenaVictoryScreenPatch {
     /**
      * Check for imperfect victory when VictoryScreen is constructed.
      */
-    @SpirePatch(clz = VictoryScreen.class, method = SpirePatch.CONSTRUCTOR, paramtypez = {MonsterGroup.class})
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.VictoryScreen", method = SpirePatch.CONSTRUCTOR, paramtypez = {MonsterGroup.class})
     public static class ConstructorPatch {
         @SpirePostfixPatch
         public static void Postfix(VictoryScreen __instance, MonsterGroup m) {
@@ -80,7 +80,7 @@ public class ArenaVictoryScreenPatch {
     /**
      * Intercept update to handle our custom buttons in arena mode for imperfect victories.
      */
-    @SpirePatch(clz = VictoryScreen.class, method = "update")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.VictoryScreen", method = "update")
     public static class UpdatePatch {
         @SpirePostfixPatch
         public static void Postfix(VictoryScreen __instance) {
@@ -194,7 +194,7 @@ public class ArenaVictoryScreenPatch {
     /**
      * Render our custom buttons for imperfect victories.
      */
-    @SpirePatch(clz = VictoryScreen.class, method = "render")
+    @SpirePatch(cls = "com.megacrit.cardcrawl.screens.VictoryScreen", method = "render")
     public static class RenderPatch {
         @SpirePostfixPatch
         public static void Postfix(VictoryScreen __instance, SpriteBatch sb) {

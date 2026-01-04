@@ -10,7 +10,7 @@ import stsarena.STSArena;
  * This stops the buttons from highlighting when the mouse hovers over them behind our screens.
  */
 @SpirePatch(
-    clz = MenuButton.class,
+    cls = "com.megacrit.cardcrawl.screens.mainMenu.MenuButton",
     method = "update"
 )
 public class BlockMenuButtonHoverPatch {

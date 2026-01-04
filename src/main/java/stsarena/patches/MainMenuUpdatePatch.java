@@ -13,7 +13,7 @@ import stsarena.STSArena;
  * removed incorrectly. This patch checks every frame and re-adds our button if missing.
  */
 @SpirePatch(
-    clz = MainMenuScreen.class,
+    cls = "com.megacrit.cardcrawl.screens.mainMenu.MainMenuScreen",
     method = "update"
 )
 public class MainMenuUpdatePatch {

@@ -10,7 +10,7 @@ import com.megacrit.cardcrawl.screens.mainMenu.MenuButton;
  * Adds the button at the end of the menu list.
  */
 @SpirePatch(
-    clz = MainMenuScreen.class,
+    cls = "com.megacrit.cardcrawl.screens.mainMenu.MainMenuScreen",
     method = "setMainMenuButtons"
 )
 public class MainMenuArenaPatch {

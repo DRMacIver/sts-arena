@@ -216,14 +216,24 @@ FightRecord.FightStats stats = FightRecord.getStatsForEncounter("TheHeart");
 | Test Type | Command | What It Tests |
 |-----------|---------|---------------|
 | Unit Tests | `mvn test` | Database, LoadoutConfig, patch validation |
-| Headless Mod Load | `./scripts/headless-mod-load-test.sh --fast` | Mod loads without CommunicationMod |
+| Headless Mod Load (fast) | `./scripts/headless-mod-load-test.sh --fast` | Patch discovery and injection |
+| Headless Mod Load (full) | `./scripts/headless-mod-load-test.sh --stsarena-only` | Full patch compilation |
 | Acceptance Tests | `./scripts/run_agent.py acceptance_tests/` | Full game integration with CommunicationMod |
 
 ### When to Run Each
 
 - **After ANY Java changes**: `mvn test && ./scripts/headless-mod-load-test.sh --fast`
-- **After changing patches**: Full headless test (no `--fast`)
+- **After changing patches**: Full headless test: `./scripts/headless-mod-load-test.sh --stsarena-only`
 - **After changing arena/combat logic**: Acceptance tests (requires game running)
+
+### Headless Test Notes
+
+The headless mod load test runs ModTheSpire's patching pipeline without starting the game:
+- `--fast` skips patch compilation (quick validation)
+- `--stsarena-only` tests only STSArena patches (compiles successfully)
+- Without flags: tests all mods including BaseMod (may fail due to external mod issues)
+
+**IMPORTANT**: When writing patches, use `cls = "fully.qualified.ClassName"` instead of `clz = ClassName.class`. The `clz` form forces class loading during annotation resolution, causing LinkageError during headless patch compilation.
 
 ### Test Locations
 
