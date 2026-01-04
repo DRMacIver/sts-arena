@@ -116,11 +116,8 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
         loadoutCreatorScreen = new LoadoutCreatorScreen();
         statsScreen = new ArenaStatsScreen();
 
-        // Register commands with CommunicationMod (if loaded)
-        // Note: Already registered in constructor, but safe to call again
-        registerCommunicationModCommands();
-
         // Arena Mode button is added via patches/MainMenuArenaPatch
+        // Note: CommunicationMod commands are registered in constructor
     }
 
     /**

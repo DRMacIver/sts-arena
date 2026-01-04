@@ -207,6 +207,50 @@ FightRecord.FightStats stats = FightRecord.getStatsForEncounter("TheHeart");
 - Log important events using the Logger
 - Handle null cases defensively (game state can be unpredictable)
 
+## Testing
+
+**IMPORTANT: Run ALL relevant tests before committing changes!**
+
+### Test Types
+
+| Test Type | Command | What It Tests |
+|-----------|---------|---------------|
+| Unit Tests | `mvn test` | Database, LoadoutConfig, patch validation |
+| Headless Mod Load | `./scripts/headless-mod-load-test.sh --fast` | Mod loads without CommunicationMod |
+| Acceptance Tests | `./scripts/run_agent.py acceptance_tests/` | Full game integration with CommunicationMod |
+
+### When to Run Each
+
+- **After ANY Java changes**: `mvn test && ./scripts/headless-mod-load-test.sh --fast`
+- **After changing patches**: Full headless test (no `--fast`)
+- **After changing arena/combat logic**: Acceptance tests (requires game running)
+
+### Test Locations
+
+```
+src/test/java/stsarena/
+├── arena/
+│   ├── ArenaIntegrationTest.java    # Arena system tests
+│   └── LoadoutConfigTest.java       # Loadout config unit tests
+├── data/
+│   └── ArenaDatabaseTest.java       # SQLite database tests
+└── validation/
+    ├── HeadlessModLoader.java       # Tests mod loads without game
+    ├── HeadlessPatchTest.java       # Validates patch targets exist
+    └── PatchValidator.java          # Checks patch annotations
+
+acceptance_tests/
+├── conftest.py                      # Pytest fixtures and helpers
+├── test_user_stories.py             # User story acceptance tests
+└── test_hypothesis_stateful.py      # Property-based Hypothesis tests
+```
+
+### Key Testing Considerations
+
+1. **CommunicationMod is optional** - The mod must load without it. Use `Class.forName()` to check before loading command classes.
+2. **CardLibrary/RelicLibrary may not be loaded** - Catch `NoClassDefFoundError` when using game libraries.
+3. **Use `wait_for_stable()` not `time.sleep()`** - For acceptance tests, wait for game state, not arbitrary time.
+
 # Agent Instructions
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
