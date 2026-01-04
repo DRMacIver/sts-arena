@@ -251,7 +251,19 @@ public class LoadoutConfig {
         "Turnip", "Unceasing Top", "WristBlade", "Shovel", "Gremlin Horn"
     );
 
+    /**
+     * Get available relics for a player class.
+     * Uses RelicLibrary at runtime to support modded characters.
+     * Falls back to curated lists for base game characters.
+     */
     public static List<String> getAvailableRelics(String playerClass) {
+        // Try dynamic lookup first (supports mods)
+        List<String> dynamicRelics = getRelicsFromLibrary(playerClass);
+        if (!dynamicRelics.isEmpty()) {
+            return dynamicRelics;
+        }
+
+        // Fallback to curated lists for base game
         List<String> relics = new ArrayList<>();
 
         // Add common relics
@@ -285,6 +297,68 @@ public class LoadoutConfig {
         }
 
         return relics;
+    }
+
+    /**
+     * Get relics from RelicLibrary dynamically.
+     * This supports modded characters and ensures correct relic IDs.
+     * Filters out useless relics for arena mode.
+     *
+     * @param playerClass The player class name
+     * @return List of relic IDs, or empty list if RelicLibrary not available
+     */
+    private static List<String> getRelicsFromLibrary(String playerClass) {
+        try {
+            List<String> relicIds = new ArrayList<>();
+
+            // Add shared relics (common, uncommon, rare)
+            for (com.megacrit.cardcrawl.relics.AbstractRelic relic :
+                    com.megacrit.cardcrawl.helpers.RelicLibrary.commonList) {
+                if (!USELESS_RELICS.contains(relic.relicId)) {
+                    relicIds.add(relic.relicId);
+                }
+            }
+            for (com.megacrit.cardcrawl.relics.AbstractRelic relic :
+                    com.megacrit.cardcrawl.helpers.RelicLibrary.uncommonList) {
+                if (!USELESS_RELICS.contains(relic.relicId)) {
+                    relicIds.add(relic.relicId);
+                }
+            }
+            for (com.megacrit.cardcrawl.relics.AbstractRelic relic :
+                    com.megacrit.cardcrawl.helpers.RelicLibrary.rareList) {
+                if (!USELESS_RELICS.contains(relic.relicId)) {
+                    relicIds.add(relic.relicId);
+                }
+            }
+
+            // Add class-specific relics
+            java.util.ArrayList<com.megacrit.cardcrawl.relics.AbstractRelic> classRelics = getClassRelicList(playerClass);
+            if (classRelics != null) {
+                for (com.megacrit.cardcrawl.relics.AbstractRelic relic : classRelics) {
+                    if (!USELESS_RELICS.contains(relic.relicId)) {
+                        relicIds.add(relic.relicId);
+                    }
+                }
+            }
+
+            return relicIds;
+        } catch (NoClassDefFoundError | ExceptionInInitializerError e) {
+            // RelicLibrary not loaded (standalone testing)
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Get the class-specific relic list from RelicLibrary.
+     */
+    private static java.util.ArrayList<com.megacrit.cardcrawl.relics.AbstractRelic> getClassRelicList(String playerClass) {
+        switch (playerClass) {
+            case "IRONCLAD": return com.megacrit.cardcrawl.helpers.RelicLibrary.redList;
+            case "THE_SILENT": return com.megacrit.cardcrawl.helpers.RelicLibrary.greenList;
+            case "DEFECT": return com.megacrit.cardcrawl.helpers.RelicLibrary.blueList;
+            case "WATCHER": return com.megacrit.cardcrawl.helpers.RelicLibrary.whiteList;
+            default: return null;
+        }
     }
 
     // ========== CARD SYNERGY TRACKING ==========
@@ -570,7 +644,19 @@ public class LoadoutConfig {
 
     // ========== CLASS CARDS ==========
 
+    /**
+     * Get all non-rare cards for a player class.
+     * Uses CardLibrary at runtime to support modded characters.
+     * Falls back to hardcoded lists for base game characters if CardLibrary isn't loaded.
+     */
     public static List<String> getClassCards(String playerClass) {
+        // Try dynamic lookup first (supports mods)
+        List<String> dynamicCards = getCardsFromLibrary(playerClass, false);
+        if (!dynamicCards.isEmpty()) {
+            return dynamicCards;
+        }
+
+        // Fallback to hardcoded lists for base game (for standalone testing)
         switch (playerClass) {
             case "IRONCLAD": return new ArrayList<>(IRONCLAD_CARDS);
             case "THE_SILENT": return new ArrayList<>(SILENT_CARDS);
@@ -580,13 +666,78 @@ public class LoadoutConfig {
         }
     }
 
+    /**
+     * Get rare cards for a player class.
+     * Uses CardLibrary at runtime to support modded characters.
+     */
     public static List<String> getRareCards(String playerClass) {
+        // Try dynamic lookup first (supports mods)
+        List<String> dynamicCards = getCardsFromLibrary(playerClass, true);
+        if (!dynamicCards.isEmpty()) {
+            return dynamicCards;
+        }
+
+        // Fallback to hardcoded lists for base game
         switch (playerClass) {
             case "IRONCLAD": return new ArrayList<>(IRONCLAD_RARES);
             case "THE_SILENT": return new ArrayList<>(SILENT_RARES);
             case "DEFECT": return new ArrayList<>(DEFECT_RARES);
             case "WATCHER": return new ArrayList<>(WATCHER_RARES);
             default: return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Get cards from CardLibrary dynamically.
+     * This supports modded characters and ensures correct card IDs.
+     *
+     * @param playerClass The player class name (e.g., "IRONCLAD")
+     * @param raresOnly If true, only return rare cards; otherwise return common/uncommon
+     * @return List of card IDs, or empty list if CardLibrary not available
+     */
+    private static List<String> getCardsFromLibrary(String playerClass, boolean raresOnly) {
+        try {
+            com.megacrit.cardcrawl.helpers.CardLibrary.LibraryType libType = getLibraryType(playerClass);
+            if (libType == null) {
+                return new ArrayList<>();
+            }
+
+            List<String> cardIds = new ArrayList<>();
+            for (com.megacrit.cardcrawl.cards.AbstractCard card :
+                    com.megacrit.cardcrawl.helpers.CardLibrary.getCardList(libType)) {
+                // Skip basic cards (strikes/defends)
+                if (card.rarity == com.megacrit.cardcrawl.cards.AbstractCard.CardRarity.BASIC) {
+                    continue;
+                }
+                // Filter by rarity
+                if (raresOnly) {
+                    if (card.rarity == com.megacrit.cardcrawl.cards.AbstractCard.CardRarity.RARE) {
+                        cardIds.add(card.cardID);
+                    }
+                } else {
+                    if (card.rarity == com.megacrit.cardcrawl.cards.AbstractCard.CardRarity.COMMON ||
+                        card.rarity == com.megacrit.cardcrawl.cards.AbstractCard.CardRarity.UNCOMMON) {
+                        cardIds.add(card.cardID);
+                    }
+                }
+            }
+            return cardIds;
+        } catch (NoClassDefFoundError | ExceptionInInitializerError e) {
+            // CardLibrary not loaded (standalone testing)
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Map player class name to CardLibrary.LibraryType.
+     */
+    private static com.megacrit.cardcrawl.helpers.CardLibrary.LibraryType getLibraryType(String playerClass) {
+        switch (playerClass) {
+            case "IRONCLAD": return com.megacrit.cardcrawl.helpers.CardLibrary.LibraryType.RED;
+            case "THE_SILENT": return com.megacrit.cardcrawl.helpers.CardLibrary.LibraryType.GREEN;
+            case "DEFECT": return com.megacrit.cardcrawl.helpers.CardLibrary.LibraryType.BLUE;
+            case "WATCHER": return com.megacrit.cardcrawl.helpers.CardLibrary.LibraryType.PURPLE;
+            default: return null;
         }
     }
 
