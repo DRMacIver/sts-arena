@@ -62,9 +62,10 @@ def main():
         env["STS_GAME_INPUT_PIPE"] = game_to_test
         env["STS_GAME_OUTPUT_PIPE"] = test_to_game
 
-        # Write pytest output to a file so the test script can display it
-        # stderr goes to a separate debug file
+        # Write pytest output to a file AND stderr for unified logging
+        # This allows viewing pytest output alongside game logs in real-time
         pytest_debug_file = project_dir / "lib" / "pytest_debug.txt"
+
         with open(pytest_output_file, "w") as outfile, open(pytest_debug_file, "w") as debugfile:
             # Start bridge threads BEFORE sending ready
             # Bridge: stdin (from game) -> game_to_test pipe
@@ -101,12 +102,43 @@ def main():
             else:
                 pytest_args.append(str(test_dir))
 
-            result = subprocess.run(
+            # Run pytest with PIPE to capture output, then tee to file and stderr
+            proc = subprocess.Popen(
                 pytest_args,
                 env=env,
-                stdout=outfile,
-                stderr=debugfile,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
+
+            def tee_stream(src, dest_file, dest_stderr):
+                """Read from source and write to both file and stderr."""
+                for line in iter(src.readline, b''):
+                    text = line.decode('utf-8', errors='replace')
+                    dest_file.write(text)
+                    dest_file.flush()
+                    dest_stderr.write(text)
+                    dest_stderr.flush()
+
+            # Start tee threads for both stdout and stderr
+            stdout_tee = threading.Thread(
+                target=tee_stream,
+                args=(proc.stdout, outfile, sys.stderr),
+                daemon=True
+            )
+            stderr_tee = threading.Thread(
+                target=tee_stream,
+                args=(proc.stderr, debugfile, sys.stderr),
+                daemon=True
+            )
+            stdout_tee.start()
+            stderr_tee.start()
+
+            # Wait for subprocess and threads
+            proc.wait()
+            stdout_tee.join(timeout=5)
+            stderr_tee.join(timeout=5)
+
+            result = proc
 
         sys.exit(result.returncode)
     finally:
