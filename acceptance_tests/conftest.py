@@ -181,12 +181,29 @@ def wait_for_combat(coordinator, timeout=DEFAULT_TIMEOUT):
 
 
 def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
-    """Ensure we're at the main menu. Abandons any active run."""
-    # First, drain any pending messages that might be queued
+    """Ensure we're at the main menu. Abandons any active run.
+
+    This function is critical for test isolation. It must:
+    1. Clear any stale messages from previous tests/examples
+    2. Get a fresh view of the actual game state
+    3. Return to menu if we're in a game
+    """
+    # Reset coordinator state to force a fresh read from the game
+    coordinator.game_is_ready = False
+    coordinator.last_error = None
+
+    # Drain any pending messages that might be queued
     drained = drain_pending_messages(coordinator)
 
-    # Get current state
-    wait_for_state_update(coordinator, timeout=10)
+    # Small delay to allow any final messages to arrive
+    import time
+    time.sleep(0.1)
+
+    # Drain again to catch any messages that arrived during the delay
+    drain_pending_messages(coordinator)
+
+    # Get current state - use longer timeout for recovery scenarios
+    wait_for_state_update(coordinator, timeout=30)
 
     if not coordinator.in_game:
         return

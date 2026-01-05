@@ -125,21 +125,36 @@ def wait_for_arena_end(coord: Coordinator, timeout: float = 60):
 
 
 def ensure_main_menu(coord: Coordinator, timeout: float = 60):
-    """Ensure we're at the main menu. Abandons any active run."""
-    # First, drain any pending messages that might be queued
-    # This helps with test isolation when previous tests left messages
-    drained = drain_pending_messages(coord)
-    if drained > 0:
-        note(f"ensure_main_menu: drained {drained} pending messages")
+    """Ensure we're at the main menu. Abandons any active run.
 
-    # Check current state - use longer timeout for recovery scenarios
+    This function is critical for test isolation. It must be deterministic
+    for Hypothesis to work correctly. We use explicit state commands rather
+    than draining, which can be non-deterministic.
+    """
+    import time
+
+    # Reset coordinator state to force a fresh read from the game
+    coord.game_is_ready = False
+    coord.last_error = None
+
+    # Drain any pending messages from the queue (silently, don't log counts
+    # as they can vary between runs and confuse Hypothesis)
+    drain_pending_messages(coord)
+
+    # Small delay to allow the game to stabilize
+    time.sleep(0.1)
+
+    # Drain again
+    drain_pending_messages(coord)
+
+    # Now get a fresh state from the game
     try:
         wait_for_state_update(coord, timeout=30)
     except GameTimeout:
-        # If we can't get state, the game might be stuck
-        # Log and re-raise with more context
-        note(f"ensure_main_menu: timeout waiting for state (in_game={coord.in_game}, ready={coord.game_is_ready})")
-        raise
+        # If we can't get state, try one more time after a longer delay
+        time.sleep(0.5)
+        drain_pending_messages(coord)
+        wait_for_state_update(coord, timeout=30)
 
     if not coord.in_game:
         return
@@ -634,12 +649,12 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
         self._action_log = []
 
     def _log(self, msg):
-        """Log an action with timestamp for debugging."""
+        """Log an action for debugging (internal only, not to Hypothesis)."""
         import time
         ts = time.strftime("%H:%M:%S")
         entry = f"[{ts}] {msg}"
         self._action_log.append(entry)
-        note(entry)
+        # Don't use note() for variable data - it can confuse Hypothesis
 
     @initialize()
     def setup(self):
@@ -648,9 +663,9 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
         self.coord = conftest._coordinator
         self._action_log = []
 
-        self._log(f"Setup: initial in_game={self.coord.in_game}")
+        self._log("Setup: starting")
         ensure_main_menu(self.coord)
-        self._log(f"Setup: after ensure_main_menu, in_game={self.coord.in_game}")
+        self._log("Setup: ensure_main_menu complete")
 
         # Model state is deterministic - always start at menu
         # DO NOT sync with game state - that causes flakiness
@@ -663,7 +678,7 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
         # Verify game actually is at menu (fail if not)
         assert not self.coord.in_game, f"ensure_main_menu() didn't work - still in game"
 
-        self._log(f"Setup complete: at_menu={self.at_menu}")
+        self._log("Setup complete")
 
     @invariant()
     def state_consistent(self):
@@ -694,7 +709,8 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
           seed=st.integers(min_value=0, max_value=2**63-1))
     def start_fight(self, character, encounter, seed):
         """Start an arena fight."""
-        self._log(f"start_fight: {character} vs {encounter} (seed={seed}), at_menu={self.at_menu}")
+        note(f"start_fight: {character} vs {encounter}")
+        self._log(f"start_fight: {character} vs {encounter} (seed={seed})")
 
         self.coord.send_message(f"arena {character} {encounter} {seed}")
         # Wait for arena command's response first (just consume it, don't request state)
@@ -705,13 +721,14 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
 
         self.at_menu = False
         self.fights_started += 1
-        self._log(f"start_fight complete: at_menu={self.at_menu}, in_game={self.coord.in_game}")
+        self._log("start_fight complete")
 
     @precondition(lambda self: not self.at_menu)
     @rule()
     def win_fight(self):
         """Win the current fight."""
-        self._log(f"win_fight: fight #{self.fights_started}, at_menu={self.at_menu}")
+        note("win_fight")
+        self._log(f"win_fight: fight #{self.fights_started}")
 
         self.coord.send_message("win")
         # Wait for win command response first
@@ -722,13 +739,14 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
 
         self.at_menu = True
         self.fights_won += 1
-        self._log(f"win_fight complete: at_menu={self.at_menu}, in_game={self.coord.in_game}")
+        self._log("win_fight complete")
 
     @precondition(lambda self: not self.at_menu)
     @rule()
     def lose_fight(self):
         """Lose the current fight."""
-        self._log(f"lose_fight: fight #{self.fights_started}, at_menu={self.at_menu}")
+        note("lose_fight")
+        self._log(f"lose_fight: fight #{self.fights_started}")
 
         self.coord.send_message("lose")
         # Wait for lose command response first
@@ -739,13 +757,14 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
 
         self.at_menu = True
         self.fights_lost += 1
-        self._log(f"lose_fight complete: at_menu={self.at_menu}, in_game={self.coord.in_game}")
+        self._log("lose_fight complete")
 
     @precondition(lambda self: not self.at_menu)
     @rule()
     def abandon_fight(self):
         """Abandon current fight."""
-        self._log(f"abandon_fight: fight #{self.fights_started}, at_menu={self.at_menu}")
+        note("abandon_fight")
+        self._log(f"abandon_fight: fight #{self.fights_started}")
 
         self.coord.send_message("abandon")
         # Wait for abandon command response first
@@ -754,12 +773,11 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
 
         self.at_menu = True
         self.fights_abandoned += 1
-        self._log(f"abandon_fight complete: at_menu={self.at_menu}, in_game={self.coord.in_game}")
+        self._log("abandon_fight complete")
 
     def teardown(self):
         """Clean up."""
         self._log(f"teardown: started={self.fights_started}, won={self.fights_won}, lost={self.fights_lost}, abandoned={self.fights_abandoned}")
-        self._log(f"teardown: full log = {self._action_log}")
         ensure_main_menu(self.coord)
 
 
