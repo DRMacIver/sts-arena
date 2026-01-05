@@ -40,6 +40,7 @@ from conftest import (
     wait_for_main_menu,
     wait_for_combat,
     wait_for_state_update,
+    drain_pending_messages,
     GameTimeout,
     DEFAULT_TIMEOUT,
 )
@@ -125,8 +126,21 @@ def wait_for_arena_end(coord: Coordinator, timeout: float = 60):
 
 def ensure_main_menu(coord: Coordinator, timeout: float = 60):
     """Ensure we're at the main menu. Abandons any active run."""
-    # Check current state first - use longer timeout for recovery scenarios
-    wait_for_state_update(coord, timeout=30)
+    # First, drain any pending messages that might be queued
+    # This helps with test isolation when previous tests left messages
+    drained = drain_pending_messages(coord)
+    if drained > 0:
+        note(f"ensure_main_menu: drained {drained} pending messages")
+
+    # Check current state - use longer timeout for recovery scenarios
+    try:
+        wait_for_state_update(coord, timeout=30)
+    except GameTimeout:
+        # If we can't get state, the game might be stuck
+        # Log and re-raise with more context
+        note(f"ensure_main_menu: timeout waiting for state (in_game={coord.in_game}, ready={coord.game_is_ready})")
+        raise
+
     if not coord.in_game:
         return
 

@@ -44,6 +44,22 @@ def _process_message(coordinator, msg):
             )
 
 
+def drain_pending_messages(coordinator, max_drain=10):
+    """Drain any pending messages from the queue without blocking.
+
+    This is useful for clearing stale messages between tests.
+    Returns the number of messages drained.
+    """
+    count = 0
+    while count < max_drain:
+        msg = coordinator.get_next_raw_message(block=False)
+        if msg is None:
+            break
+        _process_message(coordinator, msg)
+        count += 1
+    return count
+
+
 def wait_for_ready(coordinator, timeout=DEFAULT_TIMEOUT):
     """Wait for the game to be ready for commands, with timeout."""
     start = time.time()
@@ -166,6 +182,9 @@ def wait_for_combat(coordinator, timeout=DEFAULT_TIMEOUT):
 
 def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
     """Ensure we're at the main menu. Abandons any active run."""
+    # First, drain any pending messages that might be queued
+    drained = drain_pending_messages(coordinator)
+
     # Get current state
     wait_for_state_update(coordinator, timeout=10)
 
