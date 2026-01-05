@@ -14,7 +14,13 @@ from spirecomm.communication.coordinator import Coordinator
 
 # Import screenshot utilities (optional - may not be available if mss not installed)
 try:
-    from screenshot import get_capture, screenshot_on_failure, generate_screenshot_index
+    from screenshot import (
+        get_capture,
+        screenshot_on_failure,
+        generate_screenshot_index,
+        get_stateful_tracker,
+        finalize_stateful_trackers,
+    )
     SCREENSHOTS_ENABLED = True
 except ImportError:
     SCREENSHOTS_ENABLED = False
@@ -258,6 +264,10 @@ def pytest_sessionfinish(session, exitstatus):
     """
     if SCREENSHOTS_ENABLED:
         try:
+            # Finalize stateful test trackers first (generates per-run indices)
+            finalize_stateful_trackers()
+
+            # Then generate main index (includes links to stateful tests)
             index_path = generate_screenshot_index()
             if index_path:
                 print(f"\nScreenshot index generated: {index_path}")

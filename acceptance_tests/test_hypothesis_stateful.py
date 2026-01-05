@@ -12,6 +12,9 @@ The state machine models:
 
 Invariants are checked after every action to catch state inconsistencies.
 
+Screenshots are captured at the start, end, and after every step of each run
+for debugging purposes.
+
 Note: These tests require the game to be running via scripts/run-acceptance-tests.sh.
 """
 
@@ -43,7 +46,15 @@ from conftest import (
     drain_pending_messages,
     GameTimeout,
     DEFAULT_TIMEOUT,
+    SCREENSHOTS_ENABLED,
 )
+
+# Import screenshot tracking for stateful tests
+if SCREENSHOTS_ENABLED:
+    from screenshot import get_stateful_tracker, StatefulRunTracker
+else:
+    get_stateful_tracker = None
+    StatefulRunTracker = None
 
 # Screen types that should NEVER appear during or after arena fights
 FORBIDDEN_ARENA_SCREENS = {
@@ -124,6 +135,49 @@ def wait_for_arena_end(coord: Coordinator, timeout: float = 60):
     wait_for_main_menu(coord, timeout=timeout)
 
 
+# =============================================================================
+# Screenshot Mixin for Stateful Tests
+# =============================================================================
+
+class ScreenshotStateMixin:
+    """
+    Mixin that provides per-step screenshot capture for stateful tests.
+
+    Subclasses should call _screenshot_setup() in their @initialize method
+    and _screenshot_step() after each rule completes.
+    """
+
+    # Class-level tracker name (override in subclass)
+    _tracker_name = "StatefulTest"
+
+    def _screenshot_setup(self):
+        """Initialize screenshot tracking for this run. Call in @initialize."""
+        if not SCREENSHOTS_ENABLED or get_stateful_tracker is None:
+            self._run_tracker = None
+            return
+
+        tracker = get_stateful_tracker(self._tracker_name)
+        self._run_tracker = tracker.start_run()
+
+        # Capture initial state
+        self._run_tracker.capture_step("setup", phase="after", extra_info="initial_state")
+
+    def _screenshot_step(self, action_name: str, extra_info: str = None):
+        """Capture screenshot after a step. Call after each rule."""
+        if self._run_tracker:
+            self._run_tracker.capture_step(action_name, phase="after", extra_info=extra_info)
+            self._run_tracker.next_step()
+
+    def _screenshot_teardown(self):
+        """Finalize screenshot tracking for this run. Call in teardown()."""
+        if self._run_tracker:
+            self._run_tracker.capture_step("teardown", phase="after", extra_info="final_state")
+            # End the run (generates per-run index)
+            tracker = get_stateful_tracker(self._tracker_name)
+            tracker.end_run()
+            self._run_tracker = None
+
+
 def ensure_main_menu(coord: Coordinator, timeout: float = 60):
     """Ensure we're at the main menu. Abandons any active run.
 
@@ -171,7 +225,7 @@ def ensure_main_menu(coord: Coordinator, timeout: float = 60):
 # Stateful State Machine
 # =============================================================================
 
-class ArenaStateMachine(RuleBasedStateMachine):
+class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
     """
     A state machine that models the STS Arena game states and transitions.
 
@@ -182,6 +236,8 @@ class ArenaStateMachine(RuleBasedStateMachine):
 
     The machine tracks expected state and verifies it matches actual game state.
     """
+
+    _tracker_name = "ArenaStateMachine"
 
     def __init__(self):
         super().__init__()
@@ -198,6 +254,9 @@ class ArenaStateMachine(RuleBasedStateMachine):
 
         # Coordinator will be set by initialize
         self.coord = None
+
+        # Screenshot tracker (set in setup)
+        self._run_tracker = None
 
     @initialize()
     def setup(self):
@@ -220,6 +279,9 @@ class ArenaStateMachine(RuleBasedStateMachine):
 
         # Verify game actually is at menu
         assert not self.coord.in_game, "ensure_main_menu() didn't work - still in game"
+
+        # Initialize screenshot tracking for this run
+        self._screenshot_setup()
 
         note("Initialized at main menu")
 
@@ -335,6 +397,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.model_in_combat = True
         self.model_combat_ended = False
 
+        self._screenshot_step("start_arena_fight", f"{character}_vs_{encounter}")
         note(f"Arena started successfully")
 
     @precondition(lambda self: not self.model_in_game)
@@ -358,6 +421,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.model_in_combat = False
         self.model_combat_ended = False
 
+        self._screenshot_step("start_normal_run", character)
         note(f"Normal run started")
 
     @precondition(lambda self: self.model_in_game)
@@ -380,6 +444,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
         self.model_in_combat = False
         self.model_combat_ended = False
 
+        self._screenshot_step("abandon_run")
         note("Abandoned successfully")
 
     @precondition(lambda self: self.model_in_game and self.model_in_combat)
@@ -391,6 +456,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
         game = self.coord.last_game_state
         if not game or not game.in_combat:
             self.model_in_combat = False
+            self._screenshot_step("win_combat", "already_ended")
             return
 
         note("Forcing win")
@@ -407,6 +473,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
             self.model_in_game = False
             self.model_in_combat = False
             self.model_combat_ended = False
+            self._screenshot_step("win_combat", "arena_at_menu")
             note("Arena fight won, at menu")
         else:
             # Normal run - might be at reward screen
@@ -419,6 +486,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
                 self.model_in_combat = False
                 self.model_combat_ended = True
                 note("Normal run combat won")
+            self._screenshot_step("win_combat", "normal_run")
 
     @precondition(lambda self: self.model_in_game and self.model_in_combat)
     @rule()
@@ -429,6 +497,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
         game = self.coord.last_game_state
         if not game or not game.in_combat:
             self.model_in_combat = False
+            self._screenshot_step("lose_combat", "already_ended")
             return
 
         note("Forcing loss")
@@ -445,6 +514,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
             self.model_in_game = False
             self.model_in_combat = False
             self.model_combat_ended = False
+            self._screenshot_step("lose_combat", "arena_at_menu")
             note("Arena fight lost, at menu")
         else:
             # Normal run - game ends on death
@@ -457,6 +527,7 @@ class ArenaStateMachine(RuleBasedStateMachine):
             elif self.coord.last_game_state and not self.coord.last_game_state.in_combat:
                 self.model_in_combat = False
                 self.model_combat_ended = True
+            self._screenshot_step("lose_combat", "normal_run")
 
     @precondition(lambda self: self.model_in_game and self.model_combat_ended)
     @rule()
@@ -469,11 +540,13 @@ class ArenaStateMachine(RuleBasedStateMachine):
             if not self.coord.in_game:
                 self.model_in_game = False
                 self.model_combat_ended = False
+            self._screenshot_step("proceed_after_combat", "arena_check")
             return
 
         wait_for_state_update(self.coord)
         if not self.coord.in_game:
             self.model_in_game = False
+            self._screenshot_step("proceed_after_combat", "not_in_game")
             return
 
         game = self.coord.last_game_state
@@ -483,10 +556,12 @@ class ArenaStateMachine(RuleBasedStateMachine):
             self.coord.send_message("proceed")
             wait_for_state_update(self.coord)
             self.model_combat_ended = False
+        self._screenshot_step("proceed_after_combat")
 
     def teardown(self):
         """Clean up after the test - return to main menu."""
         note(f"Teardown. Action history: {self.action_history}")
+        self._screenshot_teardown()
         ensure_main_menu(self.coord)
 
 
@@ -505,12 +580,14 @@ TestArenaStateful.settings = settings(
 # Additional focused state machines
 # =============================================================================
 
-class ArenaCombatMachine(RuleBasedStateMachine):
+class ArenaCombatMachine(ScreenshotStateMixin, RuleBasedStateMachine):
     """
     State machine focused on combat outcomes within arena fights.
 
     Tests win/lose commands and verifies proper state transitions.
     """
+
+    _tracker_name = "ArenaCombatMachine"
 
     def __init__(self):
         super().__init__()
@@ -518,6 +595,7 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         self.in_combat = False
         self.wins = 0
         self.losses = 0
+        self._run_tracker = None
 
     @initialize()
     def setup(self):
@@ -535,6 +613,9 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         # Verify game actually is at menu
         assert not self.coord.in_game, "ensure_main_menu() didn't work - still in game"
 
+        # Initialize screenshot tracking for this run
+        self._screenshot_setup()
+
     @precondition(lambda self: not self.in_combat)
     @rule(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS),
           seed=st.integers(min_value=0, max_value=2**63-1))
@@ -550,6 +631,7 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         wait_for_combat(self.coord)
 
         self.in_combat = True
+        self._screenshot_step("start_fight", f"{character}_vs_{encounter}")
 
     @invariant()
     def valid_combat_state(self):
@@ -580,6 +662,7 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         """Force a win."""
         if not self.coord.in_game:
             self.in_combat = False
+            self._screenshot_step("win", "not_in_game")
             return
 
         note("Forcing win")
@@ -592,6 +675,7 @@ class ArenaCombatMachine(RuleBasedStateMachine):
 
         self.wins += 1
         self.in_combat = False
+        self._screenshot_step("win", "at_menu")
         note("Returned to menu after win")
 
     @precondition(lambda self: self.in_combat)
@@ -600,6 +684,7 @@ class ArenaCombatMachine(RuleBasedStateMachine):
         """Force a loss."""
         if not self.coord.in_game:
             self.in_combat = False
+            self._screenshot_step("lose", "not_in_game")
             return
 
         note("Forcing loss")
@@ -612,11 +697,13 @@ class ArenaCombatMachine(RuleBasedStateMachine):
 
         self.losses += 1
         self.in_combat = False
+        self._screenshot_step("lose", "at_menu")
         note("Returned to menu after loss")
 
     def teardown(self):
         """Clean up."""
         note(f"Wins: {self.wins}, Losses: {self.losses}")
+        self._screenshot_teardown()
         ensure_main_menu(self.coord)
 
 
@@ -631,12 +718,14 @@ TestArenaCombat.settings = settings(
 )
 
 
-class ArenaTransitionMachine(RuleBasedStateMachine):
+class ArenaTransitionMachine(ScreenshotStateMixin, RuleBasedStateMachine):
     """
     State machine focused on testing transitions between arena and main menu.
 
     Tests various ways to exit combat: win, lose, abandon.
     """
+
+    _tracker_name = "ArenaTransitionMachine"
 
     def __init__(self):
         super().__init__()
@@ -647,6 +736,7 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
         self.fights_lost = 0
         self.fights_abandoned = 0
         self._action_log = []
+        self._run_tracker = None
 
     def _log(self, msg):
         """Log an action for debugging (internal only, not to Hypothesis)."""
@@ -677,6 +767,9 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
 
         # Verify game actually is at menu (fail if not)
         assert not self.coord.in_game, f"ensure_main_menu() didn't work - still in game"
+
+        # Initialize screenshot tracking for this run
+        self._screenshot_setup()
 
         self._log("Setup complete")
 
@@ -721,6 +814,7 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
 
         self.at_menu = False
         self.fights_started += 1
+        self._screenshot_step("start_fight", f"{character}_vs_{encounter}")
         self._log("start_fight complete")
 
     @precondition(lambda self: not self.at_menu)
@@ -739,6 +833,7 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
 
         self.at_menu = True
         self.fights_won += 1
+        self._screenshot_step("win_fight", "at_menu")
         self._log("win_fight complete")
 
     @precondition(lambda self: not self.at_menu)
@@ -757,6 +852,7 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
 
         self.at_menu = True
         self.fights_lost += 1
+        self._screenshot_step("lose_fight", "at_menu")
         self._log("lose_fight complete")
 
     @precondition(lambda self: not self.at_menu)
@@ -773,11 +869,13 @@ class ArenaTransitionMachine(RuleBasedStateMachine):
 
         self.at_menu = True
         self.fights_abandoned += 1
+        self._screenshot_step("abandon_fight", "at_menu")
         self._log("abandon_fight complete")
 
     def teardown(self):
         """Clean up."""
         self._log(f"teardown: started={self.fights_started}, won={self.fights_won}, lost={self.fights_lost}, abandoned={self.fights_abandoned}")
+        self._screenshot_teardown()
         ensure_main_menu(self.coord)
 
 
