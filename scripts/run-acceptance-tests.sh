@@ -81,6 +81,10 @@ for jar in lib/desktop-1.0.jar lib/ModTheSpire.jar lib/BaseMod.jar lib/Communica
     fi
 done
 
+# Build CommunicationMod (if sources have changed)
+echo "Building CommunicationMod..."
+(cd external/CommunicationMod && mvn package -DskipTests -q)
+
 # Build mod and test classes
 echo "Building project..."
 mvn compile test-compile package -DskipTests -q

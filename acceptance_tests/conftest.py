@@ -186,6 +186,22 @@ def wait_for_combat(coordinator, timeout=DEFAULT_TIMEOUT):
         raise GameTimeout("Expected to be in combat")
 
 
+def wait_for_visual_stable(coordinator, timeout=DEFAULT_TIMEOUT):
+    """Block until visual effects have completed.
+
+    This waits for:
+    - No fading in/out
+    - Effect lists are empty (no animations playing)
+    - Room wait timer is zero
+
+    Use this before taking screenshots to ensure the screen shows
+    the stable state rather than mid-transition.
+    """
+    coordinator.game_is_ready = False
+    coordinator.send_message("wait_for visual_stable")
+    wait_for_ready(coordinator, timeout=timeout)
+
+
 def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
     """Ensure we're at the main menu. Abandons any active run.
 

@@ -42,6 +42,7 @@ from conftest import (
     wait_for_in_game,
     wait_for_main_menu,
     wait_for_combat,
+    wait_for_visual_stable,
     wait_for_state_update,
     drain_pending_messages,
     GameTimeout,
@@ -145,6 +146,8 @@ class ScreenshotStateMixin:
 
     Subclasses should call _screenshot_setup() in their @initialize method
     and _screenshot_step() after each rule completes.
+
+    Subclasses must have a `coord` attribute pointing to the game Coordinator.
     """
 
     # Class-level tracker name (override in subclass)
@@ -159,23 +162,39 @@ class ScreenshotStateMixin:
         tracker = get_stateful_tracker(self._tracker_name)
         self._run_tracker = tracker.start_run()
 
-        # Capture initial state
+        # Wait for visual stability and capture initial state
+        self._wait_for_visual_stable()
         self._run_tracker.capture_step("setup", phase="after", extra_info="initial_state")
 
     def _screenshot_step(self, action_name: str, extra_info: str = None):
-        """Capture screenshot after a step. Call after each rule."""
+        """Capture screenshot after a step. Call after each rule.
+
+        Waits for visual effects to complete before capturing to ensure
+        screenshots show the stable state rather than mid-transition.
+        """
         if self._run_tracker:
+            self._wait_for_visual_stable()
             self._run_tracker.capture_step(action_name, phase="after", extra_info=extra_info)
             self._run_tracker.next_step()
 
     def _screenshot_teardown(self):
         """Finalize screenshot tracking for this run. Call in teardown()."""
         if self._run_tracker:
+            self._wait_for_visual_stable()
             self._run_tracker.capture_step("teardown", phase="after", extra_info="final_state")
             # End the run (generates per-run index)
             tracker = get_stateful_tracker(self._tracker_name)
             tracker.end_run()
             self._run_tracker = None
+
+    def _wait_for_visual_stable(self):
+        """Wait for visual effects to complete. Uses self.coord.
+
+        Raises GameTimeout if visual effects don't stabilize within timeout,
+        as this usually indicates something has gone wrong.
+        """
+        if hasattr(self, 'coord') and self.coord is not None:
+            wait_for_visual_stable(self.coord, timeout=10)
 
 
 def ensure_main_menu(coord: Coordinator, timeout: float = 60):
