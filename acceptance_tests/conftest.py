@@ -289,6 +289,12 @@ def pytest_runtest_makereport(item, call):
     # Capture on test call completion (not setup/teardown)
     if report.when == "call" and SCREENSHOTS_ENABLED:
         test_name = item.nodeid
+
+        # Wait for visual stability before taking screenshot
+        # This ensures we capture the actual screen state, not a transition
+        # Let exceptions propagate - visual stability failures should be visible
+        wait_for_visual_stable(_coordinator, timeout=10)
+
         try:
             if report.failed:
                 exc_info = call.excinfo
