@@ -1,5 +1,6 @@
 package stsarena.communication;
 
+import communicationmod.CommunicationMod;
 import communicationmod.CommandExecutor;
 import communicationmod.InvalidCommandException;
 import stsarena.STSArena;
@@ -65,6 +66,11 @@ public class ArenaBackCommand implements CommandExecutor.CommandExtension {
 
         // Clear the return-to-arena flag so screens don't reopen
         STSArena.clearReturnToArenaOnMainMenu();
+
+        // Force a state update to be sent back to the caller
+        // Without this, no response would be sent since we're already at main menu
+        // and closing arena screens doesn't trigger a detectable state change
+        CommunicationMod.mustSendGameState = true;
 
         STSArena.logger.info("arena_back command complete");
     }
