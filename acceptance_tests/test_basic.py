@@ -234,10 +234,7 @@ class TestArenaMode:
         # Call arena_back to exit arena screens and clean up save files
         coord.send_message("arena_back")
         wait_for_ready(coord)
-
-        # Verify we're still at main menu
-        coord.send_message("state")
-        wait_for_ready(coord)
+        # The arena_back response already contains current state
         assert not coord.in_game, "Should be at main menu after arena_back"
 
         # Now start a fresh normal run - this should start from floor 1,
@@ -274,10 +271,7 @@ class TestArenaMode:
         # Call arena_back to exit arena screens and clean up save files
         coord.send_message("arena_back")
         wait_for_ready(coord)
-
-        # Verify we're still at main menu
-        coord.send_message("state")
-        wait_for_ready(coord)
+        # The arena_back response already contains current state
         assert not coord.in_game, "Should be at main menu after arena_back"
 
     def test_multiple_arena_fights_with_back_cleanup(self, at_main_menu: Coordinator):

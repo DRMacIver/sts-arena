@@ -2,6 +2,7 @@ package stsarena.communication;
 
 import communicationmod.CommunicationMod;
 import communicationmod.CommandExecutor;
+import communicationmod.GameStateListener;
 import communicationmod.InvalidCommandException;
 import stsarena.STSArena;
 import stsarena.arena.ArenaRunner;
@@ -70,6 +71,7 @@ public class ArenaBackCommand implements CommandExecutor.CommandExtension {
         // Force a state update to be sent back to the caller
         // Without this, no response would be sent since we're already at main menu
         // and closing arena screens doesn't trigger a detectable state change
+        GameStateListener.signalReadyForCommand();
         CommunicationMod.mustSendGameState = true;
 
         STSArena.logger.info("arena_back command complete");

@@ -407,8 +407,7 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
 
         self.coord.send_message("arena_back")
         wait_for_ready(self.coord)
-        # Should still be at main menu
-        wait_for_state_update(self.coord)
+        # The arena_back response already contains current state, no need for extra state command
         assert not self.coord.in_game, "Should be at main menu after arena_back"
 
         self._screenshot_step("exit_arena_screens")
@@ -850,7 +849,7 @@ class ArenaTransitionMachine(ScreenshotStateMixin, RuleBasedStateMachine):
 
         self.coord.send_message("arena_back")
         wait_for_ready(self.coord)
-        wait_for_state_update(self.coord)
+        # The arena_back response already contains current state, no need for extra state command
         assert not self.coord.in_game, "Should be at main menu after arena_back"
 
         self._screenshot_step("exit_arena_screens")
