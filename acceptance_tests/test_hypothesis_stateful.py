@@ -395,6 +395,26 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
     # =========================================================================
 
     @precondition(lambda self: not self.model_in_game)
+    @rule()
+    def exit_arena_screens(self):
+        """Exit arena screens and clean up arena state.
+
+        This simulates pressing Back from arena screens to return to main menu.
+        Useful for testing save file cleanup after arena fights.
+        """
+        note("Exiting arena screens")
+        self.action_history.append("arena_back")
+
+        self.coord.send_message("arena_back")
+        wait_for_ready(self.coord)
+        # Should still be at main menu
+        wait_for_state_update(self.coord)
+        assert not self.coord.in_game, "Should be at main menu after arena_back"
+
+        self._screenshot_step("exit_arena_screens")
+        note("Exited arena screens")
+
+    @precondition(lambda self: not self.model_in_game)
     @rule(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS),
           seed=st.integers(min_value=0, max_value=2**63-1))
     def start_arena_fight(self, character, encounter, seed):
@@ -816,6 +836,25 @@ class ArenaTransitionMachine(ScreenshotStateMixin, RuleBasedStateMachine):
                 assert False, \
                     f"Arena fight showed forbidden screen {screen_type.name}! " \
                     f"Fight #{self.fights_started}, won={self.fights_won}, lost={self.fights_lost}"
+
+    @precondition(lambda self: self.at_menu)
+    @rule()
+    def exit_arena_screens(self):
+        """Exit arena screens and clean up arena state.
+
+        This simulates pressing Back from arena screens to return to main menu.
+        Useful for testing save file cleanup after arena fights.
+        """
+        note("exit_arena_screens")
+        self._log("exit_arena_screens")
+
+        self.coord.send_message("arena_back")
+        wait_for_ready(self.coord)
+        wait_for_state_update(self.coord)
+        assert not self.coord.in_game, "Should be at main menu after arena_back"
+
+        self._screenshot_step("exit_arena_screens")
+        self._log("exit_arena_screens complete")
 
     @precondition(lambda self: self.at_menu)
     @rule(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS),

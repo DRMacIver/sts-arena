@@ -15,6 +15,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import stsarena.arena.ArenaRunner;
 import stsarena.arena.SaveFileManager;
+import stsarena.communication.ArenaBackCommand;
 import stsarena.communication.ArenaCommand;
 import stsarena.communication.LoseCommand;
 import stsarena.communication.WinCommand;
@@ -81,6 +82,7 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
 
             // CommunicationMod is available - now safe to load and register our commands
             ArenaCommand.register();
+            ArenaBackCommand.register();
             LoseCommand.register();
             WinCommand.register();
             logger.info("CommunicationMod detected - commands registered");
@@ -351,6 +353,15 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     public static void setReturnToArenaOnMainMenu() {
         returnToArenaOnMainMenu = true;
         logger.info("ARENA: Will return to arena selection on main menu");
+    }
+
+    /**
+     * Clear the flag to return to arena selection.
+     * Called when exiting arena screens via Back button or arena_back command.
+     */
+    public static void clearReturnToArenaOnMainMenu() {
+        returnToArenaOnMainMenu = false;
+        logger.info("ARENA: Cleared return-to-arena flag");
     }
 
     /**
