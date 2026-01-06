@@ -290,11 +290,13 @@ def pytest_runtest_makereport(item, call):
     if report.when == "call" and SCREENSHOTS_ENABLED:
         test_name = item.nodeid
 
-        try:
-            # Wait for visual stability before taking screenshot
-            # This ensures we capture the actual screen state, not a transition
-            wait_for_visual_stable(_coordinator, timeout=10)
+        # Wait for visual stability before taking screenshot
+        # This ensures we capture the actual screen state, not a transition
+        # Note: GameTimeout and VisualStabilityTimeout are NOT caught here -
+        # they indicate real problems that should fail the test
+        wait_for_visual_stable(_coordinator, timeout=10)
 
+        try:
             if report.failed:
                 exc_info = call.excinfo
                 exception = exc_info.value if exc_info else None
@@ -303,10 +305,9 @@ def pytest_runtest_makereport(item, call):
                 # Also capture on success
                 from screenshot import take_screenshot
                 take_screenshot(name="success", test_name=test_name)
-        except (Exception, GameTimeout, VisualStabilityTimeout) as e:
-            # Don't fail the test because of screenshot issues
-            # Catch GameTimeout and VisualStabilityTimeout explicitly since they
-            # inherit from BaseException (to avoid Hypothesis minimization)
+        except Exception as e:
+            # Only catch screenshot-specific errors (file I/O, mss errors, etc.)
+            # NOT game communication timeouts
             print(f"Warning: Failed to capture screenshot: {e}")
 
 
