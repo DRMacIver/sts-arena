@@ -19,56 +19,57 @@ Note: These tests require the game to be running via scripts/run-acceptance-test
 """
 
 import time
-from hypothesis import note, settings, Verbosity, HealthCheck, Phase, assume
-from hypothesis.stateful import (
-    RuleBasedStateMachine,
-    rule,
-    invariant,
-    precondition,
-    initialize,
-    Bundle,
-    consumes,
-    multiple,
-)
-from hypothesis import strategies as st
-import pytest
 
+import pytest
+from hypothesis import HealthCheck, Phase, Verbosity, assume, note, settings
+from hypothesis import strategies as st
+from hypothesis.stateful import (
+    Bundle,
+    RuleBasedStateMachine,
+    consumes,
+    initialize,
+    invariant,
+    multiple,
+    precondition,
+    rule,
+)
 from spirecomm.communication.coordinator import Coordinator
 from spirecomm.spire.character import PlayerClass
 from spirecomm.spire.screen import ScreenType
+
 from conftest import (
-    wait_for_ready,
-    wait_for_stable,
-    wait_for_in_game,
-    wait_for_main_menu,
-    wait_for_combat,
-    wait_for_visual_stable,
-    wait_for_state_update,
-    drain_pending_messages,
-    GameTimeout,
-    VisualStabilityTimeout,
     DEFAULT_TIMEOUT,
     SCREENSHOTS_ENABLED,
+    GameTimeout,
+    VisualStabilityTimeout,
+    drain_pending_messages,
+    wait_for_combat,
+    wait_for_in_game,
+    wait_for_main_menu,
+    wait_for_ready,
+    wait_for_stable,
+    wait_for_state_update,
+    wait_for_visual_stable,
 )
 
 # Import screenshot tracking for stateful tests
 if SCREENSHOTS_ENABLED:
-    from screenshot import get_stateful_tracker, StatefulRunTracker
+    from screenshot import StatefulRunTracker, get_stateful_tracker
 else:
     get_stateful_tracker = None
     StatefulRunTracker = None
 
 # Screen types that should NEVER appear during or after arena fights
 FORBIDDEN_ARENA_SCREENS = {
-    ScreenType.CARD_REWARD,    # Should not get card rewards in arena
+    ScreenType.CARD_REWARD,  # Should not get card rewards in arena
     ScreenType.COMBAT_REWARD,  # Should not get combat rewards in arena
-    ScreenType.MAP,            # Should not see map in arena
-    ScreenType.BOSS_REWARD,    # Should not get boss rewards in arena
-    ScreenType.SHOP_ROOM,      # Should not see shop in arena
-    ScreenType.SHOP_SCREEN,    # Should not see shop screen in arena
-    ScreenType.REST,           # Should not see rest sites in arena
-    ScreenType.CHEST,          # Should not see chests in arena
-    ScreenType.EVENT,          # Should not see events in arena
+    ScreenType.MAP,  # Should not see map in arena
+    ScreenType.BOSS_REWARD,  # Should not get boss rewards in arena
+    ScreenType.SHOP_ROOM,  # Should not see shop in arena
+    ScreenType.SHOP_SCREEN,  # Should not see shop screen in arena
+    ScreenType.REST,  # Should not see rest sites in arena
+    ScreenType.CHEST,  # Should not see chests in arena
+    ScreenType.EVENT,  # Should not see events in arena
 }
 
 # Characters that can be used for arena fights
@@ -127,9 +128,13 @@ def assert_in_combat(coord: Coordinator):
     assert coord.in_game, "Expected to be in game but we're at main menu"
     assert coord.last_game_state, "No game state available"
     game = coord.last_game_state
-    assert game.in_combat, f"Expected to be in combat but in_combat={game.in_combat}"
+    assert game.in_combat, (
+        f"Expected to be in combat but in_combat={game.in_combat}"
+    )
     assert game.monsters, "Expected monsters in combat but none found"
-    assert game.play_available or game.end_available, "Combat not ready for input"
+    assert game.play_available or game.end_available, (
+        "Combat not ready for input"
+    )
 
 
 def wait_for_arena_end(coord: Coordinator, timeout: float = 60):
@@ -140,6 +145,7 @@ def wait_for_arena_end(coord: Coordinator, timeout: float = 60):
 # =============================================================================
 # Screenshot Mixin for Stateful Tests
 # =============================================================================
+
 
 class ScreenshotStateMixin:
     """
@@ -165,7 +171,9 @@ class ScreenshotStateMixin:
 
         # Wait for visual stability and capture initial state
         self._wait_for_visual_stable()
-        self._run_tracker.capture_step("setup", phase="after", extra_info="initial_state")
+        self._run_tracker.capture_step(
+            "setup", phase="after", extra_info="initial_state"
+        )
 
     def _screenshot_step(self, action_name: str, extra_info: str = None):
         """Capture screenshot after a step. Call after each rule.
@@ -175,14 +183,18 @@ class ScreenshotStateMixin:
         """
         if self._run_tracker:
             self._wait_for_visual_stable()
-            self._run_tracker.capture_step(action_name, phase="after", extra_info=extra_info)
+            self._run_tracker.capture_step(
+                action_name, phase="after", extra_info=extra_info
+            )
             self._run_tracker.next_step()
 
     def _screenshot_teardown(self):
         """Finalize screenshot tracking for this run. Call in teardown()."""
         if self._run_tracker:
             self._wait_for_visual_stable()
-            self._run_tracker.capture_step("teardown", phase="after", extra_info="final_state")
+            self._run_tracker.capture_step(
+                "teardown", phase="after", extra_info="final_state"
+            )
             # End the run (generates per-run index)
             tracker = get_stateful_tracker(self._tracker_name)
             tracker.end_run()
@@ -194,7 +206,7 @@ class ScreenshotStateMixin:
         Raises GameTimeout if visual effects don't stabilize within timeout,
         as this usually indicates something has gone wrong.
         """
-        if hasattr(self, 'coord') and self.coord is not None:
+        if hasattr(self, "coord") and self.coord is not None:
             wait_for_visual_stable(self.coord, timeout=10)
 
 
@@ -245,6 +257,7 @@ def ensure_main_menu(coord: Coordinator, timeout: float = 60):
 # Stateful State Machine
 # =============================================================================
 
+
 class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
     """
     A state machine that models the STS Arena game states and transitions.
@@ -283,6 +296,7 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
         """Initialize the state machine with a coordinator at main menu."""
         # Access the global coordinator from conftest
         import conftest
+
         self.coord = conftest._coordinator
 
         # Ensure we start at main menu
@@ -298,7 +312,9 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
         self.model_combat_ended = False
 
         # Verify game actually is at menu
-        assert not self.coord.in_game, "ensure_main_menu() didn't work - still in game"
+        assert not self.coord.in_game, (
+            "ensure_main_menu() didn't work - still in game"
+        )
 
         # Initialize screenshot tracking for this run
         self._screenshot_setup()
@@ -313,14 +329,16 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
     def game_state_consistency(self):
         """If we're in game, we should have a game state."""
         if self.coord.in_game:
-            assert self.coord.last_game_state is not None, \
+            assert self.coord.last_game_state is not None, (
                 "In game but no game state"
+            )
 
     @invariant()
     def model_matches_reality(self):
         """Our model state should match the actual game state."""
-        assert self.model_in_game == self.coord.in_game, \
+        assert self.model_in_game == self.coord.in_game, (
             f"Model says in_game={self.model_in_game}, but game says {self.coord.in_game}"
+        )
 
     @invariant()
     def combat_has_monsters(self):
@@ -328,7 +346,9 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
         if self.coord.in_game and self.coord.last_game_state:
             game = self.coord.last_game_state
             if game.in_combat and not self.model_combat_ended:
-                assert game.monsters is not None, "In combat but monsters is None"
+                assert game.monsters is not None, (
+                    "In combat but monsters is None"
+                )
                 assert len(game.monsters) > 0, "In combat but no monsters"
 
     @invariant()
@@ -338,15 +358,17 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
             game = self.coord.last_game_state
             if game.in_combat and game.current_hp is not None:
                 # HP can be 0 if we just died
-                assert game.current_hp >= 0, f"HP is negative: {game.current_hp}"
+                assert game.current_hp >= 0, (
+                    f"HP is negative: {game.current_hp}"
+                )
 
     @invariant()
     def energy_non_negative(self):
         """Energy should never be negative."""
         if self.coord.in_game and self.coord.last_game_state:
             game = self.coord.last_game_state
-            if game.in_combat and hasattr(game, 'player') and game.player:
-                energy = getattr(game.player, 'energy', None)
+            if game.in_combat and hasattr(game, "player") and game.player:
+                energy = getattr(game.player, "energy", None)
                 if energy is not None:
                     assert energy >= 0, f"Energy is negative: {energy}"
 
@@ -356,39 +378,56 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
         if self.coord.in_game and self.coord.last_game_state:
             game = self.coord.last_game_state
             if game.in_combat and game.hand:
-                assert len(game.hand) <= 10, f"Hand has {len(game.hand)} cards (max 10)"
+                assert len(game.hand) <= 10, (
+                    f"Hand has {len(game.hand)} cards (max 10)"
+                )
 
     @invariant()
     def arena_no_apology_slime(self):
         """Arena fights should never have Apology Slime (fallback monster)."""
-        if self.model_is_arena and self.coord.in_game and self.coord.last_game_state:
+        if (
+            self.model_is_arena
+            and self.coord.in_game
+            and self.coord.last_game_state
+        ):
             game = self.coord.last_game_state
             if game.in_combat and game.monsters:
                 monster_names = [m.name for m in game.monsters]
-                assert "Apology Slime" not in monster_names, \
+                assert "Apology Slime" not in monster_names, (
                     f"Arena got fallback Apology Slime! Expected {self.model_encounter}, got {monster_names}"
+                )
 
     @invariant()
     def correct_character(self):
         """If we're in game, character should match what we started with."""
-        if self.model_character and self.coord.in_game and self.coord.last_game_state:
+        if (
+            self.model_character
+            and self.coord.in_game
+            and self.coord.last_game_state
+        ):
             game = self.coord.last_game_state
             expected = PlayerClass[self.model_character]
-            assert game.character == expected, \
+            assert game.character == expected, (
                 f"Expected {self.model_character}, got {game.character}"
+            )
 
     @invariant()
     def arena_no_forbidden_screens(self):
         """Arena fights should never show reward screens, map, or other non-combat screens."""
-        if self.model_is_arena and self.coord.in_game and self.coord.last_game_state:
+        if (
+            self.model_is_arena
+            and self.coord.in_game
+            and self.coord.last_game_state
+        ):
             game = self.coord.last_game_state
             screen_type = game.screen_type
             if screen_type in FORBIDDEN_ARENA_SCREENS:
                 # This is the bug! Arena fights should return to menu, not show reward screens
-                assert False, \
-                    f"Arena fight showed forbidden screen {screen_type.name}! " \
-                    f"Character={self.model_character}, Encounter={self.model_encounter}, " \
+                assert False, (
+                    f"Arena fight showed forbidden screen {screen_type.name}! "
+                    f"Character={self.model_character}, Encounter={self.model_encounter}, "
                     f"Actions={self.action_history}"
+                )
 
     # =========================================================================
     # Rules - actions that can be taken
@@ -414,8 +453,11 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
         note("Exited arena screens")
 
     @precondition(lambda self: not self.model_in_game)
-    @rule(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS),
-          seed=st.integers(min_value=0, max_value=2**63-1))
+    @rule(
+        character=st.sampled_from(CHARACTERS),
+        encounter=st.sampled_from(ENCOUNTERS),
+        seed=st.integers(min_value=0, max_value=2**63 - 1),
+    )
     def start_arena_fight(self, character, encounter, seed):
         """Start an arena fight from the main menu."""
         note(f"Starting arena: {character} vs {encounter} (seed={seed})")
@@ -436,7 +478,9 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
         self.model_in_combat = True
         self.model_combat_ended = False
 
-        self._screenshot_step("start_arena_fight", f"{character}_vs_{encounter}")
+        self._screenshot_step(
+            "start_arena_fight", f"{character}_vs_{encounter}"
+        )
         note(f"Arena started successfully")
 
     @precondition(lambda self: not self.model_in_game)
@@ -521,7 +565,10 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
                 self.model_in_game = False
                 self.model_in_combat = False
                 self.model_combat_ended = False
-            elif self.coord.last_game_state and not self.coord.last_game_state.in_combat:
+            elif (
+                self.coord.last_game_state
+                and not self.coord.last_game_state.in_combat
+            ):
                 self.model_in_combat = False
                 self.model_combat_ended = True
                 note("Normal run combat won")
@@ -563,7 +610,10 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
                 self.model_in_combat = False
                 self.model_combat_ended = False
                 note("Normal run death")
-            elif self.coord.last_game_state and not self.coord.last_game_state.in_combat:
+            elif (
+                self.coord.last_game_state
+                and not self.coord.last_game_state.in_combat
+            ):
                 self.model_in_combat = False
                 self.model_combat_ended = True
             self._screenshot_step("lose_combat", "normal_run")
@@ -589,7 +639,7 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
             return
 
         game = self.coord.last_game_state
-        if hasattr(game, 'proceed_available') and game.proceed_available:
+        if hasattr(game, "proceed_available") and game.proceed_available:
             note("Proceeding after combat")
             self.action_history.append("proceed")
             self.coord.send_message("proceed")
@@ -619,6 +669,7 @@ TestArenaStateful.settings = settings(
 # Additional focused state machines
 # =============================================================================
 
+
 class ArenaCombatMachine(ScreenshotStateMixin, RuleBasedStateMachine):
     """
     State machine focused on combat outcomes within arena fights.
@@ -640,6 +691,7 @@ class ArenaCombatMachine(ScreenshotStateMixin, RuleBasedStateMachine):
     def setup(self):
         """Initialize at main menu."""
         import conftest
+
         self.coord = conftest._coordinator
         ensure_main_menu(self.coord)
 
@@ -650,14 +702,19 @@ class ArenaCombatMachine(ScreenshotStateMixin, RuleBasedStateMachine):
         self.losses = 0
 
         # Verify game actually is at menu
-        assert not self.coord.in_game, "ensure_main_menu() didn't work - still in game"
+        assert not self.coord.in_game, (
+            "ensure_main_menu() didn't work - still in game"
+        )
 
         # Initialize screenshot tracking for this run
         self._screenshot_setup()
 
     @precondition(lambda self: not self.in_combat)
-    @rule(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS),
-          seed=st.integers(min_value=0, max_value=2**63-1))
+    @rule(
+        character=st.sampled_from(CHARACTERS),
+        encounter=st.sampled_from(ENCOUNTERS),
+        seed=st.integers(min_value=0, max_value=2**63 - 1),
+    )
     def start_fight(self, character, encounter, seed):
         """Start an arena fight."""
         note(f"Starting combat: {character} vs {encounter} (seed={seed})")
@@ -691,9 +748,10 @@ class ArenaCombatMachine(ScreenshotStateMixin, RuleBasedStateMachine):
             game = self.coord.last_game_state
             screen_type = game.screen_type
             if screen_type in FORBIDDEN_ARENA_SCREENS:
-                assert False, \
-                    f"Arena fight showed forbidden screen {screen_type.name}! " \
+                assert False, (
+                    f"Arena fight showed forbidden screen {screen_type.name}! "
                     f"Wins={self.wins}, Losses={self.losses}"
+                )
 
     @precondition(lambda self: self.in_combat)
     @rule()
@@ -780,6 +838,7 @@ class ArenaTransitionMachine(ScreenshotStateMixin, RuleBasedStateMachine):
     def _log(self, msg):
         """Log an action for debugging (internal only, not to Hypothesis)."""
         import time
+
         ts = time.strftime("%H:%M:%S")
         entry = f"[{ts}] {msg}"
         self._action_log.append(entry)
@@ -789,6 +848,7 @@ class ArenaTransitionMachine(ScreenshotStateMixin, RuleBasedStateMachine):
     def setup(self):
         """Initialize at main menu."""
         import conftest
+
         self.coord = conftest._coordinator
         self._action_log = []
 
@@ -805,7 +865,9 @@ class ArenaTransitionMachine(ScreenshotStateMixin, RuleBasedStateMachine):
         self.fights_abandoned = 0
 
         # Verify game actually is at menu (fail if not)
-        assert not self.coord.in_game, f"ensure_main_menu() didn't work - still in game"
+        assert not self.coord.in_game, (
+            f"ensure_main_menu() didn't work - still in game"
+        )
 
         # Initialize screenshot tracking for this run
         self._screenshot_setup()
@@ -815,15 +877,19 @@ class ArenaTransitionMachine(ScreenshotStateMixin, RuleBasedStateMachine):
     @invariant()
     def state_consistent(self):
         """Model state should match reality."""
-        assert self.at_menu == (not self.coord.in_game), \
+        assert self.at_menu == (not self.coord.in_game), (
             f"Model: at_menu={self.at_menu}, Reality: in_game={self.coord.in_game}"
+        )
 
     @invariant()
     def fight_counts_valid(self):
         """Fight outcomes shouldn't exceed fights started."""
-        total_outcomes = self.fights_won + self.fights_lost + self.fights_abandoned
-        assert total_outcomes <= self.fights_started, \
+        total_outcomes = (
+            self.fights_won + self.fights_lost + self.fights_abandoned
+        )
+        assert total_outcomes <= self.fights_started, (
             f"Outcomes {total_outcomes} > started {self.fights_started}"
+        )
 
     @invariant()
     def no_forbidden_screens(self):
@@ -832,9 +898,10 @@ class ArenaTransitionMachine(ScreenshotStateMixin, RuleBasedStateMachine):
             game = self.coord.last_game_state
             screen_type = game.screen_type
             if screen_type in FORBIDDEN_ARENA_SCREENS:
-                assert False, \
-                    f"Arena fight showed forbidden screen {screen_type.name}! " \
+                assert False, (
+                    f"Arena fight showed forbidden screen {screen_type.name}! "
                     f"Fight #{self.fights_started}, won={self.fights_won}, lost={self.fights_lost}"
+                )
 
     @precondition(lambda self: self.at_menu)
     @rule()
@@ -856,8 +923,11 @@ class ArenaTransitionMachine(ScreenshotStateMixin, RuleBasedStateMachine):
         self._log("exit_arena_screens complete")
 
     @precondition(lambda self: self.at_menu)
-    @rule(character=st.sampled_from(CHARACTERS), encounter=st.sampled_from(ENCOUNTERS),
-          seed=st.integers(min_value=0, max_value=2**63-1))
+    @rule(
+        character=st.sampled_from(CHARACTERS),
+        encounter=st.sampled_from(ENCOUNTERS),
+        seed=st.integers(min_value=0, max_value=2**63 - 1),
+    )
     def start_fight(self, character, encounter, seed):
         """Start an arena fight."""
         note(f"start_fight: {character} vs {encounter}")
@@ -932,12 +1002,15 @@ class ArenaTransitionMachine(ScreenshotStateMixin, RuleBasedStateMachine):
 
     def teardown(self):
         """Clean up."""
-        self._log(f"teardown: started={self.fights_started}, won={self.fights_won}, lost={self.fights_lost}, abandoned={self.fights_abandoned}")
+        self._log(
+            f"teardown: started={self.fights_started}, won={self.fights_won}, lost={self.fights_lost}, abandoned={self.fights_abandoned}"
+        )
         self._screenshot_teardown()
         ensure_main_menu(self.coord)
 
 
-# Now working! Run more thorough tests
+# Keep consistent with other tests to avoid timeouts
+# TODO: Consider running more thorough tests in CI with higher limits
 TestArenaTransitions = ArenaTransitionMachine.TestCase
 TestArenaTransitions.settings = settings(
     max_examples=20,
