@@ -658,7 +658,7 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
 TestArenaStateful = ArenaStateMachine.TestCase
 TestArenaStateful.settings = settings(
     max_examples=20,
-    stateful_step_count=8,
+    stateful_step_count=20,
     deadline=None,
     suppress_health_check=list(HealthCheck),
     verbosity=Verbosity.normal,
@@ -1009,12 +1009,10 @@ class ArenaTransitionMachine(ScreenshotStateMixin, RuleBasedStateMachine):
         ensure_main_menu(self.coord)
 
 
-# Keep consistent with other tests to avoid timeouts
-# TODO: Consider running more thorough tests in CI with higher limits
 TestArenaTransitions = ArenaTransitionMachine.TestCase
 TestArenaTransitions.settings = settings(
     max_examples=20,
-    stateful_step_count=8,
+    stateful_step_count=20,
     deadline=None,
     suppress_health_check=list(HealthCheck),
     verbosity=Verbosity.normal,

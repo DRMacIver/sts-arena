@@ -6,21 +6,22 @@ run_agent.py handles the "ready" signal and creates named pipes for communicatio
 """
 
 import os
-import pytest
 import sys
 import time
 
+import pytest
 from spirecomm.communication.coordinator import Coordinator
 
 # Import screenshot utilities (optional - may not be available if mss not installed)
 try:
     from screenshot import (
-        get_capture,
-        screenshot_on_failure,
-        generate_screenshot_index,
-        get_stateful_tracker,
         finalize_stateful_trackers,
+        generate_screenshot_index,
+        get_capture,
+        get_stateful_tracker,
+        screenshot_on_failure,
     )
+
     SCREENSHOTS_ENABLED = True
 except ImportError:
     SCREENSHOTS_ENABLED = False
@@ -29,19 +30,21 @@ except ImportError:
 DEFAULT_TIMEOUT = 60  # seconds - game takes time to initialize
 
 
-class GameTimeout(BaseException):
+class GameTimeout(Exception):
     """Raised when waiting for game state times out.
 
     Inherits from BaseException (not Exception) so that Hypothesis won't
     catch it and try to minimize - timeouts are test infrastructure failures,
     not test logic failures.
     """
+
     pass
 
 
 def _process_message(coordinator, msg):
     """Process a raw message from the game and update coordinator state."""
     import json
+
     communication_state = json.loads(msg)
     coordinator.last_error = communication_state.get("error", None)
     coordinator.game_is_ready = communication_state.get("ready_for_command")
@@ -49,9 +52,10 @@ def _process_message(coordinator, msg):
         coordinator.in_game = communication_state.get("in_game")
         if coordinator.in_game:
             from spirecomm.spire.game import Game
+
             coordinator.last_game_state = Game.from_json(
                 communication_state.get("game_state"),
-                communication_state.get("available_commands")
+                communication_state.get("available_commands"),
             )
 
 
@@ -77,9 +81,13 @@ def wait_for_ready(coordinator, timeout=DEFAULT_TIMEOUT):
     while not coordinator.game_is_ready:
         remaining = timeout - (time.time() - start)
         if remaining <= 0:
-            raise GameTimeout(f"Timed out after {timeout}s waiting for game to be ready")
+            raise GameTimeout(
+                f"Timed out after {timeout}s waiting for game to be ready"
+            )
         # Block for up to 1 second at a time, checking timeout between
-        msg = coordinator.get_next_raw_message(block=True, timeout=min(1.0, remaining))
+        msg = coordinator.get_next_raw_message(
+            block=True, timeout=min(1.0, remaining)
+        )
         if msg is not None:
             _process_message(coordinator, msg)
 
@@ -117,7 +125,9 @@ _input_pipe_path = os.environ.get("STS_GAME_INPUT_PIPE")
 _output_pipe_path = os.environ.get("STS_GAME_OUTPUT_PIPE")
 
 if not _input_pipe_path or not _output_pipe_path:
-    raise RuntimeError("STS_GAME_INPUT_PIPE and STS_GAME_OUTPUT_PIPE must be set")
+    raise RuntimeError(
+        "STS_GAME_INPUT_PIPE and STS_GAME_OUTPUT_PIPE must be set"
+    )
 
 # Open the named pipes
 # Note: opening a FIFO blocks until the other end is also opened,
@@ -187,17 +197,22 @@ def wait_for_combat(coordinator, timeout=DEFAULT_TIMEOUT):
     coordinator.game_is_ready = False
     coordinator.send_message("wait_for in_combat true")
     wait_for_ready(coordinator, timeout=timeout)
-    if not (coordinator.in_game and coordinator.last_game_state and coordinator.last_game_state.in_combat):
+    if not (
+        coordinator.in_game
+        and coordinator.last_game_state
+        and coordinator.last_game_state.in_combat
+    ):
         raise GameTimeout("Expected to be in combat")
 
 
-class VisualStabilityTimeout(BaseException):
+class VisualStabilityTimeout(Exception):
     """Raised when visual stability wait times out in the game.
 
     Inherits from BaseException (not Exception) so that Hypothesis won't
     catch it and try to minimize - timeouts are test infrastructure failures,
     not test logic failures.
     """
+
     pass
 
 
@@ -218,16 +233,32 @@ def wait_for_visual_stable(coordinator, timeout=DEFAULT_TIMEOUT):
         GameTimeout: If we time out waiting for the game to respond
     """
     import sys
-    print(f"[wait_for_visual_stable] Sending wait_for visual_stable command...", file=sys.stderr, flush=True)
+
+    print(
+        f"[wait_for_visual_stable] Sending wait_for visual_stable command...",
+        file=sys.stderr,
+        flush=True,
+    )
     coordinator.game_is_ready = False
     coordinator.last_error = None
     coordinator.send_message("wait_for visual_stable")
-    print(f"[wait_for_visual_stable] Waiting for response (timeout={timeout}s)...", file=sys.stderr, flush=True)
+    print(
+        f"[wait_for_visual_stable] Waiting for response (timeout={timeout}s)...",
+        file=sys.stderr,
+        flush=True,
+    )
     wait_for_ready(coordinator, timeout=timeout)
-    print(f"[wait_for_visual_stable] Got response! error={coordinator.last_error}", file=sys.stderr, flush=True)
+    print(
+        f"[wait_for_visual_stable] Got response! error={coordinator.last_error}",
+        file=sys.stderr,
+        flush=True,
+    )
 
     # Check if the game reported a timeout error
-    if coordinator.last_error and "visual stability" in coordinator.last_error.lower():
+    if (
+        coordinator.last_error
+        and "visual stability" in coordinator.last_error.lower()
+    ):
         raise VisualStabilityTimeout(coordinator.last_error)
 
 
@@ -248,6 +279,7 @@ def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
 
     # Small delay to allow any final messages to arrive
     import time
+
     time.sleep(0.1)
 
     # Drain again to catch any messages that arrived during the delay
@@ -274,6 +306,7 @@ def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
 # =============================================================================
 # Screenshot capture hooks
 # =============================================================================
+
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
@@ -304,6 +337,7 @@ def pytest_runtest_makereport(item, call):
             else:
                 # Also capture on success
                 from screenshot import take_screenshot
+
                 take_screenshot(name="success", test_name=test_name)
         except Exception as e:
             # Only catch screenshot-specific errors (file I/O, mss errors, etc.)
@@ -351,6 +385,7 @@ def screenshot(request):
         # Return a no-op function if screenshots aren't available
         def noop(name=None):
             pass
+
         yield noop
         return
 
@@ -358,6 +393,7 @@ def screenshot(request):
 
     def take(name=None):
         from screenshot import take_screenshot
+
         return take_screenshot(name=name, test_name=test_name)
 
     yield take

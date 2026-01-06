@@ -46,8 +46,12 @@ def main():
     """Main entry point."""
     # Create named pipes in a temp directory FIRST
     pipe_dir = tempfile.mkdtemp(prefix="sts-arena-")
-    game_to_test = os.path.join(pipe_dir, "game_to_test")  # game state from CommunicationMod
-    test_to_game = os.path.join(pipe_dir, "test_to_game")  # commands to CommunicationMod
+    game_to_test = os.path.join(
+        pipe_dir, "game_to_test"
+    )  # game state from CommunicationMod
+    test_to_game = os.path.join(
+        pipe_dir, "test_to_game"
+    )  # commands to CommunicationMod
     os.mkfifo(game_to_test)
     os.mkfifo(test_to_game)
 
@@ -66,13 +70,14 @@ def main():
         # This allows viewing pytest output alongside game logs in real-time
         pytest_debug_file = project_dir / "lib" / "pytest_debug.txt"
 
-        with open(pytest_output_file, "w") as outfile, open(pytest_debug_file, "w") as debugfile:
+        with (
+            open(pytest_output_file, "w") as outfile,
+            open(pytest_debug_file, "w") as debugfile,
+        ):
             # Start bridge threads BEFORE sending ready
             # Bridge: stdin (from game) -> game_to_test pipe
             input_thread = threading.Thread(
-                target=bridge_input,
-                args=(sys.stdin, game_to_test),
-                daemon=True
+                target=bridge_input, args=(sys.stdin, game_to_test), daemon=True
             )
             input_thread.start()
 
@@ -80,7 +85,7 @@ def main():
             output_thread = threading.Thread(
                 target=bridge_output,
                 args=(test_to_game, sys.stdout),
-                daemon=True
+                daemon=True,
             )
             output_thread.start()
 
@@ -90,11 +95,14 @@ def main():
 
             # Allow passing additional pytest arguments via command line
             pytest_args = [
-                sys.executable, "-m", "pytest",
+                sys.executable,
+                "-m",
+                "pytest",
+                "--ff",
+                "--maxfail=1",
                 "-v",
                 "-s",  # Disable output capturing
                 "--tb=short",
-                "-p", "no:cacheprovider",
             ]
             # Add test directory or specific test files from command line
             if len(sys.argv) > 1:
@@ -112,8 +120,8 @@ def main():
 
             def tee_stream(src, dest_file, dest_stderr):
                 """Read from source and write to both file and stderr."""
-                for line in iter(src.readline, b''):
-                    text = line.decode('utf-8', errors='replace')
+                for line in iter(src.readline, b""):
+                    text = line.decode("utf-8", errors="replace")
                     dest_file.write(text)
                     dest_file.flush()
                     dest_stderr.write(text)
@@ -123,12 +131,12 @@ def main():
             stdout_tee = threading.Thread(
                 target=tee_stream,
                 args=(proc.stdout, outfile, sys.stderr),
-                daemon=True
+                daemon=True,
             )
             stderr_tee = threading.Thread(
                 target=tee_stream,
                 args=(proc.stderr, debugfile, sys.stderr),
-                daemon=True
+                daemon=True,
             )
             stdout_tee.start()
             stderr_tee.start()

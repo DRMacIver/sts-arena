@@ -2,10 +2,18 @@ package stsarena.communication;
 
 import com.megacrit.cardcrawl.actions.AbstractGameAction;
 import com.megacrit.cardcrawl.core.AbstractCreature;
+import com.megacrit.cardcrawl.core.CardCrawlGame;
+import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
+import com.megacrit.cardcrawl.powers.AbstractPower;
 import communicationmod.CommandExecutor;
 import communicationmod.InvalidCommandException;
 import stsarena.STSArena;
+import stsarena.arena.ArenaRunner;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * CommunicationMod command extension for forcing a loss.
@@ -56,6 +64,10 @@ public class LoseCommand implements CommandExecutor.CommandExtension {
 
         STSArena.logger.info("LOSE command: Forcing player death via action queue");
 
+        // Clear damage-preventing powers BEFORE queueing the death action
+        // Powers like Intangible, Buffer can block even HP_LOSS damage
+        clearDamagePreventingPowers();
+
         // Queue the death as a top-priority action to ensure it's processed
         // during the normal game loop, avoiding timing issues with direct damage.
         // This action keeps trying until the player actually dies, which handles
@@ -86,29 +98,72 @@ public class LoseCommand implements CommandExecutor.CommandExtension {
                 }
 
                 attempts++;
-                int overkillDamage = AbstractDungeon.player.currentHealth + 999;
-                STSArena.logger.info("LOSE command: Attempt " + attempts + ", dealing " + overkillDamage + " damage");
 
-                AbstractDungeon.player.damage(
-                    new com.megacrit.cardcrawl.cards.DamageInfo(
-                        null,  // source (null = no source)
-                        overkillDamage,
-                        com.megacrit.cardcrawl.cards.DamageInfo.DamageType.HP_LOSS  // HP_LOSS bypasses block
-                    )
-                );
+                // Clear damage-preventing powers on each attempt (in case they were re-applied)
+                clearDamagePreventingPowers();
 
-                // If player is still alive (death prevented), the action will run again
-                if (!AbstractDungeon.player.isDead) {
-                    STSArena.logger.info("LOSE command: Player survived with HP="
-                        + AbstractDungeon.player.currentHealth + ", will try again");
-                    // Don't set isDone = true, so the action runs again
-                } else {
-                    STSArena.logger.info("LOSE command: Player died on attempt " + attempts);
-                    this.isDone = true;
+                int hpBefore = AbstractDungeon.player.currentHealth;
+                STSArena.logger.info("LOSE command: Attempt " + attempts + ", HP before: " + hpBefore);
+
+                // Kill the player by setting HP to 0 and marking as dead
+                AbstractDungeon.player.currentHealth = 0;
+                AbstractDungeon.player.isDead = true;
+                STSArena.logger.info("LOSE command: Set HP=0 and isDead=true");
+
+                // For arena runs, clear the arena state and return to main menu
+                // This mimics what happens when clicking "Retreat" on the death screen
+                if (ArenaRunner.isArenaRun()) {
+                    STSArena.logger.info("LOSE command: Arena run detected, triggering startOver to return to menu");
+                    ArenaRunner.clearArenaRun();
+                    Settings.isTrial = false;
+                    Settings.isDailyRun = false;
+                    Settings.isEndless = false;
+                    CardCrawlGame.startOver();
                 }
+
+                // Action is complete
+                STSArena.logger.info("LOSE command: Player died on attempt " + attempts);
+                this.isDone = true;
             }
         });
 
         STSArena.logger.info("LOSE command: Death action queued");
+    }
+
+    /**
+     * Clear powers that prevent damage, such as Intangible and Buffer.
+     * This ensures the LOSE command can kill the player even with defensive powers active.
+     */
+    private static void clearDamagePreventingPowers() {
+        if (AbstractDungeon.player == null || AbstractDungeon.player.powers == null) {
+            return;
+        }
+
+        // List of power IDs that prevent or significantly reduce damage
+        List<String> damagePreventingPowerIds = Arrays.asList(
+            "Intangible",    // Reduces all damage to 1
+            "Buffer",        // Blocks one instance of damage
+            "Invincible",    // Boss/elite damage cap (shouldn't be on player, but just in case)
+            "IntangiblePlayer"  // Player-specific variant used by some mods
+        );
+
+        // Remove these powers from the player
+        List<AbstractPower> powersToRemove = new ArrayList<>();
+        for (AbstractPower power : AbstractDungeon.player.powers) {
+            if (damagePreventingPowerIds.contains(power.ID)) {
+                STSArena.logger.info("LOSE command: Removing damage-preventing power: " + power.ID);
+                powersToRemove.add(power);
+            }
+        }
+
+        for (AbstractPower power : powersToRemove) {
+            AbstractDungeon.player.powers.remove(power);
+        }
+
+        // Also clear block to ensure HP_LOSS isn't blocked
+        if (AbstractDungeon.player.currentBlock > 0) {
+            STSArena.logger.info("LOSE command: Clearing " + AbstractDungeon.player.currentBlock + " block");
+            AbstractDungeon.player.loseBlock();
+        }
     }
 }
