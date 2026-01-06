@@ -19,6 +19,7 @@ import com.megacrit.cardcrawl.screens.mainMenu.MenuCancelButton;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import stsarena.STSArena;
+import stsarena.arena.ArenaRunner;
 import stsarena.data.ArenaDatabase;
 import stsarena.data.ArenaRepository;
 
@@ -350,6 +351,10 @@ public class ArenaLoadoutSelectScreen {
                 isConfirmingDelete = false;
                 return;
             }
+            // When closing loadout select to return to main menu, clean up arena state
+            // This restores any backed-up save files since the main menu constructor
+            // won't be called (the main menu already exists, arena screens render over it)
+            ArenaRunner.clearArenaRun();
             this.close();
             return;
         }

@@ -255,6 +255,8 @@ public class ArenaEncounterSelectScreen {
 
             if (openedFromPauseMenu) {
                 // Go back to the settings/pause menu
+                // Clean up arena state (restores save file if one was backed up)
+                ArenaRunner.clearArenaRun();
                 STSArena.logger.info("Returning to settings screen from arena encounter select");
                 AbstractDungeon.settingsScreen.open();
             } else if (ArenaRunner.wasStartedFromNormalRun()) {
