@@ -186,20 +186,35 @@ def wait_for_combat(coordinator, timeout=DEFAULT_TIMEOUT):
         raise GameTimeout("Expected to be in combat")
 
 
+class VisualStabilityTimeout(Exception):
+    """Raised when visual stability wait times out in the game."""
+    pass
+
+
 def wait_for_visual_stable(coordinator, timeout=DEFAULT_TIMEOUT):
     """Block until visual effects have completed.
 
     This waits for:
     - No fading in/out
-    - Effect lists are empty (no animations playing)
+    - No screen swap in progress
     - Room wait timer is zero
+    - CardCrawlGame screen timer is zero
 
     Use this before taking screenshots to ensure the screen shows
     the stable state rather than mid-transition.
+
+    Raises:
+        VisualStabilityTimeout: If the game reports a timeout waiting for visual stability
+        GameTimeout: If we time out waiting for the game to respond
     """
     coordinator.game_is_ready = False
+    coordinator.last_error = None
     coordinator.send_message("wait_for visual_stable")
     wait_for_ready(coordinator, timeout=timeout)
+
+    # Check if the game reported a timeout error
+    if coordinator.last_error and "visual stability" in coordinator.last_error.lower():
+        raise VisualStabilityTimeout(coordinator.last_error)
 
 
 def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):

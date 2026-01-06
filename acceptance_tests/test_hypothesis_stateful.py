@@ -46,6 +46,7 @@ from conftest import (
     wait_for_state_update,
     drain_pending_messages,
     GameTimeout,
+    VisualStabilityTimeout,
     DEFAULT_TIMEOUT,
     SCREENSHOTS_ENABLED,
 )
