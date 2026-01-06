@@ -69,6 +69,16 @@ public class ArenaRunner {
         STSArena.logger.info("ARENA: Loadout: " + loadout.name + ", Encounter: " + encounter);
         STSArena.logger.info("ARENA: BEFORE - arenaRunInProgress=" + arenaRunInProgress + ", isArenaRun=" + isArenaRun);
 
+        // Close any open arena screens to ensure clean transition
+        if (STSArena.encounterSelectScreen != null && STSArena.encounterSelectScreen.isOpen) {
+            STSArena.logger.info("ARENA: Closing encounter select screen before starting fight");
+            STSArena.encounterSelectScreen.close();
+        }
+        if (STSArena.loadoutSelectScreen != null && STSArena.loadoutSelectScreen.isOpen) {
+            STSArena.logger.info("ARENA: Closing loadout select screen before starting fight");
+            STSArena.loadoutSelectScreen.close();
+        }
+
         pendingLoadout = loadout;
         pendingEncounter = encounter;
         arenaRunInProgress = true;
