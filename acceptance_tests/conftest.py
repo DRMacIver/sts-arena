@@ -29,8 +29,13 @@ except ImportError:
 DEFAULT_TIMEOUT = 60  # seconds - game takes time to initialize
 
 
-class GameTimeout(Exception):
-    """Raised when waiting for game state times out."""
+class GameTimeout(BaseException):
+    """Raised when waiting for game state times out.
+
+    Inherits from BaseException (not Exception) so that Hypothesis won't
+    catch it and try to minimize - timeouts are test infrastructure failures,
+    not test logic failures.
+    """
     pass
 
 
@@ -186,8 +191,13 @@ def wait_for_combat(coordinator, timeout=DEFAULT_TIMEOUT):
         raise GameTimeout("Expected to be in combat")
 
 
-class VisualStabilityTimeout(Exception):
-    """Raised when visual stability wait times out in the game."""
+class VisualStabilityTimeout(BaseException):
+    """Raised when visual stability wait times out in the game.
+
+    Inherits from BaseException (not Exception) so that Hypothesis won't
+    catch it and try to minimize - timeouts are test infrastructure failures,
+    not test logic failures.
+    """
     pass
 
 
@@ -207,10 +217,14 @@ def wait_for_visual_stable(coordinator, timeout=DEFAULT_TIMEOUT):
         VisualStabilityTimeout: If the game reports a timeout waiting for visual stability
         GameTimeout: If we time out waiting for the game to respond
     """
+    import sys
+    print(f"[wait_for_visual_stable] Sending wait_for visual_stable command...", file=sys.stderr, flush=True)
     coordinator.game_is_ready = False
     coordinator.last_error = None
     coordinator.send_message("wait_for visual_stable")
+    print(f"[wait_for_visual_stable] Waiting for response (timeout={timeout}s)...", file=sys.stderr, flush=True)
     wait_for_ready(coordinator, timeout=timeout)
+    print(f"[wait_for_visual_stable] Got response! error={coordinator.last_error}", file=sys.stderr, flush=True)
 
     # Check if the game reported a timeout error
     if coordinator.last_error and "visual stability" in coordinator.last_error.lower():
