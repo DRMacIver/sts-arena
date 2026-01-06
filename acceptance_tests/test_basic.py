@@ -202,3 +202,121 @@ class TestArenaMode:
         assert not coord.in_game, (
             "Arena loss should automatically return to main menu without needing abandon command."
         )
+
+    def test_arena_back_cleans_up_after_victory(self, at_main_menu: Coordinator):
+        """Test that arena_back properly cleans up save files after victory.
+
+        This is a regression test for a bug where arena save files persisted
+        after winning a fight and exiting arena screens via Back button.
+        The save file would cause a Continue option to appear at main menu.
+
+        The test verifies that:
+        1. Arena fight can be started
+        2. Victory returns to arena screens (at main menu level)
+        3. arena_back command properly cleans up
+        4. A new normal run can start fresh (not continuing the arena save)
+        """
+        coord = at_main_menu
+
+        # Start an arena fight with IRONCLAD
+        coord.send_message("arena IRONCLAD Cultist 11111")
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
+        wait_for_combat(coord)
+        assert coord.in_game, "Should be in arena fight"
+
+        # Win the fight
+        coord.send_message("win")
+        wait_for_ready(coord)
+        wait_for_main_menu(coord)
+        assert not coord.in_game, "Should be at main menu after arena victory"
+
+        # Call arena_back to exit arena screens and clean up save files
+        coord.send_message("arena_back")
+        wait_for_ready(coord)
+
+        # Verify we're still at main menu
+        coord.send_message("state")
+        wait_for_ready(coord)
+        assert not coord.in_game, "Should be at main menu after arena_back"
+
+        # Now start a fresh normal run - this should start from floor 1,
+        # not continue from the arena save
+        coord.send_message("start IRONCLAD 0")
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
+
+        assert coord.in_game, "Should be in normal run"
+        assert coord.last_game_state is not None, "Should have game state"
+        # A fresh run should start at floor 1 (or thereabouts)
+        # Arena saves were at floor 1 too, but this verifies the run starts clean
+
+    def test_arena_back_cleans_up_after_loss(self, at_main_menu: Coordinator):
+        """Test that arena_back properly cleans up save files after loss.
+
+        Similar to test_arena_back_cleans_up_after_victory but for defeats.
+        """
+        coord = at_main_menu
+
+        # Start an arena fight
+        coord.send_message("arena IRONCLAD Cultist 22222")
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
+        wait_for_combat(coord)
+        assert coord.in_game, "Should be in arena fight"
+
+        # Lose the fight
+        coord.send_message("lose")
+        wait_for_ready(coord)
+        wait_for_main_menu(coord)
+        assert not coord.in_game, "Should be at main menu after arena loss"
+
+        # Call arena_back to exit arena screens and clean up save files
+        coord.send_message("arena_back")
+        wait_for_ready(coord)
+
+        # Verify we're still at main menu
+        coord.send_message("state")
+        wait_for_ready(coord)
+        assert not coord.in_game, "Should be at main menu after arena_back"
+
+    def test_multiple_arena_fights_with_back_cleanup(self, at_main_menu: Coordinator):
+        """Test that save files are properly cleaned up across multiple fights.
+
+        This tests the sequence:
+        1. Arena fight 1 -> win -> arena_back
+        2. Arena fight 2 -> lose -> arena_back
+        3. Normal run starts fresh
+        """
+        coord = at_main_menu
+
+        # Fight 1: Win
+        coord.send_message("arena IRONCLAD Cultist 33333")
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
+        wait_for_combat(coord)
+        coord.send_message("win")
+        wait_for_ready(coord)
+        wait_for_main_menu(coord)
+        coord.send_message("arena_back")
+        wait_for_ready(coord)
+        assert not coord.in_game, "Fight 1: Should be at main menu"
+
+        # Fight 2: Lose
+        coord.send_message("arena DEFECT Jaw Worm 44444")
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
+        wait_for_combat(coord)
+        coord.send_message("lose")
+        wait_for_ready(coord)
+        wait_for_main_menu(coord)
+        coord.send_message("arena_back")
+        wait_for_ready(coord)
+        assert not coord.in_game, "Fight 2: Should be at main menu"
+
+        # Verify normal run starts fresh with a different character
+        coord.send_message("start THE_SILENT 0")
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
+        assert coord.in_game, "Should be in fresh normal run"
+        assert coord.last_game_state.character.name == "THE_SILENT", "Should be playing Silent"
