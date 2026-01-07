@@ -170,7 +170,12 @@ def at_main_menu(coordinator):
     yield coordinator
 
     # After test: ensure at main menu for next test
-    _ensure_main_menu(coordinator)
+    # Wrap in try-except so teardown issues don't mark passing tests as ERROR
+    # The next test's setup will try to recover anyway
+    try:
+        _ensure_main_menu(coordinator)
+    except GameTimeout as e:
+        print(f"Warning: Teardown failed to return to main menu: {e}")
 
 
 def wait_for_state_update(coordinator, timeout=DEFAULT_TIMEOUT):
@@ -268,45 +273,71 @@ def wait_for_visual_stable(coordinator, timeout=DEFAULT_TIMEOUT):
         raise VisualStabilityTimeout(coordinator.last_error)
 
 
-def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
+def _ensure_main_menu(coordinator, timeout=DEFAULT_TIMEOUT, max_retries=2):
     """Ensure we're at the main menu. Abandons any active run.
 
     This function is critical for test isolation. It must:
     1. Clear any stale messages from previous tests/examples
     2. Get a fresh view of the actual game state
     3. Return to menu if we're in a game
+
+    Args:
+        coordinator: The game coordinator
+        timeout: Timeout for each operation
+        max_retries: Number of times to retry if communication fails
     """
-    # Reset coordinator state to force a fresh read from the game
-    coordinator.game_is_ready = False
-    coordinator.last_error = None
-
-    # Drain any pending messages that might be queued
-    drained = drain_pending_messages(coordinator)
-
-    # Small delay to allow any final messages to arrive
     import time
 
-    time.sleep(0.1)
+    last_error = None
+    for attempt in range(max_retries + 1):
+        try:
+            # Reset coordinator state to force a fresh read from the game
+            coordinator.game_is_ready = False
+            coordinator.last_error = None
 
-    # Drain again to catch any messages that arrived during the delay
-    drain_pending_messages(coordinator)
+            # Drain any pending messages that might be queued
+            # Use larger max_drain on retry attempts
+            max_drain = 10 if attempt == 0 else 50
+            drained = drain_pending_messages(coordinator, max_drain=max_drain)
 
-    # Get current state - use longer timeout for recovery scenarios
-    wait_for_state_update(coordinator, timeout=30)
+            # Delay to allow messages to arrive - longer on retries
+            delay = 0.1 if attempt == 0 else 1.0
+            time.sleep(delay)
 
-    if not coordinator.in_game:
-        return
+            # Drain again to catch any messages that arrived during the delay
+            drain_pending_messages(coordinator, max_drain=max_drain)
 
-    # We're in a game - need to abandon
-    coordinator.send_message("abandon")
+            # Get current state - use shorter timeout on first attempt
+            state_timeout = 30 if attempt == 0 else 15
+            wait_for_state_update(coordinator, timeout=state_timeout)
 
-    # Wait for abandon command response first
-    wait_for_ready(coordinator)
+            if not coordinator.in_game:
+                return
 
-    # Wait for return to main menu using wait_for command
-    wait_for_main_menu(coordinator, timeout=timeout)
+            # We're in a game - need to abandon
+            coordinator.send_message("abandon")
 
-    assert not coordinator.in_game, "Should be at main menu after abandon"
+            # Wait for abandon command response first
+            wait_for_ready(coordinator)
+
+            # Wait for return to main menu using wait_for command
+            wait_for_main_menu(coordinator, timeout=timeout)
+
+            assert not coordinator.in_game, "Should be at main menu after abandon"
+            return
+
+        except GameTimeout as e:
+            last_error = e
+            if attempt < max_retries:
+                print(
+                    f"Warning: _ensure_main_menu attempt {attempt + 1} timed out, "
+                    f"retrying..."
+                )
+                # Aggressive drain before retry
+                drain_pending_messages(coordinator, max_drain=100)
+                time.sleep(2.0)  # Give game time to recover
+            else:
+                raise
 
 
 # =============================================================================

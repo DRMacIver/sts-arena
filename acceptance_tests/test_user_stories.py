@@ -16,6 +16,7 @@ from conftest import (
     wait_for_in_game,
     wait_for_main_menu,
     wait_for_combat,
+    wait_for_visual_stable,
     GameTimeout,
     DEFAULT_TIMEOUT,
 )
@@ -171,6 +172,10 @@ class TestStory1_5_1_6_LoadoutManagement:
         wait_for_ready(coord)
         wait_for_main_menu(coord)
 
+        # Wait for visual stability before sending commands
+        # This ensures the main menu transition is complete
+        wait_for_visual_stable(coord)
+
         # Try to rename loadout 1 (may not exist if deleted in previous tests)
         coord.send_message("arena-loadout rename 1 My Renamed Loadout")
         wait_for_ready(coord, timeout=5)
@@ -196,6 +201,10 @@ class TestStory1_5_1_6_LoadoutManagement:
         coord.send_message("arena-back")
         wait_for_ready(coord)
         wait_for_main_menu(coord)
+
+        # Wait for visual stability before sending commands
+        # This ensures the main menu transition is complete
+        wait_for_visual_stable(coord)
 
         # Try to delete loadout 1 (may not exist if deleted in previous tests)
         coord.send_message("arena-loadout delete 1")
