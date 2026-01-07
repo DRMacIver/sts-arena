@@ -7,19 +7,23 @@ import stsarena.STSArena;
 import stsarena.arena.ArenaRunner;
 import stsarena.arena.LoadoutConfig;
 import stsarena.arena.RandomLoadoutGenerator;
+import stsarena.data.ArenaDatabase;
+import stsarena.data.ArenaRepository;
 
 /**
  * CommunicationMod command extension for arena mode.
  *
- * Usage: arena <CHARACTER> <ENCOUNTER> [SEED]
- * Example: arena IRONCLAD Cultist
- * Example: arena IRONCLAD Cultist 12345
+ * Usage:
+ *   arena <CHARACTER> <ENCOUNTER> [SEED]    - Start with random loadout
+ *   arena --loadout <ID> <ENCOUNTER>        - Start with saved loadout
  *
- * This command starts an arena fight with a randomly generated loadout
- * for the specified character (with random ascension level).
+ * Examples:
+ *   arena IRONCLAD Cultist                  - Random IRONCLAD loadout vs Cultist
+ *   arena IRONCLAD Cultist 12345            - Random with seed for reproducibility
+ *   arena --loadout 5 Cultist               - Use saved loadout #5 vs Cultist
  *
- * The optional SEED parameter allows reproducible loadout generation
- * for testing purposes.
+ * The optional SEED parameter (for random mode) allows reproducible loadout
+ * generation for testing purposes.
  */
 public class ArenaCommand implements CommandExecutor.CommandExtension {
 
@@ -53,6 +57,13 @@ public class ArenaCommand implements CommandExecutor.CommandExtension {
             throw new InvalidCommandException(tokens, InvalidCommandException.InvalidCommandFormat.MISSING_ARGUMENT);
         }
 
+        // Check for --loadout option
+        if (tokens[1].equalsIgnoreCase("--loadout")) {
+            executeWithSavedLoadout(tokens);
+            return;
+        }
+
+        // Standard random loadout mode: arena <CHARACTER> <ENCOUNTER> [SEED]
         String characterName = tokens[1].toUpperCase();
 
         // Check if last token is a numeric seed
@@ -93,6 +104,55 @@ public class ArenaCommand implements CommandExecutor.CommandExtension {
         // Generate a loadout for the specified character (random ascension)
         RandomLoadoutGenerator.GeneratedLoadout loadout =
             RandomLoadoutGenerator.generateForClass(playerClass, seed);
+
+        // Start the arena fight
+        ArenaRunner.startFight(loadout, encounter);
+    }
+
+    /**
+     * Execute arena with a saved loadout: arena --loadout <ID> <ENCOUNTER>
+     */
+    private void executeWithSavedLoadout(String[] tokens) throws InvalidCommandException {
+        if (tokens.length < 4) {
+            throw new InvalidCommandException("Usage: arena --loadout <id> <encounter>");
+        }
+
+        // Parse loadout ID
+        long loadoutId;
+        try {
+            loadoutId = Long.parseLong(tokens[2]);
+        } catch (NumberFormatException e) {
+            throw new InvalidCommandException("Invalid loadout ID: " + tokens[2]);
+        }
+
+        // Combine remaining tokens for encounter name
+        StringBuilder encounterBuilder = new StringBuilder();
+        for (int i = 3; i < tokens.length; i++) {
+            if (i > 3) encounterBuilder.append(" ");
+            encounterBuilder.append(tokens[i]);
+        }
+        String rawEncounter = encounterBuilder.toString();
+        String encounter = normalizeEncounterName(rawEncounter);
+
+        // Get database and repository
+        ArenaDatabase db = ArenaDatabase.getInstance();
+        if (db == null) {
+            throw new InvalidCommandException("Database not available");
+        }
+        ArenaRepository repo = new ArenaRepository(db);
+
+        // Get the saved loadout
+        ArenaRepository.LoadoutRecord record = repo.getLoadoutById(loadoutId);
+        if (record == null) {
+            throw new InvalidCommandException("Loadout not found with ID: " + loadoutId);
+        }
+
+        STSArena.logger.info("Arena command: Using saved loadout '" + record.name +
+            "' (ID=" + loadoutId + ") vs " + encounter);
+
+        // Convert LoadoutRecord to GeneratedLoadout
+        RandomLoadoutGenerator.GeneratedLoadout loadout =
+            RandomLoadoutGenerator.fromSavedLoadout(record);
 
         // Start the arena fight
         ArenaRunner.startFight(loadout, encounter);

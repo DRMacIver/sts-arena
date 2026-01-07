@@ -125,9 +125,33 @@ class TestStory1_2_SavedLoadout:
 class TestStory1_5_1_6_LoadoutManagement:
     """Story 1.5 and 1.6: Loadout rename and delete.
 
-    These require arena-loadout commands to be implemented.
-    Tests are implemented but will fail until the feature exists.
+    Tests the arena-loadout command for managing saved loadouts.
     """
+
+    def test_arena_loadout_list(self, at_main_menu: Coordinator):
+        """Verify arena-loadout list command works."""
+        coord = at_main_menu
+
+        # First create a loadout by starting an arena fight
+        coord.send_message("arena IRONCLAD Cultist")
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
+
+        # Win the fight to save the loadout
+        coord.send_message("win")
+        wait_for_ready(coord)
+
+        # Go back to main menu
+        coord.send_message("arena-back")
+        wait_for_ready(coord)
+        wait_for_main_menu(coord)
+
+        # List loadouts
+        coord.send_message("arena-loadout list")
+        wait_for_ready(coord, timeout=5)
+
+        # Command should succeed (no error)
+        assert coord.last_error is None, f"arena-loadout list failed: {coord.last_error}"
 
     def test_rename_loadout(self, at_main_menu: Coordinator):
         """Verify loadout can be renamed via arena-loadout command."""
@@ -135,30 +159,123 @@ class TestStory1_5_1_6_LoadoutManagement:
 
         # First create a loadout by starting an arena fight
         coord.send_message("arena IRONCLAD Cultist")
-        # Wait for arena command response first
         wait_for_ready(coord)
         wait_for_in_game(coord)
 
-        # Try to rename it - this command doesn't exist yet
-        # When implemented, syntax might be: arena-loadout rename <id> <new-name>
-        coord.send_message("arena-loadout list")
+        # Win the fight to save the loadout
+        coord.send_message("win")
+        wait_for_ready(coord)
+
+        # Go back to main menu
+        coord.send_message("arena-back")
+        wait_for_ready(coord)
+        wait_for_main_menu(coord)
+
+        # Rename loadout 1 (most recently created)
+        coord.send_message("arena-loadout rename 1 My Renamed Loadout")
         wait_for_ready(coord, timeout=5)
 
-        # Check if the command is available
-        # If not implemented, this should fail with an error
-        if coord.last_error and "unknown command" in str(coord.last_error).lower():
-            pytest.fail("arena-loadout command not implemented - feature not available")
+        assert coord.last_error is None, f"arena-loadout rename failed: {coord.last_error}"
 
     def test_delete_loadout(self, at_main_menu: Coordinator):
         """Verify loadout can be deleted via arena-loadout command."""
         coord = at_main_menu
 
-        # Try the arena-loadout command
-        coord.send_message("arena-loadout list")
+        # First create a loadout by starting an arena fight
+        coord.send_message("arena IRONCLAD Cultist")
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
+
+        # Win the fight
+        coord.send_message("win")
+        wait_for_ready(coord)
+
+        # Go back to main menu
+        coord.send_message("arena-back")
+        wait_for_ready(coord)
+        wait_for_main_menu(coord)
+
+        # Delete loadout 1
+        coord.send_message("arena-loadout delete 1")
         wait_for_ready(coord, timeout=5)
 
-        if coord.last_error and "unknown command" in str(coord.last_error).lower():
-            pytest.fail("arena-loadout command not implemented - feature not available")
+        assert coord.last_error is None, f"arena-loadout delete failed: {coord.last_error}"
+
+
+class TestStartWithSavedLoadout:
+    """Tests for starting arena fights with saved loadouts.
+
+    These tests verify the arena --loadout <ID> <ENCOUNTER> command.
+    """
+
+    def test_start_arena_with_saved_loadout(self, at_main_menu: Coordinator):
+        """Verify arena can be started with a saved loadout."""
+        coord = at_main_menu
+
+        # First create a loadout by starting an arena fight
+        coord.send_message("arena IRONCLAD Cultist")
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
+
+        # Note the character and HP for later comparison
+        game = coord.last_game_state
+        original_character = game.character
+
+        # Win the fight to save the loadout
+        coord.send_message("win")
+        wait_for_ready(coord)
+
+        # Go back to main menu
+        coord.send_message("arena-back")
+        wait_for_ready(coord)
+        wait_for_main_menu(coord)
+
+        # Now start a new arena using the saved loadout (ID 1)
+        coord.send_message("arena --loadout 1 Cultist")
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
+
+        # Verify we're in combat with the same character
+        game = coord.last_game_state
+        assert game.in_combat, "Should be in combat"
+        assert game.character == original_character, "Should use same character class as saved loadout"
+
+    def test_start_arena_with_saved_loadout_different_encounter(self, at_main_menu: Coordinator):
+        """Verify saved loadout can be used against different encounters."""
+        coord = at_main_menu
+
+        # Create a loadout against Cultist
+        coord.send_message("arena SILENT Cultist")
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
+
+        # Win and return to menu
+        coord.send_message("win")
+        wait_for_ready(coord)
+        coord.send_message("arena-back")
+        wait_for_ready(coord)
+        wait_for_main_menu(coord)
+
+        # Use the same loadout against Lagavulin (different encounter)
+        coord.send_message("arena --loadout 1 Lagavulin")
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
+
+        game = coord.last_game_state
+        assert game.in_combat, "Should be in combat"
+        assert game.character == PlayerClass.SILENT, "Should use saved SILENT loadout"
+
+    def test_start_arena_with_nonexistent_loadout(self, at_main_menu: Coordinator):
+        """Verify error when using non-existent loadout ID."""
+        coord = at_main_menu
+
+        # Try to use a loadout that doesn't exist
+        coord.send_message("arena --loadout 99999 Cultist")
+        wait_for_ready(coord, timeout=5)
+
+        # Should get an error
+        assert coord.last_error is not None, "Should get error for non-existent loadout"
+        assert "not found" in coord.last_error.lower(), f"Error should mention 'not found': {coord.last_error}"
 
 
 # =============================================================================
