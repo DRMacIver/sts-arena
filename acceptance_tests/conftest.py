@@ -1,8 +1,14 @@
 """
 Pytest fixtures for STS Arena acceptance tests.
 
-These tests run in a subprocess spawned by run_agent.py.
-run_agent.py handles the "ready" signal and creates named pipes for communication.
+HOW TO RUN:
+    ./scripts/run-acceptance-tests.sh
+
+These tests run in a subprocess spawned by run_agent.py, which is itself
+spawned by CommunicationMod when the game starts. The wrapper script
+(run-acceptance-tests.sh) handles all the setup.
+
+See run_agent.py docstring for more details.
 """
 
 import os

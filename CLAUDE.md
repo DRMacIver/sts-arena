@@ -218,7 +218,7 @@ FightRecord.FightStats stats = FightRecord.getStatsForEncounter("TheHeart");
 | Unit Tests | `mvn test` | Database, LoadoutConfig, patch validation |
 | Headless Mod Load (fast) | `./scripts/headless-mod-load-test.sh --fast` | Patch discovery and injection |
 | Headless Mod Load (full) | `./scripts/headless-mod-load-test.sh --stsarena-only` | Full patch compilation |
-| Acceptance Tests | `./scripts/run_agent.py acceptance_tests/` | Full game integration with CommunicationMod |
+| Acceptance Tests | `./scripts/run-acceptance-tests.sh` | Full game integration with CommunicationMod |
 
 ### When to Run Each
 

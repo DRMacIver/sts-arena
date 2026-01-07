@@ -2,14 +2,26 @@
 """
 STS Arena Acceptance Test Agent.
 
-This script is the entry point that CommunicationMod spawns. It:
+HOW TO RUN ACCEPTANCE TESTS:
+    ./scripts/run-acceptance-tests.sh
+
+The wrapper script handles:
+- Building the mod and CommunicationMod
+- Setting up a mock Steam installation
+- Starting Xvfb for headless testing
+- Launching the game with ModTheSpire
+- Waiting for test completion
+
+This script (run_agent.py) is spawned BY CommunicationMod, not run directly.
+It:
 1. Sends "ready" immediately to stdout (CommunicationMod protocol)
 2. Creates named pipes for game communication
 3. Runs pytest in a subprocess with pipe paths in environment
 4. Bridges between CommunicationMod's stdin/stdout and the named pipes
 
-To configure CommunicationMod:
-    uv run --directory /path/to/acceptance_tests python run_agent.py
+You can pass pytest arguments through the wrapper:
+    ./scripts/run-acceptance-tests.sh -k "test_arena"
+    ./scripts/run-acceptance-tests.sh --tb=short
 """
 
 import os
