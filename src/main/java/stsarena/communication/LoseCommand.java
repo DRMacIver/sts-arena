@@ -1,7 +1,5 @@
 package stsarena.communication;
 
-import com.megacrit.cardcrawl.actions.AbstractGameAction;
-import com.megacrit.cardcrawl.core.AbstractCreature;
 import com.megacrit.cardcrawl.core.CardCrawlGame;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
@@ -62,72 +60,32 @@ public class LoseCommand implements CommandExecutor.CommandExtension {
             throw new InvalidCommandException("Player is already dead");
         }
 
-        STSArena.logger.info("LOSE command: Forcing player death via action queue");
+        STSArena.logger.info("LOSE command: Forcing player death directly");
 
-        // Clear damage-preventing powers BEFORE queueing the death action
-        // Powers like Intangible, Buffer can block even HP_LOSS damage
+        // Clear damage-preventing powers
         clearDamagePreventingPowers();
 
-        // Queue the death as a top-priority action to ensure it's processed
-        // during the normal game loop, avoiding timing issues with direct damage.
-        // This action keeps trying until the player actually dies, which handles
-        // death-prevention relics like Fairy in a Bottle and Lizard Tail.
-        AbstractDungeon.actionManager.addToTop(new AbstractGameAction() {
-            private int attempts = 0;
-            private static final int MAX_ATTEMPTS = 5;
+        int hpBefore = AbstractDungeon.player.currentHealth;
+        STSArena.logger.info("LOSE command: HP before: " + hpBefore);
 
-            @Override
-            public void update() {
-                if (AbstractDungeon.player == null) {
-                    STSArena.logger.info("LOSE command: No player, action done");
-                    this.isDone = true;
-                    return;
-                }
+        // Kill the player by setting HP to 0 and marking as dead
+        // Execute directly without action queue to avoid timing issues
+        AbstractDungeon.player.currentHealth = 0;
+        AbstractDungeon.player.isDead = true;
+        STSArena.logger.info("LOSE command: Set HP=0 and isDead=true");
 
-                if (AbstractDungeon.player.isDead) {
-                    STSArena.logger.info("LOSE command: Player is dead after " + attempts + " attempts");
-                    this.isDone = true;
-                    return;
-                }
+        // For arena runs, clear the arena state and return to main menu
+        // This mimics what happens when clicking "Retreat" on the death screen
+        if (ArenaRunner.isArenaRun()) {
+            STSArena.logger.info("LOSE command: Arena run detected, triggering startOver to return to menu");
+            ArenaRunner.clearArenaRun();
+            Settings.isTrial = false;
+            Settings.isDailyRun = false;
+            Settings.isEndless = false;
+            CardCrawlGame.startOver();
+        }
 
-                if (attempts >= MAX_ATTEMPTS) {
-                    STSArena.logger.warn("LOSE command: Max attempts reached, player still alive with HP="
-                        + AbstractDungeon.player.currentHealth);
-                    this.isDone = true;
-                    return;
-                }
-
-                attempts++;
-
-                // Clear damage-preventing powers on each attempt (in case they were re-applied)
-                clearDamagePreventingPowers();
-
-                int hpBefore = AbstractDungeon.player.currentHealth;
-                STSArena.logger.info("LOSE command: Attempt " + attempts + ", HP before: " + hpBefore);
-
-                // Kill the player by setting HP to 0 and marking as dead
-                AbstractDungeon.player.currentHealth = 0;
-                AbstractDungeon.player.isDead = true;
-                STSArena.logger.info("LOSE command: Set HP=0 and isDead=true");
-
-                // For arena runs, clear the arena state and return to main menu
-                // This mimics what happens when clicking "Retreat" on the death screen
-                if (ArenaRunner.isArenaRun()) {
-                    STSArena.logger.info("LOSE command: Arena run detected, triggering startOver to return to menu");
-                    ArenaRunner.clearArenaRun();
-                    Settings.isTrial = false;
-                    Settings.isDailyRun = false;
-                    Settings.isEndless = false;
-                    CardCrawlGame.startOver();
-                }
-
-                // Action is complete
-                STSArena.logger.info("LOSE command: Player died on attempt " + attempts);
-                this.isDone = true;
-            }
-        });
-
-        STSArena.logger.info("LOSE command: Death action queued");
+        STSArena.logger.info("LOSE command: Player death complete");
     }
 
     /**
