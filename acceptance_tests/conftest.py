@@ -221,6 +221,36 @@ def wait_for_combat(coordinator, timeout=DEFAULT_TIMEOUT):
         raise GameTimeout("Expected to be in combat")
 
 
+def select_save_slot(coordinator, slot=0, timeout=DEFAULT_TIMEOUT):
+    """Click on a save slot button if the Save Slot screen is showing.
+
+    The game shows a Save Slot selection screen when no slot has been chosen.
+    This function clicks on one of the three slot buttons to dismiss it.
+
+    Args:
+        coordinator: The game coordinator
+        slot: Which slot to select (0, 1, or 2)
+        timeout: Timeout for the click command
+
+    The screen is 1280x720 and the slot buttons are centered vertically:
+    - Slot 0: center y ~= 261 (from top)
+    - Slot 1: center y ~= 401
+    - Slot 2: center y ~= 541
+    """
+    import time
+
+    # Slot button Y coordinates (from top of screen)
+    slot_y = {0: 261, 1: 401, 2: 541}
+    y = slot_y.get(slot, 261)
+    x = 640  # Center of 1280 width screen
+
+    print(f"[select_save_slot] Clicking on save slot {slot} at ({x}, {y})")
+    coordinator.game_is_ready = False
+    coordinator.send_message(f"click LEFT {x} {y}")
+    wait_for_ready(coordinator, timeout=timeout)
+    time.sleep(0.5)  # Let the UI update
+
+
 class VisualStabilityTimeout(Exception):
     """Raised when visual stability wait times out in the game.
 

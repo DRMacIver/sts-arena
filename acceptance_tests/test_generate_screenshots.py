@@ -112,6 +112,112 @@ def find_monster_room_index(coordinator):
     return 0
 
 
+def navigate_to_combat(coordinator, timeout=60):
+    """Navigate from current position to combat.
+
+    This handles the flow from Neow event to first combat:
+    1. If on EVENT screen (Neow), choose option 0
+    2. If on CARD_REWARD screen, skip it
+    3. If on MAP screen, choose a monster room
+    4. Wait for combat to start
+
+    Args:
+        coordinator: The game coordinator
+        timeout: Maximum time to spend navigating
+
+    Returns:
+        True if we successfully entered combat
+    """
+    import time
+    start = time.time()
+    max_iterations = 30
+    event_choices_made = 0
+
+    for iteration in range(max_iterations):
+        if time.time() - start > timeout:
+            print("  Error: Timed out navigating to combat")
+            return False
+
+        # Always wait a bit between checks to let the game process
+        time.sleep(0.5)
+
+        wait_for_state_update(coordinator)
+        game = coordinator.last_game_state
+
+        if not game:
+            print("  No game state, waiting...")
+            time.sleep(1.0)
+            continue
+
+        # Check if we're already in combat
+        if game.in_combat:
+            print("  Successfully entered combat")
+            return True
+
+        screen_type = game.screen_type
+        print(f"  [{iteration}] Screen: {screen_type}, in_combat: {game.in_combat}")
+
+        if screen_type == ScreenType.EVENT:
+            # Neow event has multiple dialogue phases before showing blessing choices
+            # We need to keep clicking through until we get past the event
+            # Allow up to 5 event choices (2-3 for dialogue, 1 for blessing choice)
+            if event_choices_made < 5:
+                print(f"  Choosing event option 0 (choice {event_choices_made + 1})")
+                coordinator.game_is_ready = False
+                coordinator.send_message("choose 0")
+                wait_for_ready(coordinator)
+                event_choices_made += 1
+                time.sleep(1.0)  # Give event time to process
+            else:
+                # Made too many choices, try proceed to dismiss
+                print("  Too many event choices, trying proceed...")
+                coordinator.game_is_ready = False
+                coordinator.send_message("proceed")
+                wait_for_ready(coordinator)
+                time.sleep(1.0)
+
+        elif screen_type == ScreenType.CARD_REWARD:
+            # Card reward screen - skip it
+            print("  Skipping card reward")
+            coordinator.game_is_ready = False
+            coordinator.send_message("skip")
+            wait_for_ready(coordinator)
+            time.sleep(0.5)
+
+        elif screen_type == ScreenType.MAP:
+            # Map screen - find and choose a monster room
+            monster_idx = find_monster_room_index(coordinator)
+            print(f"  Choosing map node {monster_idx}")
+            coordinator.game_is_ready = False
+            coordinator.send_message(f"choose {monster_idx}")
+            wait_for_ready(coordinator)
+            # Use wait_for to wait for combat instead of fixed sleep
+            print("  Waiting for combat...")
+            coordinator.game_is_ready = False
+            coordinator.send_message("wait_for in_combat true")
+            wait_for_ready(coordinator, timeout=30)
+            return coordinator.last_game_state and coordinator.last_game_state.in_combat
+
+        elif screen_type == ScreenType.NONE:
+            # Between screens - try pressing proceed or opening map
+            print("  Screen type NONE, trying to open map")
+            coordinator.game_is_ready = False
+            coordinator.send_message("key MAP")
+            wait_for_ready(coordinator)
+            time.sleep(1.0)
+
+        else:
+            # Unknown screen, try proceed
+            print(f"  Unknown screen {screen_type}, trying proceed")
+            coordinator.game_is_ready = False
+            coordinator.send_message("proceed")
+            wait_for_ready(coordinator)
+            time.sleep(0.5)
+
+    print("  Error: Max iterations reached without entering combat")
+    return False
+
+
 def get_loadout_id(coordinator, index=0):
     """Get the ID of a loadout by its index in the list.
 
@@ -164,6 +270,7 @@ def test_generate_documentation_screenshots(at_main_menu):
     # ====================
     # Main Menu Screenshot
     # ====================
+    # Note: The Save Slot screen is prevented by setting DEFAULT_SLOT in STSSaveSlots preferences
     print("\n[1/11] Main menu with Arena Mode button...")
     wait_for_visual_stable(coordinator)
     capture_screenshot("main_menu")
@@ -308,30 +415,9 @@ def test_generate_documentation_screenshots(at_main_menu):
     wait_for_in_game(coordinator)
     time.sleep(1.0)
 
-    # At Neow - make a choice to proceed
-    coordinator.game_is_ready = False
-    coordinator.send_message("choose 0")  # Choose first Neow option
-    wait_for_ready(coordinator)
-    time.sleep(1.0)
-
-    # Proceed to map
-    coordinator.game_is_ready = False
-    coordinator.send_message("proceed")
-    wait_for_ready(coordinator)
-    time.sleep(1.0)
-
-    # Get fresh state to see the map
-    wait_for_state_update(coordinator)
-
-    # Find a monster room (symbol 'M' or 'E') instead of blindly choosing index 0
-    monster_room_index = find_monster_room_index(coordinator)
-
-    # Choose the monster room
-    coordinator.game_is_ready = False
-    coordinator.send_message(f"choose {monster_room_index}")
-    wait_for_ready(coordinator)
-    wait_for_combat(coordinator)
-    time.sleep(1.0)
+    # Navigate from Neow to combat (handles intermediate screens automatically)
+    if not navigate_to_combat(coordinator):
+        raise RuntimeError("Failed to navigate to combat for pause menu screenshot")
 
     # Now press escape to open pause menu
     coordinator.game_is_ready = False
