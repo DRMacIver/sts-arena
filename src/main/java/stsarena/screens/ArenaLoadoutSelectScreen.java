@@ -51,7 +51,7 @@ public class ArenaLoadoutSelectScreen {
     private static final float HISTORY_BUTTON_WIDTH = 120.0f * Settings.scale;
     private static final float HISTORY_BUTTON_HEIGHT = 40.0f * Settings.scale;
     private static final float HISTORY_BUTTON_X = Settings.WIDTH - HISTORY_BUTTON_WIDTH - 40.0f * Settings.scale;
-    private static final float HISTORY_BUTTON_Y = 50.0f * Settings.scale;
+    private static final float HISTORY_BUTTON_Y = 90.0f * Settings.scale;  // Moved up by 40px
     private static final float STATS_BUTTON_X = HISTORY_BUTTON_X - HISTORY_BUTTON_WIDTH - 20.0f * Settings.scale;
 
     private MenuCancelButton cancelButton;
@@ -79,8 +79,8 @@ public class ArenaLoadoutSelectScreen {
     private static final float ACTION_BUTTON_WIDTH = 120.0f * Settings.scale;
     private static final float ACTION_BUTTON_HEIGHT = 35.0f * Settings.scale;
     private static final float ACTION_BUTTON_GAP = 10.0f * Settings.scale;
-    private static final float ACTION_BUTTONS_Y_ROW1 = 140.0f * Settings.scale;  // Top row
-    private static final float ACTION_BUTTONS_Y_ROW2 = 95.0f * Settings.scale;   // Bottom row
+    private static final float ACTION_BUTTONS_Y_ROW1 = 180.0f * Settings.scale;  // Top row (moved up by ~40px)
+    private static final float ACTION_BUTTONS_Y_ROW2 = 135.0f * Settings.scale;   // Bottom row (moved up by ~40px)
     private Hitbox fightButtonHb, favoriteButtonHb, editButtonHb, copyButtonHb, renameButtonHb, deleteButtonHb, loadoutHistoryButtonHb;
 
     // Rename state
@@ -120,7 +120,9 @@ public class ArenaLoadoutSelectScreen {
     private Hitbox searchBoxHitbox;
     private static final float SEARCH_BOX_WIDTH = 200.0f * Settings.scale;
     private static final float SEARCH_BOX_HEIGHT = 30.0f * Settings.scale;
-    private static final float SEARCH_BOX_Y = TITLE_Y + 5.0f * Settings.scale;
+    // Position search box below the filter tabs, at the right of the left panel
+    // (LIST_START_Y = TITLE_Y - 80, so this puts it just above the list)
+    private static final float SEARCH_BOX_Y = LIST_START_Y + 20.0f * Settings.scale;
 
     // Character class filter (null = all classes)
     private String filterClass = null;  // "IRONCLAD", "THE_SILENT", "DEFECT", "WATCHER", or null for all
@@ -814,7 +816,7 @@ public class ArenaLoadoutSelectScreen {
         // Only show bulk operations when items are selected
         if (selectedLoadoutIds.isEmpty()) return;
 
-        float buttonsY = 60.0f * Settings.scale;
+        float buttonsY = 100.0f * Settings.scale;  // Moved up by 40px
         float startX = LEFT_PANEL_X + 10.0f * Settings.scale;
 
         bulkDeleteHb.move(startX + BULK_BUTTON_WIDTH / 2.0f, buttonsY);
@@ -1543,7 +1545,7 @@ public class ArenaLoadoutSelectScreen {
     private void renderBulkOperations(SpriteBatch sb) {
         if (selectedLoadoutIds.isEmpty()) return;
 
-        float buttonsY = 60.0f * Settings.scale;
+        float buttonsY = 100.0f * Settings.scale;  // Moved up by 40px
         float startX = LEFT_PANEL_X + 10.0f * Settings.scale;
 
         // Selection count

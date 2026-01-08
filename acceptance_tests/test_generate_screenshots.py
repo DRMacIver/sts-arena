@@ -50,7 +50,11 @@ SCREENSHOT_DIR = Path(__file__).parent.parent / "docs" / "screenshots"
 
 
 def capture_screenshot(name: str) -> Path:
-    """Capture a screenshot and save it to the docs/screenshots directory."""
+    """Capture a screenshot and save it to the docs/screenshots directory.
+
+    The game runs at 1280x720 centered in the virtual screen (1920x1080).
+    We crop to just the game area to avoid black borders.
+    """
     if not HAS_MSS:
         print(f"  [SKIP] {name} (mss not available)")
         return None
@@ -59,11 +63,26 @@ def capture_screenshot(name: str) -> Path:
     SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
     filepath = SCREENSHOT_DIR / f"{name}.png"
 
+    # Game window dimensions and position (centered in 1920x1080)
+    GAME_WIDTH = 1280
+    GAME_HEIGHT = 720
+    SCREEN_WIDTH = 1920
+    SCREEN_HEIGHT = 1080
+    GAME_X = (SCREEN_WIDTH - GAME_WIDTH) // 2  # 320
+    GAME_Y = (SCREEN_HEIGHT - GAME_HEIGHT) // 2  # 180
+
     try:
         with mss.mss() as sct:
-            # Capture the first monitor (primary screen)
-            monitor = sct.monitors[0]
-            sct_img = sct.grab(monitor)
+            # Define the game window region
+            game_region = {
+                "left": GAME_X,
+                "top": GAME_Y,
+                "width": GAME_WIDTH,
+                "height": GAME_HEIGHT,
+            }
+
+            # Capture just the game window area
+            sct_img = sct.grab(game_region)
 
             # Save to file
             mss.tools.to_png(sct_img.rgb, sct_img.size, output=str(filepath))
@@ -241,6 +260,56 @@ def get_loadout_id(coordinator, index=0):
     return None
 
 
+def hide_cursor(coordinator, hide=True):
+    """Hide or show the game cursor.
+
+    Args:
+        coordinator: The game coordinator
+        hide: True to hide the cursor, False to show it
+    """
+    coordinator.game_is_ready = False
+    coordinator.send_message(f"cursor_hide {'true' if hide else 'false'}")
+    wait_for_ready(coordinator)
+    time.sleep(0.1)  # Brief delay for visual update
+
+
+def create_loadout_with_fights(coordinator, character, encounters, loadout_name=None):
+    """Create a loadout by winning fights against specified encounters.
+
+    Args:
+        coordinator: The game coordinator
+        character: Character class (IRONCLAD, THE_SILENT, DEFECT, WATCHER)
+        encounters: List of encounter names to fight
+        loadout_name: Optional name for the loadout
+
+    Returns:
+        The loadout ID if successful, None otherwise
+    """
+    for i, encounter in enumerate(encounters):
+        print(f"    Fighting {encounter} ({i + 1}/{len(encounters)})...")
+        coordinator.game_is_ready = False
+        coordinator.send_message(f"arena {character} {encounter}")
+        wait_for_ready(coordinator)
+        wait_for_combat(coordinator)
+        time.sleep(0.3)
+
+        # Win the fight
+        coordinator.game_is_ready = False
+        coordinator.send_message("win")
+        wait_for_ready(coordinator)
+        time.sleep(0.5)
+
+        # Return to menu
+        coordinator.game_is_ready = False
+        coordinator.send_message("arena-back")
+        wait_for_ready(coordinator)
+        wait_for_main_menu(coordinator)
+        time.sleep(0.3)
+
+    # Get the ID of the newly created loadout
+    return get_loadout_id(coordinator, index=0)
+
+
 def test_generate_documentation_screenshots(at_main_menu):
     """
     Generate all documentation screenshots.
@@ -259,6 +328,12 @@ def test_generate_documentation_screenshots(at_main_menu):
     print(f"Output directory: {SCREENSHOT_DIR}")
 
     # ====================
+    # Hide cursor for clean screenshots
+    # ====================
+    print("\n[Setup] Hiding cursor...")
+    hide_cursor(coordinator, hide=True)
+
+    # ====================
     # Clear all existing loadouts for a clean slate
     # ====================
     print("\n[Setup] Clearing all existing loadouts...")
@@ -266,6 +341,38 @@ def test_generate_documentation_screenshots(at_main_menu):
     coordinator.send_message("arena-loadout delete-all")
     wait_for_ready(coordinator)
     print("  Loadouts cleared")
+
+    # ====================
+    # Create 5 loadouts with 2-3 fights each for history/stats screenshots
+    # ====================
+    print("\n[Setup] Creating loadouts with fight history...")
+
+    # Loadout 1: Ironclad vs normal enemies
+    print("  Creating Ironclad loadout (3 fights)...")
+    create_loadout_with_fights(coordinator, "IRONCLAD",
+        ["Cultist", "JawWorm", "2Louse"])
+
+    # Loadout 2: Silent vs normal enemies
+    print("  Creating Silent loadout (2 fights)...")
+    create_loadout_with_fights(coordinator, "THE_SILENT",
+        ["Cultist", "JawWorm"])
+
+    # Loadout 3: Defect vs normal enemies
+    print("  Creating Defect loadout (3 fights)...")
+    create_loadout_with_fights(coordinator, "DEFECT",
+        ["Cultist", "2Louse", "JawWorm"])
+
+    # Loadout 4: Watcher vs normal enemies
+    print("  Creating Watcher loadout (2 fights)...")
+    create_loadout_with_fights(coordinator, "WATCHER",
+        ["Cultist", "JawWorm"])
+
+    # Loadout 5: Another Ironclad loadout (2 fights)
+    print("  Creating second Ironclad loadout (2 fights)...")
+    create_loadout_with_fights(coordinator, "IRONCLAD",
+        ["2Louse", "Cultist"])
+
+    print("  Created 5 loadouts with 12 total fights")
 
     # ====================
     # Main Menu Screenshot
@@ -276,32 +383,10 @@ def test_generate_documentation_screenshots(at_main_menu):
     capture_screenshot("main_menu")
 
     # ====================
-    # Create 2 loadouts by winning arena fights (needed for loadout select screenshot)
-    # ====================
-    print("\n[Setup] Creating first loadout (Ironclad)...")
-    coordinator.game_is_ready = False
-    coordinator.send_message("arena IRONCLAD Cultist")
-    wait_for_ready(coordinator)
-    wait_for_combat(coordinator)
-    time.sleep(0.5)
-
-    # Win the fight
-    coordinator.game_is_ready = False
-    coordinator.send_message("win")
-    wait_for_ready(coordinator)
-    time.sleep(1.0)
-
-    # Return to menu
-    coordinator.game_is_ready = False
-    coordinator.send_message("arena-back")
-    wait_for_ready(coordinator)
-    wait_for_main_menu(coordinator)
-
-    # ====================
     # Loadout Select Screen with a loadout selected to show contents
     # ====================
     print("\n[2/11] Loadout selection screen with loadout preview...")
-    # Get the ID of the first loadout
+    # Get the ID of the first loadout (we have 5 now)
     loadout_id = get_loadout_id(coordinator, index=0)
     if loadout_id:
         # Open loadout screen with the loadout selected (shows preview panel)
@@ -310,7 +395,7 @@ def test_generate_documentation_screenshots(at_main_menu):
         # Fallback: just open the loadout screen
         print("  Warning: Could not get loadout ID, opening without selection")
         open_arena_screen(coordinator, "loadout")
-    time.sleep(0.5)
+    time.sleep(1.0)  # Let UI fully render
     wait_for_visual_stable(coordinator)
     capture_screenshot("loadout_select")
 
@@ -369,7 +454,11 @@ def test_generate_documentation_screenshots(at_main_menu):
     coordinator.game_is_ready = False
     coordinator.send_message("win")
     wait_for_ready(coordinator)
-    time.sleep(2.0)  # Let victory screen appear
+
+    # Wait for the game to exit combat and show victory screen
+    # The victory screen appears when in_game is true but in_combat is false
+    print("  Waiting for victory screen to appear...")
+    time.sleep(3.0)  # Victory screen has transition animations
     wait_for_visual_stable(coordinator)
     capture_screenshot("arena_victory")
 
@@ -394,7 +483,10 @@ def test_generate_documentation_screenshots(at_main_menu):
     coordinator.game_is_ready = False
     coordinator.send_message("lose")
     wait_for_ready(coordinator)
-    time.sleep(2.0)  # Wait for death screen to appear
+
+    # Wait for death screen to appear (has transition animations)
+    print("  Waiting for defeat screen to appear...")
+    time.sleep(3.0)  # Death screen has transition animations
     wait_for_visual_stable(coordinator)
     capture_screenshot("arena_defeat")
 
@@ -419,11 +511,15 @@ def test_generate_documentation_screenshots(at_main_menu):
     if not navigate_to_combat(coordinator):
         raise RuntimeError("Failed to navigate to combat for pause menu screenshot")
 
+    # Wait for combat to fully stabilize
+    time.sleep(1.0)
+
     # Now press escape to open pause menu
     coordinator.game_is_ready = False
     coordinator.send_message("key ESCAPE")
     wait_for_ready(coordinator)
-    time.sleep(0.5)
+    print("  Waiting for pause menu to appear...")
+    time.sleep(1.5)  # Pause menu has fade-in animation
     wait_for_visual_stable(coordinator)
     capture_screenshot("pause_menu_practice")
 
@@ -435,13 +531,14 @@ def test_generate_documentation_screenshots(at_main_menu):
     coordinator.game_is_ready = False
     coordinator.send_message("key ESCAPE")
     wait_for_ready(coordinator)
-    time.sleep(0.3)
+    time.sleep(0.5)
 
     # Lose the fight to show death screen
     coordinator.game_is_ready = False
     coordinator.send_message("lose")
     wait_for_ready(coordinator)
-    time.sleep(2.0)  # Wait for death screen
+    print("  Waiting for death screen to appear...")
+    time.sleep(3.0)  # Death screen has transition animations
     wait_for_visual_stable(coordinator)
     capture_screenshot("normal_run_death")
 
@@ -449,6 +546,10 @@ def test_generate_documentation_screenshots(at_main_menu):
     # Cleanup
     # ====================
     print("\nCleaning up...")
+
+    # Show cursor again
+    hide_cursor(coordinator, hide=False)
+
     # Abandon the run to return to menu
     coordinator.game_is_ready = False
     coordinator.send_message("abandon")

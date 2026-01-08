@@ -260,6 +260,7 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
 
         STSArena.logger.info("ARENA-LOADOUT DELETE-ALL: Deleted " + deleted + " loadouts");
         GameStateListener.setMessage("Deleted " + deleted + " loadouts");
+        GameStateListener.signalReadyForCommand();
     }
 
     /**

@@ -19,6 +19,7 @@ import stsarena.communication.ArenaBackCommand;
 import stsarena.communication.ArenaCommand;
 import stsarena.communication.ArenaLoadoutCommand;
 import stsarena.communication.ArenaScreenCommand;
+import stsarena.communication.CursorHideCommand;
 import stsarena.communication.LoseCommand;
 import stsarena.communication.WinCommand;
 import stsarena.data.ArenaDatabase;
@@ -87,6 +88,7 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
             ArenaBackCommand.register();
             ArenaLoadoutCommand.register();
             ArenaScreenCommand.register();
+            CursorHideCommand.register();
             LoseCommand.register();
             WinCommand.register();
             logger.info("CommunicationMod detected - commands registered");
