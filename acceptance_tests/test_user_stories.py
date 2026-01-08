@@ -10,6 +10,8 @@ import pytest
 from spirecomm.communication.coordinator import Coordinator
 from spirecomm.spire.character import PlayerClass
 from spirecomm.spire.screen import ScreenType
+import json
+
 from conftest import (
     wait_for_ready,
     wait_for_stable,
@@ -20,6 +22,41 @@ from conftest import (
     GameTimeout,
     DEFAULT_TIMEOUT,
 )
+
+
+def get_loadout_list(coord: "Coordinator") -> list:
+    """Get list of loadouts from the game.
+
+    Returns a list of loadout dictionaries with fields like:
+    - id: the loadout database ID
+    - name: loadout name
+    - characterClass: character class
+    """
+    # Clear last_message before sending command to avoid stale data
+    coord.last_message = None
+    coord.send_message("arena-loadout list")
+    wait_for_ready(coord, timeout=5)
+
+    if coord.last_error:
+        raise RuntimeError(f"arena-loadout list failed: {coord.last_error}")
+
+    if not coord.last_message:
+        return []
+
+    return json.loads(coord.last_message)
+
+
+def get_most_recent_loadout_id(coord: "Coordinator") -> int | None:
+    """Get the ID of the most recently created loadout.
+
+    Returns None if no loadouts exist.
+    """
+    loadouts = get_loadout_list(coord)
+    if not loadouts:
+        return None
+
+    # Loadouts are returned with most recent first (by createdAt desc)
+    return loadouts[0]["id"]
 
 
 # =============================================================================
@@ -130,7 +167,7 @@ class TestStory1_5_1_6_LoadoutManagement:
     """
 
     def test_arena_loadout_list(self, at_main_menu: Coordinator):
-        """Verify arena-loadout list command works."""
+        """Verify arena-loadout list command works and returns loadout data."""
         coord = at_main_menu
 
         # First create a loadout by starting an arena fight
@@ -147,12 +184,20 @@ class TestStory1_5_1_6_LoadoutManagement:
         wait_for_ready(coord)
         wait_for_main_menu(coord)
 
-        # List loadouts
-        coord.send_message("arena-loadout list")
-        wait_for_ready(coord, timeout=5)
+        # Wait for visual stability
+        wait_for_visual_stable(coord)
 
-        # Command should succeed (no error)
-        assert coord.last_error is None, f"arena-loadout list failed: {coord.last_error}"
+        # List loadouts and verify we get data back
+        loadouts = get_loadout_list(coord)
+
+        # We should have at least one loadout (the one we just created)
+        assert len(loadouts) > 0, "No loadouts found after creating one"
+
+        # Verify loadout has expected fields
+        loadout = loadouts[0]
+        assert "id" in loadout, "Loadout missing 'id' field"
+        assert "name" in loadout, "Loadout missing 'name' field"
+        assert "characterClass" in loadout, "Loadout missing 'characterClass' field"
 
     def test_rename_loadout(self, at_main_menu: Coordinator):
         """Verify loadout can be renamed via arena-loadout command."""
@@ -173,15 +218,16 @@ class TestStory1_5_1_6_LoadoutManagement:
         wait_for_main_menu(coord)
 
         # Wait for visual stability before sending commands
-        # This ensures the main menu transition is complete
         wait_for_visual_stable(coord)
 
-        # Try to rename loadout 1 (may not exist if deleted in previous tests)
-        coord.send_message("arena-loadout rename 1 My Renamed Loadout")
+        # Get the most recent loadout ID (the one we just created)
+        loadout_id = get_most_recent_loadout_id(coord)
+        assert loadout_id is not None, "No loadouts found after creating one"
+
+        # Rename the loadout we just created
+        coord.send_message(f"arena-loadout rename {loadout_id} My Renamed Loadout")
         wait_for_ready(coord, timeout=5)
 
-        if coord.last_error and "not found" in coord.last_error.lower():
-            pytest.skip(f"Loadout 1 doesn't exist: {coord.last_error}")
         assert coord.last_error is None, f"arena-loadout rename failed: {coord.last_error}"
 
     def test_delete_loadout(self, at_main_menu: Coordinator):
@@ -203,15 +249,16 @@ class TestStory1_5_1_6_LoadoutManagement:
         wait_for_main_menu(coord)
 
         # Wait for visual stability before sending commands
-        # This ensures the main menu transition is complete
         wait_for_visual_stable(coord)
 
-        # Try to delete loadout 1 (may not exist if deleted in previous tests)
-        coord.send_message("arena-loadout delete 1")
+        # Get the most recent loadout ID (the one we just created)
+        loadout_id = get_most_recent_loadout_id(coord)
+        assert loadout_id is not None, "No loadouts found after creating one"
+
+        # Delete the loadout we just created
+        coord.send_message(f"arena-loadout delete {loadout_id}")
         wait_for_ready(coord, timeout=5)
 
-        if coord.last_error and "not found" in coord.last_error.lower():
-            pytest.skip(f"Loadout 1 doesn't exist: {coord.last_error}")
         assert coord.last_error is None, f"arena-loadout delete failed: {coord.last_error}"
 
 
@@ -219,25 +266,7 @@ class TestStartWithSavedLoadout:
     """Tests for starting arena fights with saved loadouts.
 
     These tests verify the arena --loadout <ID> <ENCOUNTER> command.
-    Note: These tests use the arena-loadout list command to get actual loadout IDs
-    since the database may contain loadouts from previous test runs.
     """
-
-    def _get_most_recent_loadout_id(self, coord: Coordinator) -> int:
-        """Get the ID of the most recently created loadout.
-
-        Uses arena-loadout list and parses the log output.
-        Returns -1 if no loadouts found.
-        """
-        # The arena-loadout list command logs JSON to the game logs
-        # For now, we'll use a simple approach: get the first loadout ID
-        # In a real implementation, we'd need to parse the response
-        coord.send_message("arena-loadout list")
-        wait_for_ready(coord, timeout=5)
-
-        # Since we can't easily parse the log output, we'll assume loadout 1 exists
-        # after creating one. A better approach would need response parsing.
-        return 1
 
     def test_start_arena_with_saved_loadout(self, at_main_menu: Coordinator):
         """Verify arena can be started with a saved loadout."""
@@ -261,18 +290,17 @@ class TestStartWithSavedLoadout:
         wait_for_ready(coord)
         wait_for_main_menu(coord)
 
-        # Get list of loadouts to find one we can use
-        coord.send_message("arena-loadout list")
-        wait_for_ready(coord, timeout=5)
-        assert coord.last_error is None, f"arena-loadout list failed: {coord.last_error}"
+        # Wait for visual stability
+        wait_for_visual_stable(coord)
 
-        # Try to start with loadout 1 (most likely exists after creating one)
-        coord.send_message("arena --loadout 1 Cultist")
+        # Get the most recent loadout ID (the one we just created)
+        loadout_id = get_most_recent_loadout_id(coord)
+        assert loadout_id is not None, "No loadouts found after creating one"
+
+        # Start arena with the saved loadout
+        coord.send_message(f"arena --loadout {loadout_id} Cultist")
         wait_for_ready(coord)
-
-        # Check if it worked or got an error
-        if coord.last_error is not None:
-            pytest.skip(f"Could not use loadout 1: {coord.last_error}")
+        assert coord.last_error is None, f"arena --loadout failed: {coord.last_error}"
 
         wait_for_in_game(coord)
 

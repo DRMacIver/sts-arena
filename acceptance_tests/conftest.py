@@ -53,6 +53,10 @@ def _process_message(coordinator, msg):
 
     communication_state = json.loads(msg)
     coordinator.last_error = communication_state.get("error", None)
+    # Only update last_message if a message is present (don't overwrite with None)
+    msg_value = communication_state.get("message")
+    if msg_value is not None:
+        coordinator.last_message = msg_value
     coordinator.game_is_ready = communication_state.get("ready_for_command")
     if coordinator.last_error is None:
         coordinator.in_game = communication_state.get("in_game")
@@ -144,6 +148,7 @@ _game_output = open(_output_pipe_path, "w")
 # Create coordinator using the pipes
 # Don't send "ready" - run_agent.py already did that
 _coordinator = Coordinator(input_file=_game_input, output_file=_game_output)
+_coordinator.last_message = None  # Initialize message field
 
 # Wait for initial game state
 wait_for_ready(_coordinator)

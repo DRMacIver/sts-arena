@@ -2,7 +2,9 @@ package stsarena.communication;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import communicationmod.CommunicationMod;
 import communicationmod.CommandExecutor;
+import communicationmod.GameStateListener;
 import communicationmod.InvalidCommandException;
 import stsarena.STSArena;
 import stsarena.data.ArenaDatabase;
@@ -86,6 +88,10 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
                 throw new InvalidCommandException("Unknown subcommand: " + subCommand +
                     ". Valid subcommands: list, info, rename, delete");
         }
+
+        // Trigger a state response so the client knows the command completed
+        // Call publishOnGameStateChange directly to ensure response is sent immediately
+        CommunicationMod.publishOnGameStateChange();
     }
 
     private ArenaRepository getRepository() {
@@ -99,6 +105,7 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
     /**
      * List all saved loadouts.
      * Output is JSON for easy parsing by tests/automation.
+     * The list is returned in the "message" field of the response.
      */
     private void executeList(ArenaRepository repo) {
         List<ArenaRepository.LoadoutRecord> loadouts = repo.getLoadouts(100);
@@ -118,8 +125,11 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
             summaries.add(summary);
         }
 
+        String jsonList = gson.toJson(summaries);
         STSArena.logger.info("ARENA-LOADOUT LIST: Found " + summaries.size() + " loadouts");
-        STSArena.logger.info("ARENA-LOADOUT LIST JSON: " + gson.toJson(summaries));
+
+        // Set the message so it's returned in the CommunicationMod response
+        GameStateListener.setMessage(jsonList);
     }
 
     /**
