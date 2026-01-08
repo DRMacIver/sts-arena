@@ -114,22 +114,22 @@ public class ArenaLoadoutSelectScreen {
     // For parsing JSON
     private static final Gson gson = new Gson();
 
-    // Search and filter state
-    private String searchText = "";
-    private boolean isTypingSearch = false;
-    private Hitbox searchBoxHitbox;
-    private static final float SEARCH_BOX_WIDTH = 200.0f * Settings.scale;
-    private static final float SEARCH_BOX_HEIGHT = 30.0f * Settings.scale;
-    // Position search box below the filter tabs, at the right of the left panel
-    // (LIST_START_Y = TITLE_Y - 80, so this puts it just above the list)
-    private static final float SEARCH_BOX_Y = LIST_START_Y + 20.0f * Settings.scale;
-
     // Character class filter (null = all classes)
     private String filterClass = null;  // "IRONCLAD", "THE_SILENT", "DEFECT", "WATCHER", or null for all
     private Hitbox[] classFilterHitboxes;
     private static final float FILTER_TAB_WIDTH = 70.0f * Settings.scale;
     private static final float FILTER_TAB_HEIGHT = 25.0f * Settings.scale;
     private static final float FILTER_TAB_Y = TITLE_Y - 40.0f * Settings.scale;
+
+    // Search and filter state
+    private String searchText = "";
+    private boolean isTypingSearch = false;
+    private Hitbox searchBoxHitbox;
+    private static final float SEARCH_BOX_WIDTH = LEFT_PANEL_WIDTH - 20.0f * Settings.scale;  // Nearly full width
+    private static final float SEARCH_BOX_HEIGHT = 30.0f * Settings.scale;
+    // Position search box below the filter tabs, left-aligned on the left panel
+    private static final float SEARCH_BOX_Y = FILTER_TAB_Y - 35.0f * Settings.scale;
+    private static final float SEARCH_BOX_X = LEFT_PANEL_X + 10.0f * Settings.scale;
 
     // Unfiltered loadouts (for filtering)
     private List<ArenaRepository.LoadoutRecord> allLoadouts = new ArrayList<>();
@@ -330,9 +330,8 @@ public class ArenaLoadoutSelectScreen {
             handleSearchInput();
         }
 
-        // Update search box
-        float searchX = LEFT_PANEL_X + LEFT_PANEL_WIDTH - SEARCH_BOX_WIDTH / 2.0f - 10.0f * Settings.scale;
-        searchBoxHitbox.move(searchX, SEARCH_BOX_Y);
+        // Update search box (centered on its X position)
+        searchBoxHitbox.move(SEARCH_BOX_X + SEARCH_BOX_WIDTH / 2.0f, SEARCH_BOX_Y);
         searchBoxHitbox.update();
         if (searchBoxHitbox.hovered && InputHelper.justClickedLeft && !isRenaming && !isConfirmingDelete) {
             isTypingSearch = true;
@@ -1476,25 +1475,23 @@ public class ArenaLoadoutSelectScreen {
     }
 
     private void renderSearchBox(SpriteBatch sb) {
-        float searchX = LEFT_PANEL_X + LEFT_PANEL_WIDTH - SEARCH_BOX_WIDTH - 10.0f * Settings.scale;
-
         // Background
         Color bgColor = isTypingSearch ? new Color(0.2f, 0.2f, 0.3f, 0.9f) :
                         searchBoxHitbox.hovered ? new Color(0.2f, 0.2f, 0.25f, 0.8f) :
                         new Color(0.1f, 0.1f, 0.15f, 0.7f);
         sb.setColor(bgColor);
         sb.draw(ImageMaster.WHITE_SQUARE_IMG,
-            searchX, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f,
+            SEARCH_BOX_X, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f,
             SEARCH_BOX_WIDTH, SEARCH_BOX_HEIGHT);
 
         // Border when active
         if (isTypingSearch) {
             sb.setColor(Settings.GOLD_COLOR);
             float bw = 2.0f * Settings.scale;
-            sb.draw(ImageMaster.WHITE_SQUARE_IMG, searchX, SEARCH_BOX_Y + SEARCH_BOX_HEIGHT / 2.0f - bw, SEARCH_BOX_WIDTH, bw);
-            sb.draw(ImageMaster.WHITE_SQUARE_IMG, searchX, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f, SEARCH_BOX_WIDTH, bw);
-            sb.draw(ImageMaster.WHITE_SQUARE_IMG, searchX, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f, bw, SEARCH_BOX_HEIGHT);
-            sb.draw(ImageMaster.WHITE_SQUARE_IMG, searchX + SEARCH_BOX_WIDTH - bw, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f, bw, SEARCH_BOX_HEIGHT);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, SEARCH_BOX_X, SEARCH_BOX_Y + SEARCH_BOX_HEIGHT / 2.0f - bw, SEARCH_BOX_WIDTH, bw);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, SEARCH_BOX_X, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f, SEARCH_BOX_WIDTH, bw);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, SEARCH_BOX_X, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f, bw, SEARCH_BOX_HEIGHT);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, SEARCH_BOX_X + SEARCH_BOX_WIDTH - bw, SEARCH_BOX_Y - SEARCH_BOX_HEIGHT / 2.0f, bw, SEARCH_BOX_HEIGHT);
         }
 
         // Text
@@ -1506,7 +1503,7 @@ public class ArenaLoadoutSelectScreen {
         }
         FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
             displayText,
-            searchX + SEARCH_BOX_WIDTH / 2.0f, SEARCH_BOX_Y, textColor);
+            SEARCH_BOX_X + SEARCH_BOX_WIDTH / 2.0f, SEARCH_BOX_Y, textColor);
     }
 
     private void renderFilterTabs(SpriteBatch sb) {

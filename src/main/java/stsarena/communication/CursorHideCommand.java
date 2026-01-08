@@ -57,6 +57,6 @@ public class CursorHideCommand implements CommandExecutor.CommandExtension {
 
         // Signal ready for next command
         GameStateListener.signalReadyForCommand();
-        CommunicationMod.mustSendGameState = true;
+        CommunicationMod.publishOnGameStateChange();
     }
 }

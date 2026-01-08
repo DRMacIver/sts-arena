@@ -93,10 +93,7 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
                 throw new InvalidCommandException("Unknown subcommand: " + subCommand +
                     ". Valid subcommands: list, info, rename, delete, delete-all");
         }
-
-        // Trigger a state response so the client knows the command completed
-        // Call publishOnGameStateChange directly to ensure response is sent immediately
-        CommunicationMod.publishOnGameStateChange();
+        // Each subcommand calls signalReadyForCommand() to trigger the state response
     }
 
     private ArenaRepository getRepository() {
@@ -135,6 +132,8 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
 
         // Set the message so it's returned in the CommunicationMod response
         GameStateListener.setMessage(jsonList);
+        GameStateListener.signalReadyForCommand();
+        CommunicationMod.publishOnGameStateChange();
     }
 
     /**
@@ -173,7 +172,11 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
         info.relicsJson = loadout.relicsJson;
         info.potionsJson = loadout.potionsJson;
 
-        STSArena.logger.info("ARENA-LOADOUT INFO: " + gson.toJson(info));
+        String jsonInfo = gson.toJson(info);
+        STSArena.logger.info("ARENA-LOADOUT INFO: " + jsonInfo);
+        GameStateListener.setMessage(jsonInfo);
+        GameStateListener.signalReadyForCommand();
+        CommunicationMod.publishOnGameStateChange();
     }
 
     /**
@@ -211,6 +214,9 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
         boolean success = repo.renameLoadout(loadoutId, newName);
         if (success) {
             STSArena.logger.info("ARENA-LOADOUT RENAME: Renamed loadout " + loadoutId + " to '" + newName + "'");
+            GameStateListener.setMessage("Renamed loadout " + loadoutId + " to '" + newName + "'");
+            GameStateListener.signalReadyForCommand();
+            CommunicationMod.publishOnGameStateChange();
         } else {
             throw new InvalidCommandException("Failed to rename loadout");
         }
@@ -239,6 +245,9 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
         boolean success = repo.deleteLoadout(loadoutId);
         if (success) {
             STSArena.logger.info("ARENA-LOADOUT DELETE: Deleted loadout " + loadoutId + " ('" + existing.name + "')");
+            GameStateListener.setMessage("Deleted loadout " + loadoutId);
+            GameStateListener.signalReadyForCommand();
+            CommunicationMod.publishOnGameStateChange();
         } else {
             throw new InvalidCommandException("Failed to delete loadout");
         }
@@ -261,6 +270,7 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
         STSArena.logger.info("ARENA-LOADOUT DELETE-ALL: Deleted " + deleted + " loadouts");
         GameStateListener.setMessage("Deleted " + deleted + " loadouts");
         GameStateListener.signalReadyForCommand();
+        CommunicationMod.publishOnGameStateChange();
     }
 
     /**

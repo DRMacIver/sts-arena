@@ -230,21 +230,7 @@ public class ArenaEncounterSelectScreen {
     public void update() {
         if (!isOpen) return;
 
-        // Handle search text input
-        if (isTypingSearch) {
-            handleSearchInput();
-        }
-
-        // Update search box
-        float searchX = CENTER_X + BUTTON_WIDTH / 2.0f - SEARCH_BOX_WIDTH - 10.0f * Settings.scale;
-        searchBoxHitbox.move(searchX + SEARCH_BOX_WIDTH / 2.0f, SEARCH_BOX_Y);
-        searchBoxHitbox.update();
-        if (searchBoxHitbox.hovered && InputHelper.justClickedLeft) {
-            isTypingSearch = true;
-            InputHelper.justClickedLeft = false;
-        } else if (InputHelper.justClickedLeft && !searchBoxHitbox.hovered && isTypingSearch) {
-            isTypingSearch = false;
-        }
+        // Search is disabled for encounter selection (not needed for this screen)
 
         // Cancel button - go back to previous screen
         this.cancelButton.update();
@@ -442,8 +428,7 @@ public class ArenaEncounterSelectScreen {
             "Select Encounter",
             CENTER_X, TITLE_Y, Settings.GOLD_COLOR);
 
-        // Search box
-        renderSearchBox(sb);
+        // Search is disabled for encounter selection (not needed)
 
         // Calculate offset for current encounter section
         float currentEncounterOffset = 0;

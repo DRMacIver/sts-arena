@@ -2,6 +2,7 @@ package stsarena.communication;
 
 import communicationmod.CommunicationMod;
 import communicationmod.CommandExecutor;
+import communicationmod.GameStateListener;
 import communicationmod.InvalidCommandException;
 import stsarena.STSArena;
 import stsarena.data.ArenaDatabase;
@@ -115,7 +116,8 @@ public class ArenaScreenCommand implements CommandExecutor.CommandExtension {
                     ". Valid screens: loadout, encounter, creator, history, stats, close");
         }
 
-        // Trigger a state response so the client knows the command completed
+        // Signal ready for next command and trigger a state response
+        GameStateListener.signalReadyForCommand();
         CommunicationMod.publishOnGameStateChange();
     }
 
