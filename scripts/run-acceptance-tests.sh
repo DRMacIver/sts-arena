@@ -129,6 +129,38 @@ cp "$PROJECT_DIR/target/STSArena.jar" "$PROJECT_DIR/lib/mods/"
 echo "Mock Steam setup complete"
 echo
 
+# Create placeholder save files to prevent Save Slot screen from appearing
+# The game shows a save slot selection screen when no saves exist, which blocks
+# CommunicationMod commands. By creating minimal save files, we skip this screen.
+#
+# IMPORTANT: The game uses relative "saves/" path on Linux, so we need to create
+# saves in both locations:
+# 1. Steam directory (for Steam detection)
+# 2. lib/ directory (where the game actually runs from)
+echo "Creating placeholder save files..."
+SAVES_DIR="$STEAM_DIR/common/SlayTheSpire/saves"
+LIB_SAVES_DIR="$PROJECT_DIR/lib/saves"
+mkdir -p "$SAVES_DIR"
+mkdir -p "$LIB_SAVES_DIR"
+for CLASS in IRONCLAD THE_SILENT DEFECT WATCHER; do
+    # Create a minimal save file that the game will recognize as existing
+    # (but not valid for continuing, which is fine)
+    for DIR in "$SAVES_DIR" "$LIB_SAVES_DIR"; do
+        cat > "$DIR/${CLASS}.autosave" << EOF
+{
+  "current_health":80,
+  "max_health":80,
+  "gold":100,
+  "floor_num":1,
+  "character_class":"${CLASS}",
+  "ascension_level":0
+}
+EOF
+    done
+done
+echo "Save files created in $SAVES_DIR and $LIB_SAVES_DIR"
+echo
+
 # Sync uv dependencies
 echo "Syncing Python dependencies..."
 cd "$ACCEPTANCE_DIR"

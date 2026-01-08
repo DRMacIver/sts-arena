@@ -82,11 +82,16 @@ public class SaveFileManager {
                     STSArena.logger.error("SaveFileManager: Failed to restore backup for " + className, e);
                 }
             } else {
-                // No backup means there was no original save - delete the arena save
+                // No backup exists. This could mean:
+                // 1. There was no original save before arena started (arena save should be deleted)
+                // 2. The backup was already restored/deleted (save is now correct)
+                // 3. Some other edge case
+                //
+                // To be safe and avoid accidentally deleting real saves, we just log a warning
+                // and leave the save file alone. The marker file will still be deleted.
                 if (saveFile.exists()) {
-                    if (saveFile.delete()) {
-                        STSArena.logger.info("SaveFileManager: Deleted orphaned arena save for " + className);
-                    }
+                    STSArena.logger.warn("SaveFileManager: Found marker without backup for " + className +
+                        ". Leaving save file intact (may be a real save). Consider deleting manually if needed.");
                 }
             }
 
@@ -110,29 +115,14 @@ public class SaveFileManager {
      * Uses the cross-platform saves directory from ArenaSaveManager.
      */
     private static String getSavePathForClassName(String className) {
-        // Reuse the cross-platform logic from ArenaSaveManager
-        // by constructing a temporary PlayerClass to get the path
+        // Reuse the logic from ArenaSaveManager for standard classes
         try {
             AbstractPlayer.PlayerClass playerClass = AbstractPlayer.PlayerClass.valueOf(className);
             return ArenaSaveManager.getSavePath(playerClass);
         } catch (IllegalArgumentException e) {
             // Fallback for unknown class names (modded characters)
-            String os = System.getProperty("os.name").toLowerCase();
-            String userHome = System.getProperty("user.home");
-            String savesDir;
-
-            if (os.contains("win")) {
-                savesDir = "saves\\";
-            } else if (os.contains("mac")) {
-                savesDir = userHome + "/Library/Application Support/Steam/steamapps/common/SlayTheSpire/SlayTheSpire.app/Contents/Resources/saves/";
-                if (!new File(savesDir).exists()) {
-                    savesDir = "saves/";
-                }
-            } else {
-                savesDir = "saves/";
-            }
-
-            return savesDir + className + ".autosave";
+            // Always use relative path to match game behavior
+            return "saves" + File.separator + className + ".autosave";
         }
     }
 

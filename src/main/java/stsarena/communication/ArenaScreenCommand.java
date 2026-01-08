@@ -4,17 +4,20 @@ import communicationmod.CommunicationMod;
 import communicationmod.CommandExecutor;
 import communicationmod.InvalidCommandException;
 import stsarena.STSArena;
+import stsarena.data.ArenaDatabase;
+import stsarena.data.ArenaRepository;
 
 /**
  * CommunicationMod command extension for opening arena screens.
  *
  * Usage:
- *   arena_screen loadout   - Open loadout selection screen
- *   arena_screen encounter - Open encounter selection screen
- *   arena_screen creator   - Open loadout creator screen
- *   arena_screen history   - Open fight history screen
- *   arena_screen stats     - Open statistics screen
- *   arena_screen close     - Close any open arena screen
+ *   arena_screen loadout        - Open loadout selection screen
+ *   arena_screen loadout <id>   - Open loadout screen with a loadout selected (shows preview)
+ *   arena_screen encounter      - Open encounter selection screen
+ *   arena_screen creator        - Open loadout creator screen
+ *   arena_screen history        - Open fight history screen
+ *   arena_screen stats          - Open statistics screen
+ *   arena_screen close          - Close any open arena screen
  *
  * This command is primarily used for documentation screenshot generation
  * and testing purposes.
@@ -64,6 +67,15 @@ public class ArenaScreenCommand implements CommandExecutor.CommandExtension {
             case "loadout":
                 closeAllArenaScreens();
                 STSArena.openLoadoutSelectScreen();
+                // If a loadout ID is provided, select it to show the preview
+                if (tokens.length >= 3) {
+                    try {
+                        long loadoutId = Long.parseLong(tokens[2]);
+                        selectLoadoutById(loadoutId);
+                    } catch (NumberFormatException e) {
+                        throw new InvalidCommandException("Invalid loadout ID: " + tokens[2]);
+                    }
+                }
                 STSArena.logger.info("ARENA_SCREEN: Opened loadout selection screen");
                 break;
 
@@ -125,6 +137,29 @@ public class ArenaScreenCommand implements CommandExecutor.CommandExtension {
         }
         if (STSArena.statsScreen != null && STSArena.statsScreen.isOpen) {
             STSArena.statsScreen.close();
+        }
+    }
+
+    /**
+     * Select a loadout by ID in the loadout selection screen.
+     * This makes the preview panel show the loadout's contents.
+     */
+    private void selectLoadoutById(long loadoutId) throws InvalidCommandException {
+        ArenaDatabase db = ArenaDatabase.getInstance();
+        if (db == null) {
+            throw new InvalidCommandException("Database not available");
+        }
+
+        ArenaRepository repo = new ArenaRepository(db);
+        ArenaRepository.LoadoutRecord loadout = repo.getLoadoutById(loadoutId);
+        if (loadout == null) {
+            throw new InvalidCommandException("Loadout not found with ID: " + loadoutId);
+        }
+
+        // Set the static selectedSavedLoadout so the screen shows the preview
+        if (STSArena.loadoutSelectScreen != null) {
+            STSArena.loadoutSelectScreen.selectLoadoutForPreview(loadout);
+            STSArena.logger.info("ARENA_SCREEN: Selected loadout " + loadoutId + " for preview");
         }
     }
 }

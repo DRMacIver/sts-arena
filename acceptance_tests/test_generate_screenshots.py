@@ -23,7 +23,10 @@ from conftest import (
     wait_for_main_menu,
     wait_for_ready,
     wait_for_visual_stable,
+    wait_for_in_game,
+    wait_for_state_update,
 )
+from spirecomm.spire.screen import ScreenType
 
 # Try to import mss for screenshots
 try:
@@ -86,12 +89,61 @@ def open_arena_screen(coordinator, screen_name):
     wait_for_visual_stable(coordinator)
 
 
+def find_monster_room_index(coordinator):
+    """Find the index of a monster room in the available map choices.
+
+    Returns the index of a room with symbol 'M' (monster) or 'E' (elite),
+    or 0 if none found (fallback).
+    """
+    game = coordinator.last_game_state
+    if not game or game.screen_type != ScreenType.MAP:
+        print("  Warning: Not on map screen, falling back to index 0")
+        return 0
+
+    # The map screen has next_nodes which are the available choices
+    if hasattr(game.screen, 'next_nodes') and game.screen.next_nodes:
+        for i, node in enumerate(game.screen.next_nodes):
+            if node.symbol in ('M', 'E'):  # Monster or Elite
+                print(f"  Found fight room at index {i} (symbol: {node.symbol})")
+                return i
+
+    # Fallback - just use index 0 and hope for the best
+    print("  Warning: No monster room found, using index 0")
+    return 0
+
+
+def get_loadout_id(coordinator, index=0):
+    """Get the ID of a loadout by its index in the list.
+
+    Returns the loadout ID, or None if not found.
+    """
+    import json
+
+    coordinator.game_is_ready = False
+    coordinator.send_message("arena-loadout list")
+    wait_for_ready(coordinator)
+
+    # Parse the loadout list from the message
+    if coordinator.last_message:
+        try:
+            loadouts = json.loads(coordinator.last_message)
+            if loadouts and len(loadouts) > index:
+                return loadouts[index].get("id")
+        except json.JSONDecodeError:
+            print(f"  Warning: Could not parse loadout list: {coordinator.last_message}")
+
+    return None
+
+
 def test_generate_documentation_screenshots(at_main_menu):
     """
     Generate all documentation screenshots.
 
     This test navigates through all arena screens and captures screenshots
     for use in the documentation.
+
+    NOTE: The run-acceptance-tests.sh script creates placeholder save files
+    to prevent the Save Slot screen from blocking CommunicationMod commands.
     """
     coordinator = at_main_menu
 
@@ -101,111 +153,187 @@ def test_generate_documentation_screenshots(at_main_menu):
     print(f"Output directory: {SCREENSHOT_DIR}")
 
     # ====================
+    # Clear all existing loadouts for a clean slate
+    # ====================
+    print("\n[Setup] Clearing all existing loadouts...")
+    coordinator.game_is_ready = False
+    coordinator.send_message("arena-loadout delete-all")
+    wait_for_ready(coordinator)
+    print("  Loadouts cleared")
+
+    # ====================
     # Main Menu Screenshot
     # ====================
-    print("\n[1/12] Main menu with Arena Mode button...")
-    # Close any open screens first
-    open_arena_screen(coordinator, "close")
+    print("\n[1/11] Main menu with Arena Mode button...")
     wait_for_visual_stable(coordinator)
     capture_screenshot("main_menu")
 
     # ====================
-    # Loadout Select Screen
+    # Create 2 loadouts by winning arena fights (needed for loadout select screenshot)
     # ====================
-    print("\n[2/12] Loadout selection screen...")
-    open_arena_screen(coordinator, "loadout")
-    capture_screenshot("loadout_select")
-
-    # ====================
-    # Loadout Creator Screen (Cards tab)
-    # ====================
-    print("\n[3/12] Loadout creator - cards tab...")
-    open_arena_screen(coordinator, "creator")
-    capture_screenshot("loadout_creator_cards")
-
-    # ====================
-    # Encounter Select Screen
-    # ====================
-    print("\n[4/12] Encounter selection screen...")
-    open_arena_screen(coordinator, "encounter")
-    capture_screenshot("encounter_select")
-
-    # ====================
-    # History Screen
-    # ====================
-    print("\n[5/12] Fight history screen...")
-    open_arena_screen(coordinator, "history")
-    capture_screenshot("history_screen")
-
-    # ====================
-    # Stats Screen
-    # ====================
-    print("\n[6/12] Statistics screen...")
-    open_arena_screen(coordinator, "stats")
-    capture_screenshot("stats_screen")
-
-    # ====================
-    # Arena Combat
-    # ====================
-    print("\n[7/12] Arena combat...")
-    open_arena_screen(coordinator, "close")  # Return to main menu first
-    coordinator.game_is_ready = False
-    coordinator.send_message("arena IRONCLAD Cultist")
-    wait_for_ready(coordinator)
-    wait_for_combat(coordinator)
-    time.sleep(1.0)  # Let combat initialize fully
-    wait_for_visual_stable(coordinator)
-    capture_screenshot("arena_combat")
-
-    # ====================
-    # Arena Victory
-    # ====================
-    print("\n[8/12] Arena victory screen...")
-    coordinator.game_is_ready = False
-    coordinator.send_message("win")
-    wait_for_ready(coordinator)
-    time.sleep(1.5)  # Let victory animation play
-    wait_for_visual_stable(coordinator)
-    capture_screenshot("arena_victory")
-
-    # ====================
-    # Return to menu and start another fight for defeat
-    # ====================
-    print("\n[9/12] Arena defeat screen...")
-    coordinator.game_is_ready = False
-    coordinator.send_message("arena-back")
-    wait_for_ready(coordinator)
-    wait_for_main_menu(coordinator)
-
+    print("\n[Setup] Creating first loadout (Ironclad)...")
     coordinator.game_is_ready = False
     coordinator.send_message("arena IRONCLAD Cultist")
     wait_for_ready(coordinator)
     wait_for_combat(coordinator)
     time.sleep(0.5)
 
+    # Win the fight
     coordinator.game_is_ready = False
-    coordinator.send_message("lose")
+    coordinator.send_message("win")
     wait_for_ready(coordinator)
-    time.sleep(1.5)  # Let defeat animation play
-    wait_for_visual_stable(coordinator)
-    capture_screenshot("arena_defeat")
+    time.sleep(1.0)
 
-    # ====================
-    # Practice in Arena from Normal Run
-    # ====================
-    print("\n[10/12] Pause menu with 'Practice in Arena' button...")
+    # Return to menu
     coordinator.game_is_ready = False
     coordinator.send_message("arena-back")
     wait_for_ready(coordinator)
     wait_for_main_menu(coordinator)
 
-    # Start a normal run to show pause menu
+    # ====================
+    # Loadout Select Screen with a loadout selected to show contents
+    # ====================
+    print("\n[2/11] Loadout selection screen with loadout preview...")
+    # Get the ID of the first loadout
+    loadout_id = get_loadout_id(coordinator, index=0)
+    if loadout_id:
+        # Open loadout screen with the loadout selected (shows preview panel)
+        open_arena_screen(coordinator, f"loadout {loadout_id}")
+    else:
+        # Fallback: just open the loadout screen
+        print("  Warning: Could not get loadout ID, opening without selection")
+        open_arena_screen(coordinator, "loadout")
+    time.sleep(0.5)
+    wait_for_visual_stable(coordinator)
+    capture_screenshot("loadout_select")
+
+    # ====================
+    # Loadout Creator Screen (Cards tab)
+    # ====================
+    print("\n[3/11] Loadout creator - cards tab...")
+    open_arena_screen(coordinator, "creator")
+    capture_screenshot("loadout_creator_cards")
+
+    # ====================
+    # Encounter Select Screen
+    # ====================
+    print("\n[4/11] Encounter selection screen...")
+    open_arena_screen(coordinator, "encounter")
+    capture_screenshot("encounter_select")
+
+    # ====================
+    # History Screen
+    # ====================
+    print("\n[5/11] Fight history screen...")
+    open_arena_screen(coordinator, "history")
+    capture_screenshot("history_screen")
+
+    # ====================
+    # Stats Screen
+    # ====================
+    print("\n[6/11] Statistics screen...")
+    open_arena_screen(coordinator, "stats")
+    capture_screenshot("stats_screen")
+
+    # ====================
+    # Arena Combat
+    # ====================
+    print("\n[7/11] Arena combat...")
+    open_arena_screen(coordinator, "close")
+    coordinator.game_is_ready = False
+    coordinator.send_message("arena IRONCLAD Cultist")
+    wait_for_ready(coordinator)
+    wait_for_combat(coordinator)
+    time.sleep(1.0)
+    wait_for_visual_stable(coordinator)
+    capture_screenshot("arena_combat")
+
+    # ====================
+    # Arena Victory (imperfect - need to take damage first)
+    # ====================
+    print("\n[8/11] Arena victory screen (imperfect victory)...")
+    # End turn to let the monster attack us (so we take damage for imperfect victory)
+    coordinator.game_is_ready = False
+    coordinator.send_message("end")
+    wait_for_ready(coordinator)
+    time.sleep(2.0)  # Wait for monster attack animation
+
+    # Now win the fight
+    coordinator.game_is_ready = False
+    coordinator.send_message("win")
+    wait_for_ready(coordinator)
+    time.sleep(2.0)  # Let victory screen appear
+    wait_for_visual_stable(coordinator)
+    capture_screenshot("arena_victory")
+
+    # ====================
+    # Arena Defeat Screen
+    # ====================
+    print("\n[9/11] Arena defeat screen...")
+    # Return to menu first
+    coordinator.game_is_ready = False
+    coordinator.send_message("arena-back")
+    wait_for_ready(coordinator)
+    wait_for_main_menu(coordinator)
+
+    # Start a new arena fight
+    coordinator.game_is_ready = False
+    coordinator.send_message("arena IRONCLAD Cultist")
+    wait_for_ready(coordinator)
+    wait_for_combat(coordinator)
+    time.sleep(0.5)
+
+    # Lose the fight - this should now show death screen with arena buttons
+    coordinator.game_is_ready = False
+    coordinator.send_message("lose")
+    wait_for_ready(coordinator)
+    time.sleep(2.0)  # Wait for death screen to appear
+    wait_for_visual_stable(coordinator)
+    capture_screenshot("arena_defeat")
+
+    # ====================
+    # Practice in Arena from Normal Run (Pause menu)
+    # ====================
+    print("\n[10/11] Pause menu with 'Practice in Arena' button...")
+    # Return to menu
+    coordinator.game_is_ready = False
+    coordinator.send_message("arena-back")
+    wait_for_ready(coordinator)
+    wait_for_main_menu(coordinator)
+
+    # Start a normal run
     coordinator.game_is_ready = False
     coordinator.send_message("start IRONCLAD 0")
     wait_for_ready(coordinator)
-    time.sleep(2.0)  # Let run initialize
+    wait_for_in_game(coordinator)
+    time.sleep(1.0)
 
-    # Press escape to open pause menu
+    # At Neow - make a choice to proceed
+    coordinator.game_is_ready = False
+    coordinator.send_message("choose 0")  # Choose first Neow option
+    wait_for_ready(coordinator)
+    time.sleep(1.0)
+
+    # Proceed to map
+    coordinator.game_is_ready = False
+    coordinator.send_message("proceed")
+    wait_for_ready(coordinator)
+    time.sleep(1.0)
+
+    # Get fresh state to see the map
+    wait_for_state_update(coordinator)
+
+    # Find a monster room (symbol 'M' or 'E') instead of blindly choosing index 0
+    monster_room_index = find_monster_room_index(coordinator)
+
+    # Choose the monster room
+    coordinator.game_is_ready = False
+    coordinator.send_message(f"choose {monster_room_index}")
+    wait_for_ready(coordinator)
+    wait_for_combat(coordinator)
+    time.sleep(1.0)
+
+    # Now press escape to open pause menu
     coordinator.game_is_ready = False
     coordinator.send_message("key ESCAPE")
     wait_for_ready(coordinator)
@@ -213,51 +341,33 @@ def test_generate_documentation_screenshots(at_main_menu):
     wait_for_visual_stable(coordinator)
     capture_screenshot("pause_menu_practice")
 
-    # Close pause menu and abandon run
+    # ====================
+    # Death screen in normal run (with Practice in Arena button)
+    # ====================
+    print("\n[11/11] Death screen with Practice in Arena button...")
+    # Close pause menu
     coordinator.game_is_ready = False
     coordinator.send_message("key ESCAPE")
     wait_for_ready(coordinator)
     time.sleep(0.3)
-    coordinator.game_is_ready = False
-    coordinator.send_message("abandon")
-    wait_for_ready(coordinator)
-    wait_for_main_menu(coordinator)
 
-    # ====================
-    # Additional screenshots with content
-    # ====================
-    print("\n[11/12] Loadout select with preview...")
-    # Create a loadout first by running a quick arena fight
+    # Lose the fight to show death screen
     coordinator.game_is_ready = False
-    coordinator.send_message("arena IRONCLAD Cultist")
+    coordinator.send_message("lose")
     wait_for_ready(coordinator)
-    wait_for_combat(coordinator)
-    coordinator.game_is_ready = False
-    coordinator.send_message("win")
-    wait_for_ready(coordinator)
-    time.sleep(1.0)
-    coordinator.game_is_ready = False
-    coordinator.send_message("arena-back")
-    wait_for_ready(coordinator)
-    wait_for_main_menu(coordinator)
-
-    # Open loadout select - should now have at least one loadout
-    open_arena_screen(coordinator, "loadout")
-    capture_screenshot("loadout_select_preview")
-
-    # ====================
-    # Loadout Creator with relics
-    # ====================
-    print("\n[12/12] Loadout creator - relics view...")
-    open_arena_screen(coordinator, "creator")
-    # Note: Would need to click on relics tab - for now capture as-is
-    capture_screenshot("loadout_creator_relics")
+    time.sleep(2.0)  # Wait for death screen
+    wait_for_visual_stable(coordinator)
+    capture_screenshot("normal_run_death")
 
     # ====================
     # Cleanup
     # ====================
     print("\nCleaning up...")
-    open_arena_screen(coordinator, "close")
+    # Abandon the run to return to menu
+    coordinator.game_is_ready = False
+    coordinator.send_message("abandon")
+    wait_for_ready(coordinator)
+    wait_for_main_menu(coordinator)
 
     print("\n" + "=" * 50)
     print("Screenshot generation complete!")

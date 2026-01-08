@@ -68,24 +68,18 @@ public class LoseCommand implements CommandExecutor.CommandExtension {
         int hpBefore = AbstractDungeon.player.currentHealth;
         STSArena.logger.info("LOSE command: HP before: " + hpBefore);
 
-        // Kill the player by setting HP to 0 and marking as dead
-        // Execute directly without action queue to avoid timing issues
-        AbstractDungeon.player.currentHealth = 0;
-        AbstractDungeon.player.isDead = true;
-        STSArena.logger.info("LOSE command: Set HP=0 and isDead=true");
+        // Deal enough damage to kill the player through normal game mechanics
+        // This ensures the DeathScreen is shown properly (with arena retry buttons if in arena)
+        int damageNeeded = AbstractDungeon.player.currentHealth + AbstractDungeon.player.currentBlock + 999;
+        STSArena.logger.info("LOSE command: Dealing " + damageNeeded + " damage to player");
 
-        // For arena runs, clear the arena state and return to main menu
-        // This mimics what happens when clicking "Retreat" on the death screen
-        if (ArenaRunner.isArenaRun()) {
-            STSArena.logger.info("LOSE command: Arena run detected, triggering startOver to return to menu");
-            ArenaRunner.clearArenaRun();
-            Settings.isTrial = false;
-            Settings.isDailyRun = false;
-            Settings.isEndless = false;
-            CardCrawlGame.startOver();
-        }
+        AbstractDungeon.player.damage(new com.megacrit.cardcrawl.cards.DamageInfo(
+            null,  // null source for environmental damage
+            damageNeeded,
+            com.megacrit.cardcrawl.cards.DamageInfo.DamageType.HP_LOSS
+        ));
 
-        STSArena.logger.info("LOSE command: Player death complete");
+        STSArena.logger.info("LOSE command: Player death triggered, DeathScreen will show");
     }
 
     /**

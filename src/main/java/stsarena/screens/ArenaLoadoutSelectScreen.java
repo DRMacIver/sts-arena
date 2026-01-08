@@ -289,6 +289,32 @@ public class ArenaLoadoutSelectScreen {
         this.cancelButton.hide();
     }
 
+    /**
+     * Select a loadout for preview display.
+     * Used by CommunicationMod commands to show a loadout's contents in the preview panel.
+     */
+    public void selectLoadoutForPreview(ArenaRepository.LoadoutRecord loadout) {
+        if (loadout == null) return;
+
+        // Find the item with this loadout
+        for (ListItem item : items) {
+            if (item.savedLoadout != null && item.savedLoadout.dbId == loadout.dbId) {
+                this.selectedItem = item;
+                this.hoveredItem = item;  // Also set hovered so preview shows
+                selectedSavedLoadout = loadout;
+                STSArena.logger.info("Selected loadout for preview: " + loadout.name);
+                return;
+            }
+        }
+
+        // If not found in items (maybe filtered out), create a temporary item
+        ListItem tempItem = new ListItem(loadout.name, false, false, false, loadout);
+        this.selectedItem = tempItem;
+        this.hoveredItem = tempItem;
+        selectedSavedLoadout = loadout;
+        STSArena.logger.info("Selected loadout for preview (not in list): " + loadout.name);
+    }
+
     public void update() {
         if (!isOpen) return;
 

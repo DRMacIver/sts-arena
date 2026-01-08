@@ -36,49 +36,19 @@ public class ArenaSaveManager {
 
     /**
      * Get the saves directory for the current platform.
+     *
+     * The game uses a relative "saves/" path when running from its install directory.
+     * We always use the relative path to match the game's behavior, ensuring saves
+     * are written to the same location the game expects to find them.
+     *
+     * Note: Previous versions tried to detect Steam installation paths, but this
+     * caused issues when running from different working directories (e.g., during
+     * testing). The game itself always uses relative paths, so we do the same.
      */
     private static String getSavesDirectory() {
-        String os = System.getProperty("os.name").toLowerCase();
-        String userHome = System.getProperty("user.home");
-        String savesDir = null;
-
-        if (os.contains("win")) {
-            // Windows: Check common Steam locations
-            String[] windowsPaths = {
-                System.getenv("PROGRAMFILES(X86)") + "\\Steam\\steamapps\\common\\SlayTheSpire\\saves\\",
-                System.getenv("PROGRAMFILES") + "\\Steam\\steamapps\\common\\SlayTheSpire\\saves\\",
-                userHome + "\\Steam\\steamapps\\common\\SlayTheSpire\\saves\\"
-            };
-            for (String path : windowsPaths) {
-                if (path != null && new File(path).exists()) {
-                    savesDir = path;
-                    break;
-                }
-            }
-        } else if (os.contains("mac")) {
-            // macOS
-            savesDir = userHome + "/Library/Application Support/Steam/steamapps/common/SlayTheSpire/SlayTheSpire.app/Contents/Resources/saves/";
-        } else {
-            // Linux: Check common Steam locations
-            String[] linuxPaths = {
-                userHome + "/.steam/steam/steamapps/common/SlayTheSpire/saves/",
-                userHome + "/.local/share/Steam/steamapps/common/SlayTheSpire/saves/",
-                userHome + "/.steam/debian-installation/steamapps/common/SlayTheSpire/saves/"
-            };
-            for (String path : linuxPaths) {
-                if (new File(path).exists()) {
-                    savesDir = path;
-                    break;
-                }
-            }
-        }
-
-        // Fallback: relative saves directory (game runs from its install dir)
-        if (savesDir == null || !new File(savesDir).exists()) {
-            savesDir = "saves" + File.separator;
-        }
-
-        return savesDir;
+        // Always use relative path - this matches the game's behavior
+        // The game expects saves to be relative to its working directory
+        return "saves" + File.separator;
     }
 
     /**

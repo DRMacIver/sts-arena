@@ -21,6 +21,7 @@ import java.util.List;
  *   arena-loadout info <id>               - Get detailed info about a loadout
  *   arena-loadout rename <id> <new-name>  - Rename a loadout
  *   arena-loadout delete <id>             - Delete a loadout
+ *   arena-loadout delete-all              - Delete all loadouts (for testing)
  *
  * This command provides external control over saved loadouts for testing
  * and automation purposes.
@@ -57,11 +58,12 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
     public void execute(String[] tokens) throws InvalidCommandException {
         if (tokens.length < 2) {
             throw new InvalidCommandException(
-                "Usage: arena-loadout <list|info|rename|delete> [args]\n" +
+                "Usage: arena-loadout <list|info|rename|delete|delete-all> [args]\n" +
                 "  list              - List all saved loadouts\n" +
                 "  info <id>         - Get detailed info about a loadout\n" +
                 "  rename <id> <name> - Rename a loadout\n" +
-                "  delete <id>       - Delete a loadout");
+                "  delete <id>       - Delete a loadout\n" +
+                "  delete-all        - Delete all loadouts (for testing)");
         }
 
         String subCommand = tokens[1].toLowerCase();
@@ -84,9 +86,12 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
             case "delete":
                 executeDelete(tokens, repo);
                 break;
+            case "delete-all":
+                executeDeleteAll(repo);
+                break;
             default:
                 throw new InvalidCommandException("Unknown subcommand: " + subCommand +
-                    ". Valid subcommands: list, info, rename, delete");
+                    ". Valid subcommands: list, info, rename, delete, delete-all");
         }
 
         // Trigger a state response so the client knows the command completed
@@ -237,6 +242,24 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
         } else {
             throw new InvalidCommandException("Failed to delete loadout");
         }
+    }
+
+    /**
+     * Delete all loadouts.
+     * This is primarily for testing/screenshot generation to start with a clean slate.
+     */
+    private void executeDeleteAll(ArenaRepository repo) throws InvalidCommandException {
+        List<ArenaRepository.LoadoutRecord> loadouts = repo.getLoadouts(1000);
+
+        int deleted = 0;
+        for (ArenaRepository.LoadoutRecord loadout : loadouts) {
+            if (repo.deleteLoadout(loadout.dbId)) {
+                deleted++;
+            }
+        }
+
+        STSArena.logger.info("ARENA-LOADOUT DELETE-ALL: Deleted " + deleted + " loadouts");
+        GameStateListener.setMessage("Deleted " + deleted + " loadouts");
     }
 
     /**
