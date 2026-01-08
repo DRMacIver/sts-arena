@@ -24,7 +24,6 @@
                 <li><a href="#encounters">Encounters</a></li>
                 <li><a href="#practice">Practice Mode</a></li>
                 <li><a href="#history">History & Stats</a></li>
-                <li><a href="#automation">Automation</a></li>
             </ul>
         </div>
     </nav>
@@ -281,6 +280,16 @@
             <div class="note">
                 <p><strong>Note:</strong> Your normal run save is completely protected. Arena practice doesn't affect your run in any way.</p>
             </div>
+
+            <h3>Practice from Death Screen</h3>
+            <p>If you die during a normal run, you can also practice from the death screen:</p>
+
+            <div class="screenshot-container">
+                <img src="screenshots/normal_run_death.png" alt="Death screen with Practice in Arena button" class="screenshot" onclick="openModal(this)">
+                <p class="screenshot-caption">The death screen includes a "Practice in Arena" button to analyze what went wrong</p>
+            </div>
+
+            <p>This is especially useful for analyzing tough fights - you can immediately retry the encounter that ended your run with the exact deck you had.</p>
         </section>
 
         <!-- History & Stats -->
@@ -309,78 +318,6 @@
                 <li>Cards played</li>
                 <li>Potions used</li>
             </ul>
-        </section>
-
-        <!-- Automation -->
-        <section id="automation">
-            <h2>CommunicationMod Integration</h2>
-            <p>STS Arena integrates with <a href="https://github.com/ForgottenArbiter/CommunicationMod">CommunicationMod</a> for automated testing and AI development.</p>
-
-            <h3>Available Commands</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Command</th>
-                        <th>Description</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><code>arena &lt;CHARACTER&gt; &lt;ENCOUNTER&gt; [SEED]</code></td>
-                        <td>Start arena with random loadout</td>
-                    </tr>
-                    <tr>
-                        <td><code>arena --loadout &lt;ID&gt; &lt;ENCOUNTER&gt;</code></td>
-                        <td>Start arena with saved loadout</td>
-                    </tr>
-                    <tr>
-                        <td><code>arena_back</code></td>
-                        <td>Close arena screens, return to menu</td>
-                    </tr>
-                    <tr>
-                        <td><code>arena_screen &lt;screen&gt;</code></td>
-                        <td>Open specific arena screen (loadout, encounter, creator, history, stats)</td>
-                    </tr>
-                    <tr>
-                        <td><code>arena-loadout list</code></td>
-                        <td>List all saved loadouts (JSON)</td>
-                    </tr>
-                    <tr>
-                        <td><code>arena-loadout info &lt;ID&gt;</code></td>
-                        <td>Get detailed loadout info</td>
-                    </tr>
-                    <tr>
-                        <td><code>arena-loadout rename &lt;ID&gt; &lt;NAME&gt;</code></td>
-                        <td>Rename a loadout</td>
-                    </tr>
-                    <tr>
-                        <td><code>arena-loadout delete &lt;ID&gt;</code></td>
-                        <td>Delete a loadout</td>
-                    </tr>
-                    <tr>
-                        <td><code>win</code></td>
-                        <td>Instantly win current combat</td>
-                    </tr>
-                    <tr>
-                        <td><code>lose</code></td>
-                        <td>Instantly lose current combat</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <h3>Example Usage</h3>
-            <pre><code># Start arena fight
-arena IRONCLAD Cultist
-
-# Wait for combat
-wait_for in_combat true
-
-# Play cards, end turn, etc.
-play 0
-end
-
-# After victory/defeat, return to menu
-arena_back</code></pre>
         </section>
     </main>
 
