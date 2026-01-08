@@ -211,6 +211,26 @@ FightRecord.FightStats stats = FightRecord.getStatsForEncounter("TheHeart");
 
 **IMPORTANT: Run ALL relevant tests before committing changes!**
 
+### Running the Game in Devcontainer
+
+**The game can be run directly in the devcontainer.** You do NOT need the game to be already running. The acceptance test script handles everything:
+
+```bash
+./scripts/run-acceptance-tests.sh                    # Run all acceptance tests
+./scripts/run-acceptance-tests.sh test_user_stories.py  # Run specific test file
+./scripts/run-acceptance-tests.sh test_generate_screenshots.py  # Generate documentation screenshots
+```
+
+The script automatically:
+1. Builds the mod and CommunicationMod
+2. Sets up a mock Steam installation
+3. Starts Xvfb for headless display
+4. Launches the game with ModTheSpire
+5. Runs the specified tests via CommunicationMod
+6. Cleans up when done
+
+**This works on x86_64 Linux only.** ARM64 is not supported due to native library issues.
+
 ### Test Types
 
 | Test Type | Command | What It Tests |
@@ -224,7 +244,7 @@ FightRecord.FightStats stats = FightRecord.getStatsForEncounter("TheHeart");
 
 - **After ANY Java changes**: `mvn test && ./scripts/headless-mod-load-test.sh --fast`
 - **After changing patches**: Full headless test: `./scripts/headless-mod-load-test.sh --stsarena-only`
-- **After changing arena/combat logic**: Acceptance tests (requires game running)
+- **After changing arena/combat logic**: Acceptance tests (game is started automatically)
 
 ### Headless Test Notes
 
