@@ -1,80 +1,42 @@
 # STS Arena
 
-A Slay the Spire mod that adds an Arena mode for practicing fights with custom loadouts.
+Practice any fight in Slay the Spire. Build the perfect deck, then prove it works against every enemy in the game.
 
-Please note: This mod is mostly vibe-coded. I've done some manual testing and debugging of it, but I expect it to have a lot of further bugs. Reports very welcome.
+![Loadout Selection](docs/screenshots/loadout_select.png)
 
-## Features
+## What is this?
 
-### Arena Mode
-Fight any encounter in the game with a randomly generated or saved loadout. Access Arena Mode from the main menu.
+STS Arena adds an **Arena Mode** to Slay the Spire where you can fight any encounter with any loadout. Use it to:
 
-**Loadout Selection:**
-- **New Random Loadout** - Generates a random character with random deck, relics, HP, and ascension level (0-20)
-- **Saved Loadouts** - Replay loadouts from previous runs (both arena and normal runs)
+- **Practice boss fights** before you get there in a real run
+- **Test deck ideas** with random or custom loadouts
+- **Replay your favorite builds** from past runs against new challenges
+- **Challenge yourself** to beat every encounter with one loadout
 
-**Encounter Selection:**
-- Choose any encounter from Acts 1-4, organized by act and type (normal, elite, boss)
-- Select "Random" for a random encounter
-- Encounters you've beaten with the current loadout show in green (bold)
-- Encounters you've lost show in red (bold)
+![Encounter Selection](docs/screenshots/encounter_select.png)
 
-### Auto-Save from Normal Runs
-When you complete a normal run (victory or defeat), your loadout is automatically saved to the arena. This lets you replay your favorite builds against any encounter.
+## Key Features
 
-- **Victory saves** capture your final state
-- **Defeat saves** capture your state *before* the fatal fight (HP and potions you had going in)
-- Loadout names include character, ascension, floor, outcome, and timestamp
-  - Example: "Ironclad A15 F51 Victory (01-01 20:47)"
-
-### Arena History
-View your arena fight history from the main menu, including:
-- Win/loss statistics
-- Recent fights with loadout, encounter, outcome, HP, and date
-- **Replay button** - Instantly replay any previous fight with the same loadout (new seed)
-
-### Full State Preservation
-Loadouts preserve your complete build:
-- Character class
-- Full deck (with upgrades)
-- All relics
-- All potions
-- Current and max HP
-- Ascension level
+- **Fight any encounter** - All enemies from Acts 1-4, organized by type
+- **Random loadouts** - Generate random decks, relics, and HP for variety
+- **Auto-save from normal runs** - Your builds are automatically saved when runs end
+- **Track your progress** - See which encounters you've beaten (or lost to) with each loadout
+- **Full state preservation** - Deck, relics, potions, HP, and ascension level
 
 ## Installation
 
 1. Install [ModTheSpire](https://github.com/kiooeht/ModTheSpire) and [BaseMod](https://github.com/daviscook477/BaseMod)
-2. Download `STSArena-0.1.0.jar` from releases
-3. Place the JAR in your `SlayTheSpire/mods/` folder
-4. Launch the game with ModTheSpire and enable STS Arena
+2. Download `STSArena.jar` from [releases](https://github.com/DRMacIver/sts-arena/releases)
+3. Place in your `SlayTheSpire/mods/` folder
+4. Enable STS Arena in ModTheSpire
 
-## Usage
+## Documentation
 
-1. From the main menu, click **Arena Mode**
-2. Select a loadout (new random or a saved one)
-3. Select an encounter to fight
-4. After the fight, you're returned to encounter selection to fight again
+For detailed usage instructions and more screenshots, see the [full documentation](https://drmaciver.github.io/sts-arena/).
 
-To view history and statistics, click **Arena History** from the main menu.
+## Status
 
-## Building from Source
-
-Requires Java 8+ and Maven.
-
-```bash
-# Build the mod
-mvn clean package
-
-# Output JAR is in target/STSArena-0.1.0.jar
-```
-
-## Data Storage
-
-Arena data (loadouts, fight history) is stored in a SQLite database at:
-- **macOS:** `~/Library/Preferences/ModTheSpire/stsarena/arena.db`
-- **Windows:** `%LOCALAPPDATA%/ModTheSpire/stsarena/arena.db`
-- **Linux:** `~/.config/ModTheSpire/stsarena/arena.db`
+This mod is functional but still in development. Bug reports welcome via [GitHub Issues](https://github.com/DRMacIver/sts-arena/issues).
 
 ## License
 
