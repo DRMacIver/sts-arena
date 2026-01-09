@@ -69,3 +69,4 @@ __pycache__/
 .hypothesis/
 test_screenshots/
 pytest_output.txt
+docs/__pycache__/
