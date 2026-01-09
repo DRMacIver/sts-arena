@@ -1,6 +1,7 @@
 package stsarena;
 
 import basemod.BaseMod;
+import basemod.interfaces.EditStringsSubscriber;
 import basemod.interfaces.PostDungeonInitializeSubscriber;
 import basemod.interfaces.PostInitializeSubscriber;
 import basemod.interfaces.PostRenderSubscriber;
@@ -26,6 +27,7 @@ import stsarena.communication.SetRetryDataCommand;
 import stsarena.communication.WinCommand;
 import stsarena.data.ArenaDatabase;
 import stsarena.data.ArenaRepository;
+import stsarena.localization.LocalizedStrings;
 import stsarena.screens.ArenaEncounterSelectScreen;
 import stsarena.screens.ArenaHistoryScreen;
 import stsarena.screens.ArenaLoadoutSelectScreen;
@@ -42,7 +44,7 @@ import stsarena.screens.LoadoutCreatorScreen;
  * - Practice specific fights without playing through the full game
  */
 @SpireInitializer
-public class STSArena implements PostInitializeSubscriber, PostDungeonInitializeSubscriber, PreUpdateSubscriber, PostUpdateSubscriber, PostRenderSubscriber {
+public class STSArena implements EditStringsSubscriber, PostInitializeSubscriber, PostDungeonInitializeSubscriber, PreUpdateSubscriber, PostUpdateSubscriber, PostRenderSubscriber {
 
     public static final Logger logger = LogManager.getLogger(STSArena.class.getName());
     public static final String MOD_ID = "stsarena";
@@ -136,6 +138,15 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
 
         // Arena Mode button is added via patches/MainMenuArenaPatch
         // Note: CommunicationMod commands are registered in constructor
+    }
+
+    /**
+     * Called to load localized strings.
+     * Loads UI strings for the current language setting.
+     */
+    @Override
+    public void receiveEditStrings() {
+        LocalizedStrings.loadStrings();
     }
 
     /**

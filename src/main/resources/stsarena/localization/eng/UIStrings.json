@@ -1,0 +1,95 @@
+{
+  "stsarena:ArenaMenu": {
+    "TEXT": ["Arena", "Select a loadout to start an arena fight.", "Arena Mode"]
+  },
+  "stsarena:LoadoutSelect": {
+    "TEXT": [
+      "Select Loadout",
+      "Create Custom",
+      "New Random",
+      "Search...",
+      "Delete",
+      "Cancel",
+      "Confirm Delete",
+      "Relics:",
+      "Deck",
+      "cards",
+      "Multi-Select",
+      "Delete Selected",
+      "Unfavorite",
+      "Cancel Selection"
+    ]
+  },
+  "stsarena:LoadoutCreator": {
+    "TEXT": [
+      "Create Loadout",
+      "Edit Loadout",
+      "Cards",
+      "Relics",
+      "Potions",
+      "Name:",
+      "Max HP:",
+      "Asc:",
+      "Save",
+      "Cancel",
+      "Search...",
+      "Deck",
+      "Selected Relics",
+      "Selected Potions"
+    ]
+  },
+  "stsarena:EncounterSelect": {
+    "TEXT": [
+      "Select Encounter",
+      "Search...",
+      "Act 1",
+      "Act 2",
+      "Act 3",
+      "Act 4",
+      "Boss",
+      "Elite",
+      "Normal"
+    ]
+  },
+  "stsarena:History": {
+    "TEXT": [
+      "Arena History",
+      "Loadout",
+      "Encounter",
+      "Result",
+      "Date",
+      "WIN",
+      "LOSS",
+      "Damage Dealt",
+      "Damage Taken",
+      "Turns"
+    ]
+  },
+  "stsarena:Stats": {
+    "TEXT": [
+      "Arena Stats",
+      "Loadout",
+      "Encounter",
+      "Runs",
+      "Wins",
+      "Losses",
+      "Win Rate"
+    ]
+  },
+  "stsarena:PauseMenu": {
+    "TEXT": [
+      "Arena Fight",
+      "Abandon Arena",
+      "Retry Arena"
+    ]
+  },
+  "stsarena:Results": {
+    "TEXT": [
+      "Victory!",
+      "Defeat",
+      "Return to Menu",
+      "Retry",
+      "Edit Loadout"
+    ]
+  }
+}
