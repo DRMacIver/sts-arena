@@ -457,9 +457,28 @@ def test_generate_documentation_screenshots(at_main_menu):
     print(f"  Created fight history: {wins} wins, {losses} losses")
 
     # Rename loadouts to entertaining names
-    # Note: We skip renaming for now since the loadout list retrieval has timing issues
-    # The loadouts will have auto-generated names, which is acceptable for screenshots
-    print("  Skipping loadout renaming (loadouts use auto-generated names)")
+    # First, open and close an arena screen to "reset" the game state after the fight sequence
+    # This helps ensure the coordinator's message handling is working correctly
+    print("  Resetting game state...")
+    open_arena_screen(coordinator, "loadout")
+    open_arena_screen(coordinator, "close")
+    time.sleep(0.5)
+
+    # Use get_loadout_id() in a loop since it works reliably
+    print("  Renaming loadouts...")
+    renamed_count = 0
+    for i, name in enumerate(loadout_names):
+        loadout_id = get_loadout_id(coordinator, index=i)
+        if loadout_id:
+            rename_loadout(coordinator, loadout_id, name)
+            print(f"    Renamed loadout {loadout_id} to '{name}'")
+            renamed_count += 1
+        else:
+            break  # No more loadouts at this index
+    if renamed_count == 0:
+        print("  Warning: Could not rename any loadouts")
+    else:
+        print(f"  Renamed {renamed_count} loadouts")
 
     # ====================
     # Main Menu Screenshot
