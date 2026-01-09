@@ -268,7 +268,8 @@ public class ArenaRepository {
     private String serializeDeck(List<AbstractCard> deck) {
         List<CardData> cards = new ArrayList<>();
         for (AbstractCard card : deck) {
-            cards.add(new CardData(card.cardID, card.timesUpgraded));
+            cards.add(new CardData(card.cardID, card.timesUpgraded,
+                card.inBottleFlame, card.inBottleLightning, card.inBottleTornado));
         }
         return gson.toJson(cards);
     }
@@ -297,10 +298,27 @@ public class ArenaRepository {
     public static class CardData {
         public String id;
         public int upgrades;
+        // Bottle flags - which bottle relic this card is in (if any)
+        public boolean inBottleFlame;
+        public boolean inBottleLightning;
+        public boolean inBottleTornado;
+
+        public CardData() {} // For Gson
 
         public CardData(String id, int upgrades) {
             this.id = id;
             this.upgrades = upgrades;
+            this.inBottleFlame = false;
+            this.inBottleLightning = false;
+            this.inBottleTornado = false;
+        }
+
+        public CardData(String id, int upgrades, boolean inBottleFlame, boolean inBottleLightning, boolean inBottleTornado) {
+            this.id = id;
+            this.upgrades = upgrades;
+            this.inBottleFlame = inBottleFlame;
+            this.inBottleLightning = inBottleLightning;
+            this.inBottleTornado = inBottleTornado;
         }
     }
 

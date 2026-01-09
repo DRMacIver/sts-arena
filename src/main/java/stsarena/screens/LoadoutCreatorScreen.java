@@ -122,6 +122,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
     private List<AbstractRelic> selectedRelics;
     private List<AbstractPotion> selectedPotions;
     private Hitbox[] deckCardUpgradeHitboxes;
+    private Hitbox[] deckCardBottleHitboxes;
     private Hitbox[] deckCardRemoveHitboxes;
     private Hitbox[] relicRemoveHitboxes;
     private Hitbox[] potionRemoveHitboxes;
@@ -675,9 +676,11 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
     private void refreshSelectedHitboxes() {
         // Deck card hitboxes
         deckCardUpgradeHitboxes = new Hitbox[deckCards.size()];
+        deckCardBottleHitboxes = new Hitbox[deckCards.size()];
         deckCardRemoveHitboxes = new Hitbox[deckCards.size()];
         for (int i = 0; i < deckCards.size(); i++) {
             deckCardUpgradeHitboxes[i] = new Hitbox(SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
+            deckCardBottleHitboxes[i] = new Hitbox(SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
             deckCardRemoveHitboxes[i] = new Hitbox(SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
         }
 
@@ -1085,7 +1088,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
             row++;
 
             if (cardY > LIST_START_Y - LIST_HEIGHT - ROW_HEIGHT && cardY <= LIST_START_Y) {
-                float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 70.0f * Settings.scale;
+                float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 100.0f * Settings.scale;
 
                 // Upgrade button
                 if (i < deckCardUpgradeHitboxes.length) {
@@ -1097,9 +1100,19 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
                     }
                 }
 
+                // Bottle button (only if eligible and bottle relic is present)
+                if (i < deckCardBottleHitboxes.length) {
+                    deckCardBottleHitboxes[i].move(buttonX + 35.0f * Settings.scale, cardY - BUTTON_HEIGHT / 2.0f);
+                    deckCardBottleHitboxes[i].update();
+                    if (deckCardBottleHitboxes[i].hovered && InputHelper.justClickedLeft) {
+                        toggleBottle(i);
+                        InputHelper.justClickedLeft = false;
+                    }
+                }
+
                 // Remove button
                 if (i < deckCardRemoveHitboxes.length) {
-                    deckCardRemoveHitboxes[i].move(buttonX + 35.0f * Settings.scale, cardY - BUTTON_HEIGHT / 2.0f);
+                    deckCardRemoveHitboxes[i].move(buttonX + 70.0f * Settings.scale, cardY - BUTTON_HEIGHT / 2.0f);
                     deckCardRemoveHitboxes[i].update();
                     if (deckCardRemoveHitboxes[i].hovered && InputHelper.justClickedLeft) {
                         removeCardFromDeck(i);
@@ -1402,6 +1415,73 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
                 dc.upgraded = !dc.upgraded;
             }
         }
+    }
+
+    /**
+     * Toggle bottle status for a card. Cycles through available bottle options.
+     */
+    private void toggleBottle(int index) {
+        if (index < 0 || index >= deckCards.size()) return;
+
+        DeckCard dc = deckCards.get(index);
+        AbstractCard card = dc.card;
+
+        // Check which bottle relics are present
+        boolean hasFlame = hasRelic("Bottled Flame");
+        boolean hasLightning = hasRelic("Bottled Lightning");
+        boolean hasTornado = hasRelic("Bottled Tornado");
+
+        // Check eligibility for each bottle type
+        boolean canFlame = hasFlame && card.type == AbstractCard.CardType.ATTACK && card.rarity != AbstractCard.CardRarity.BASIC;
+        boolean canLightning = hasLightning && card.type == AbstractCard.CardType.SKILL && card.rarity != AbstractCard.CardRarity.BASIC;
+        boolean canTornado = hasTornado && card.type == AbstractCard.CardType.POWER;
+
+        // Current state
+        boolean isInFlame = card.inBottleFlame;
+        boolean isInLightning = card.inBottleLightning;
+        boolean isInTornado = card.inBottleTornado;
+        boolean isInAny = isInFlame || isInLightning || isInTornado;
+
+        // Toggle logic: if in a bottle, remove from it; if not, add to first available bottle
+        if (isInAny) {
+            // Remove from bottle
+            card.inBottleFlame = false;
+            card.inBottleLightning = false;
+            card.inBottleTornado = false;
+        } else {
+            // Add to first available bottle (based on card type)
+            if (canFlame) {
+                // Clear any other card in Flame bottle
+                for (DeckCard other : deckCards) {
+                    other.card.inBottleFlame = false;
+                }
+                card.inBottleFlame = true;
+            } else if (canLightning) {
+                // Clear any other card in Lightning bottle
+                for (DeckCard other : deckCards) {
+                    other.card.inBottleLightning = false;
+                }
+                card.inBottleLightning = true;
+            } else if (canTornado) {
+                // Clear any other card in Tornado bottle
+                for (DeckCard other : deckCards) {
+                    other.card.inBottleTornado = false;
+                }
+                card.inBottleTornado = true;
+            }
+        }
+    }
+
+    /**
+     * Check if a relic is in the selected relics list.
+     */
+    private boolean hasRelic(String relicId) {
+        for (AbstractRelic relic : selectedRelics) {
+            if (relicId.equals(relic.relicId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void addRelic(AbstractRelic relic) {
@@ -2075,12 +2155,43 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
             RIGHT_COLUMN_X - rowWidth / 2.0f, cardY - BUTTON_HEIGHT,
             rowWidth, BUTTON_HEIGHT);
 
+        // Bottle indicator prefix
+        String bottlePrefix = "";
+        Color bottleColor = null;
+        if (card.inBottleFlame) {
+            bottlePrefix = "[F] ";
+            bottleColor = new Color(1.0f, 0.5f, 0.3f, 1.0f);  // Orange
+        } else if (card.inBottleLightning) {
+            bottlePrefix = "[L] ";
+            bottleColor = new Color(0.3f, 0.6f, 1.0f, 1.0f);  // Blue
+        } else if (card.inBottleTornado) {
+            bottlePrefix = "[T] ";
+            bottleColor = new Color(0.5f, 1.0f, 0.5f, 1.0f);  // Green
+        }
+
         String name = card.name + (dc.upgraded ? "+" : "");
         Color textColor = dc.upgraded ? Settings.GREEN_TEXT_COLOR : getCardTypeColor(card.type);
+
+        float textX = RIGHT_COLUMN_X - rowWidth / 2.0f + 8.0f * Settings.scale;
+        if (!bottlePrefix.isEmpty()) {
+            // Render bottle indicator
+            FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
+                bottlePrefix,
+                textX, cardY - 4.0f * Settings.scale, bottleColor);
+            textX += FontHelper.getSmartWidth(FontHelper.cardDescFont_N, bottlePrefix, 1000, 0);
+        }
         FontHelper.renderFontLeftTopAligned(sb, FontHelper.cardDescFont_N,
-            name,
-            RIGHT_COLUMN_X - rowWidth / 2.0f + 8.0f * Settings.scale,
-            cardY - 4.0f * Settings.scale, textColor);
+            name, textX, cardY - 4.0f * Settings.scale, textColor);
+
+        // Check bottle eligibility
+        boolean hasFlame = hasRelic("Bottled Flame");
+        boolean hasLightning = hasRelic("Bottled Lightning");
+        boolean hasTornado = hasRelic("Bottled Tornado");
+        boolean canFlame = hasFlame && card.type == AbstractCard.CardType.ATTACK && card.rarity != AbstractCard.CardRarity.BASIC;
+        boolean canLightning = hasLightning && card.type == AbstractCard.CardType.SKILL && card.rarity != AbstractCard.CardRarity.BASIC;
+        boolean canTornado = hasTornado && card.type == AbstractCard.CardType.POWER;
+        boolean canBottle = canFlame || canLightning || canTornado;
+        boolean isBottled = card.inBottleFlame || card.inBottleLightning || card.inBottleTornado;
 
         // Upgrade button
         boolean upgradeHovered = index < deckCardUpgradeHitboxes.length && deckCardUpgradeHitboxes[index].hovered;
@@ -2089,7 +2200,7 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         if (!canUpgrade && !dc.upgraded) {
             upgradeBg = new Color(0.2f, 0.2f, 0.2f, 0.3f);
         }
-        float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 70.0f * Settings.scale;
+        float buttonX = RIGHT_COLUMN_X + rowWidth / 2.0f - 100.0f * Settings.scale;
         sb.setColor(upgradeBg);
         sb.draw(ImageMaster.WHITE_SQUARE_IMG, buttonX - SMALL_BUTTON_WIDTH / 2.0f, cardY - BUTTON_HEIGHT, SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
         FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
@@ -2097,10 +2208,35 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
             buttonX, cardY - BUTTON_HEIGHT / 2.0f,
             dc.upgraded ? Settings.GREEN_TEXT_COLOR : Settings.CREAM_COLOR);
 
+        // Bottle button (only show if card can be bottled or is already bottled)
+        float bottleX = buttonX + 35.0f * Settings.scale;
+        if (canBottle || isBottled) {
+            boolean bottleHovered = index < deckCardBottleHitboxes.length && deckCardBottleHitboxes[index].hovered;
+            Color bottleBg;
+            if (isBottled) {
+                bottleBg = bottleHovered ? new Color(0.5f, 0.4f, 0.2f, 0.9f) : new Color(0.35f, 0.28f, 0.14f, 0.8f);
+            } else {
+                bottleBg = bottleHovered ? new Color(0.3f, 0.3f, 0.4f, 0.9f) : new Color(0.18f, 0.18f, 0.25f, 0.6f);
+            }
+            sb.setColor(bottleBg);
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, bottleX - SMALL_BUTTON_WIDTH / 2.0f, cardY - BUTTON_HEIGHT, SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
+
+            String bottleLabel = "B";
+            Color bottleLabelColor = isBottled ? Settings.GOLD_COLOR : Settings.CREAM_COLOR;
+            FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+                bottleLabel, bottleX, cardY - BUTTON_HEIGHT / 2.0f, bottleLabelColor);
+        } else {
+            // Render disabled bottle button
+            sb.setColor(new Color(0.15f, 0.15f, 0.15f, 0.3f));
+            sb.draw(ImageMaster.WHITE_SQUARE_IMG, bottleX - SMALL_BUTTON_WIDTH / 2.0f, cardY - BUTTON_HEIGHT, SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
+            FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
+                "B", bottleX, cardY - BUTTON_HEIGHT / 2.0f, new Color(0.4f, 0.4f, 0.4f, 0.5f));
+        }
+
         // Remove button
         boolean removeHovered = index < deckCardRemoveHitboxes.length && deckCardRemoveHitboxes[index].hovered;
         Color removeBg = removeHovered ? new Color(0.4f, 0.2f, 0.2f, 0.9f) : new Color(0.2f, 0.1f, 0.1f, 0.6f);
-        float removeX = buttonX + 35.0f * Settings.scale;
+        float removeX = buttonX + 70.0f * Settings.scale;
         sb.setColor(removeBg);
         sb.draw(ImageMaster.WHITE_SQUARE_IMG, removeX - SMALL_BUTTON_WIDTH / 2.0f, cardY - BUTTON_HEIGHT, SMALL_BUTTON_WIDTH, BUTTON_HEIGHT);
         FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
