@@ -25,6 +25,8 @@ RUN apt-get update && apt-get install -y \
     libopenal-dev \
     # Python for acceptance tests
     python3 \
+    # rsync for copying config files in postStartCommand
+    rsync \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for Python package management (as vscode user)
