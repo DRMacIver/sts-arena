@@ -237,10 +237,10 @@ def navigate_to_combat(coordinator, timeout=60):
     return False
 
 
-def get_loadout_id(coordinator, index=0):
-    """Get the ID of a loadout by its index in the list.
+def get_loadout_list(coordinator):
+    """Get the list of all loadouts with their details.
 
-    Returns the loadout ID, or None if not found.
+    Returns a list of loadout dicts, or empty list if failed.
     """
     import json
 
@@ -256,12 +256,21 @@ def get_loadout_id(coordinator, index=0):
     # Parse the loadout list from the message
     if coordinator.last_message:
         try:
-            loadouts = json.loads(coordinator.last_message)
-            if loadouts and len(loadouts) > index:
-                return loadouts[index].get("id")
+            return json.loads(coordinator.last_message)
         except json.JSONDecodeError:
             print(f"  Warning: Could not parse loadout list: {coordinator.last_message}")
 
+    return []
+
+
+def get_loadout_id(coordinator, index=0):
+    """Get the ID of a loadout by its index in the list.
+
+    Returns the loadout ID, or None if not found.
+    """
+    loadouts = get_loadout_list(coordinator)
+    if loadouts and len(loadouts) > index:
+        return loadouts[index].get("id")
     return None
 
 
@@ -398,14 +407,13 @@ def test_generate_documentation_screenshots(at_main_menu):
     # ====================
     print("\n[Setup] Creating loadouts with fight history...")
 
-    # Entertaining loadout names
-    loadout_names = [
-        "Angry Ironclad",
-        "Sneaky Shiv Build",
-        "Orb Goes Brrr",
-        "Calm Before Storm",
-        "Strike Deck Enjoyer"
-    ]
+    # Character-specific loadout names
+    character_names = {
+        "IRONCLAD": ["Angry Ironclad", "Strength Stacker", "Exhaust Engine"],
+        "THE_SILENT": ["Sneaky Shiv Build", "Poison Master", "Discard Demon"],
+        "DEFECT": ["Orb Goes Brrr", "Focus Fanatic", "Claw Machine"],
+        "WATCHER": ["Calm Before Storm", "Stance Dancer", "Divinity Seeker"],
+    }
 
     # Fight sequence: interleave wins and losses for more realistic history
     # Format: (character, encounter, win=True/lose=False)
@@ -464,17 +472,25 @@ def test_generate_documentation_screenshots(at_main_menu):
     open_arena_screen(coordinator, "close")
     time.sleep(0.5)
 
-    # Use get_loadout_id() in a loop since it works reliably
+    # Rename loadouts based on their character class
     print("  Renaming loadouts...")
+    loadouts = get_loadout_list(coordinator)
     renamed_count = 0
-    for i, name in enumerate(loadout_names):
-        loadout_id = get_loadout_id(coordinator, index=i)
-        if loadout_id:
+    name_counters = {char: 0 for char in character_names}  # Track which name to use per character
+
+    for loadout in loadouts[:10]:  # Limit to first 10
+        loadout_id = loadout.get("id")
+        char_class = loadout.get("characterClass")
+        if loadout_id and char_class and char_class in character_names:
+            names = character_names[char_class]
+            name_index = name_counters[char_class] % len(names)
+            name = names[name_index]
+            name_counters[char_class] += 1
+
             rename_loadout(coordinator, loadout_id, name)
-            print(f"    Renamed loadout {loadout_id} to '{name}'")
+            print(f"    Renamed {char_class} loadout {loadout_id} to '{name}'")
             renamed_count += 1
-        else:
-            break  # No more loadouts at this index
+
     if renamed_count == 0:
         print("  Warning: Could not rename any loadouts")
     else:
