@@ -1,6 +1,7 @@
 # STS Arena
 
-Practice any fight in Slay the Spire. Build the perfect deck, then prove it works against every enemy in the game.
+If you find yourself asking "Does this deck beat Gremlin Nob?", why not just check?
+Practice fights in Slay the Spire to improve your tactical play and get a better sense of the strength of different decks. Try your current deck against different fights, experiment with modifications, and use the arena as a training ground to get better at the game proper by training your skill at pilotng different decks. 
 
 ![Loadout Selection](docs/screenshots/loadout_select.png)
 
@@ -8,7 +9,7 @@ Practice any fight in Slay the Spire. Build the perfect deck, then prove it work
 
 STS Arena adds an **Arena Mode** to Slay the Spire where you can fight any encounter with any loadout. Use it to:
 
-- **Practice boss fights** before you get there in a real run
+- **Practice elite fights** before you get there in a real run
 - **Test deck ideas** with random or custom loadouts
 - **Replay your favorite builds** from past runs against new challenges
 - **Challenge yourself** to beat every encounter with one loadout
