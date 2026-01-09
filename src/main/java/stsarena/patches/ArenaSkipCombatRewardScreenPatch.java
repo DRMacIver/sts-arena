@@ -21,12 +21,31 @@ public class ArenaSkipCombatRewardScreenPatch {
 
     /**
      * Intercept the combat reward screen opening and skip it in arena mode.
+     * For imperfect victories (where player took damage), we don't auto-return
+     * so the VictoryScreen can show retry/modify options.
      */
     @SpirePatch(cls = "com.megacrit.cardcrawl.screens.CombatRewardScreen", method = "open", paramtypez = {})
     public static class SkipCombatRewardScreenOpen {
         @SpirePrefixPatch
         public static SpireReturn<Void> Prefix(CombatRewardScreen __instance) {
             if (ArenaRunner.isArenaRun()) {
+                // Check if this is an imperfect victory (player took damage)
+                boolean imperfect = false;
+                if (AbstractDungeon.player != null && ArenaRunner.getCurrentLoadout() != null) {
+                    int startHp = ArenaRunner.getCurrentLoadout().currentHp;
+                    int endHp = AbstractDungeon.player.currentHealth;
+                    imperfect = endHp < startHp;
+                }
+
+                if (imperfect) {
+                    // For imperfect victories, skip rewards but DON'T return to menu
+                    // The VictoryScreen will show our retry/modify buttons
+                    STSArena.logger.info("ARENA: Skipping CombatRewardScreen for imperfect victory - VictoryScreen will show buttons");
+                    __instance.rewards.clear();
+                    return SpireReturn.Return(null);
+                }
+
+                // For perfect victories, auto-return to menu
                 STSArena.logger.info("ARENA: Skipping CombatRewardScreen.open() - triggering return to menu");
 
                 // Clear the rewards to prevent any processing
