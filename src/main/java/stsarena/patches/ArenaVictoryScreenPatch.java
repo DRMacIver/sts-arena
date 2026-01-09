@@ -235,12 +235,12 @@ public class ArenaVictoryScreenPatch {
                 textColor = Settings.CREAM_COLOR;
             }
 
-            // Draw button background with slightly larger scale for more padding
+            // Draw button background
             sb.setColor(buttonColor);
-            float btnScale = Settings.scale * 0.55f;
+            float btnScale = Settings.scale;
             sb.draw(ImageMaster.DYNAMIC_BTN_IMG2,
                 x - 256.0f * btnScale, y - 256.0f * btnScale,
-                256.0f * btnScale, 256.0f * btnScale,
+                256.0f, 256.0f,  // origin in source coordinates (center of 512x512 image)
                 512.0f, 512.0f,
                 btnScale, btnScale,
                 0.0f,

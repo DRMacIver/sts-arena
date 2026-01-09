@@ -649,13 +649,29 @@ def test_generate_documentation_screenshots(at_main_menu):
     # ====================
     # Death screen in normal run (with Practice in Arena button)
     # ====================
-    # NOTE: This screenshot is skipped because:
-    # 1. The pause menu doesn't support CommunicationMod's proceed/cancel commands
-    # 2. The key ESCAPE command doesn't reliably signal ready
-    # 3. The main arena screenshots (victory, defeat, pause menu) are captured above
-    # This can be added later with a different approach (e.g., using click command)
-    print("\n[11/11] Death screen with Practice in Arena button... [SKIPPED]")
-    print("  (Normal run death screenshot requires manual capture)")
+    print("\n[11/11] Death screen with Practice in Arena button...")
+    # Close pause menu by pressing ESCAPE again
+    coordinator.game_is_ready = False
+    coordinator.send_message("key ESCAPE")
+    wait_for_ready(coordinator)
+    time.sleep(1.0)
+
+    # Set up arena retry data so the "Try Again in Arena Mode" button appears
+    # We use loadout 1 and the current encounter
+    coordinator.game_is_ready = False
+    coordinator.send_message("set_retry_data 1 Cultist")
+    wait_for_ready(coordinator)
+
+    # Lose the fight to show death screen
+    coordinator.game_is_ready = False
+    coordinator.send_message("lose")
+    wait_for_ready(coordinator)
+
+    # Wait for death screen to appear
+    print("  Waiting for death screen to appear...")
+    time.sleep(2.0)  # Let death screen animations complete
+    wait_for_visual_stable(coordinator)
+    take_screenshot(coordinator, "normal_run_death")
 
     # ====================
     # Cleanup

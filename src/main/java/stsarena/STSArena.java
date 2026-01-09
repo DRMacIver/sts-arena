@@ -22,6 +22,7 @@ import stsarena.communication.ArenaScreenCommand;
 import stsarena.communication.CursorHideCommand;
 import stsarena.communication.LoseCommand;
 import stsarena.communication.ScreenshotModeCommand;
+import stsarena.communication.SetRetryDataCommand;
 import stsarena.communication.WinCommand;
 import stsarena.data.ArenaDatabase;
 import stsarena.data.ArenaRepository;
@@ -96,6 +97,7 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
             CursorHideCommand.register();
             LoseCommand.register();
             ScreenshotModeCommand.register();
+            SetRetryDataCommand.register();
             WinCommand.register();
             logger.info("CommunicationMod detected - commands registered");
         } catch (ClassNotFoundException e) {

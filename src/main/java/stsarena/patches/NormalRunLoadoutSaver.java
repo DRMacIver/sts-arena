@@ -448,6 +448,17 @@ public class NormalRunLoadoutSaver {
     }
 
     /**
+     * Set the retry data directly. Used for testing screenshots.
+     * @param loadoutId The loadout ID to use for retry
+     * @param encounterId The encounter ID to use for retry
+     */
+    public static void setRetryData(long loadoutId, String encounterId) {
+        lastSavedLoadoutId = loadoutId;
+        lastSavedEncounterId = encounterId;
+        STSArena.logger.info("Set retry data for testing: loadoutId=" + loadoutId + ", encounterId=" + encounterId);
+    }
+
+    /**
      * Get the current combat encounter ID (captured when entering the fight).
      * Returns null if not currently in combat or encounter wasn't captured.
      */
