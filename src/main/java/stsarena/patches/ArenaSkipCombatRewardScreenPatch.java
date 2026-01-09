@@ -30,14 +30,6 @@ public class ArenaSkipCombatRewardScreenPatch {
         @SpirePrefixPatch
         public static SpireReturn<Void> Prefix(CombatRewardScreen __instance) {
             if (ArenaRunner.isArenaRun()) {
-                // In screenshot mode, skip rewards but DON'T return to menu
-                // This allows victory screens to be captured for documentation
-                if (STSArena.isScreenshotMode()) {
-                    STSArena.logger.info("ARENA: Screenshot mode - skipping CombatRewardScreen without auto-return");
-                    __instance.rewards.clear();
-                    return SpireReturn.Return(null);
-                }
-
                 // Check if this is an imperfect victory (player took damage)
                 boolean imperfect = false;
                 if (AbstractDungeon.player != null && ArenaRunner.getCurrentLoadout() != null) {
@@ -46,22 +38,12 @@ public class ArenaSkipCombatRewardScreenPatch {
                     imperfect = endHp < startHp;
                 }
 
-                if (imperfect) {
-                    // For imperfect victories, skip rewards but DON'T return to menu
-                    // The VictoryScreen will show our retry/modify buttons
-                    STSArena.logger.info("ARENA: Skipping CombatRewardScreen for imperfect victory - VictoryScreen will show buttons");
-                    __instance.rewards.clear();
-                    return SpireReturn.Return(null);
-                }
-
-                // For perfect victories, auto-return to menu
-                STSArena.logger.info("ARENA: Skipping CombatRewardScreen.open() - triggering return to menu");
-
                 // Clear the rewards to prevent any processing
                 __instance.rewards.clear();
 
-                // Force return to main menu
-                triggerReturnToMainMenu();
+                // Open our custom results screen
+                STSArena.logger.info("ARENA: Skipping CombatRewardScreen.open() - opening ArenaResultsScreen (imperfect=" + imperfect + ")");
+                STSArena.openResultsScreenVictory(imperfect);
 
                 return SpireReturn.Return(null);
             }

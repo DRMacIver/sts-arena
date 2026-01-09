@@ -31,6 +31,7 @@ import stsarena.localization.LocalizedStrings;
 import stsarena.screens.ArenaEncounterSelectScreen;
 import stsarena.screens.ArenaHistoryScreen;
 import stsarena.screens.ArenaLoadoutSelectScreen;
+import stsarena.screens.ArenaResultsScreen;
 import stsarena.screens.ArenaStatsScreen;
 import stsarena.screens.LoadoutCreatorScreen;
 
@@ -55,6 +56,7 @@ public class STSArena implements EditStringsSubscriber, PostInitializeSubscriber
     public static ArenaLoadoutSelectScreen loadoutSelectScreen;
     public static LoadoutCreatorScreen loadoutCreatorScreen;
     public static ArenaStatsScreen statsScreen;
+    public static ArenaResultsScreen resultsScreen;
 
     // Flag to trigger fight start on next update (gives game time to initialize)
     private static boolean pendingFightStart = false;
@@ -135,6 +137,7 @@ public class STSArena implements EditStringsSubscriber, PostInitializeSubscriber
         loadoutSelectScreen = new ArenaLoadoutSelectScreen();
         loadoutCreatorScreen = new LoadoutCreatorScreen();
         statsScreen = new ArenaStatsScreen();
+        resultsScreen = new ArenaResultsScreen();
 
         // Arena Mode button is added via patches/MainMenuArenaPatch
         // Note: CommunicationMod commands are registered in constructor
@@ -196,6 +199,12 @@ public class STSArena implements EditStringsSubscriber, PostInitializeSubscriber
         if (statsScreen != null && statsScreen.isOpen) {
             statsScreen.update();
             // Consume remaining input to block main menu
+            InputHelper.justClickedLeft = false;
+            InputHelper.justClickedRight = false;
+        }
+        // Results screen is updated here but can show during combat
+        if (resultsScreen != null && resultsScreen.isOpen) {
+            resultsScreen.update();
             InputHelper.justClickedLeft = false;
             InputHelper.justClickedRight = false;
         }
@@ -275,6 +284,10 @@ public class STSArena implements EditStringsSubscriber, PostInitializeSubscriber
         }
         if (statsScreen != null && statsScreen.isOpen) {
             statsScreen.render(sb);
+        }
+        // Results screen renders on top of everything (including combat room)
+        if (resultsScreen != null && resultsScreen.isOpen) {
+            resultsScreen.render(sb);
         }
     }
 
@@ -423,6 +436,35 @@ public class STSArena implements EditStringsSubscriber, PostInitializeSubscriber
                (encounterSelectScreen != null && encounterSelectScreen.isOpen) ||
                (loadoutSelectScreen != null && loadoutSelectScreen.isOpen) ||
                (loadoutCreatorScreen != null && loadoutCreatorScreen.isOpen) ||
-               (statsScreen != null && statsScreen.isOpen);
+               (statsScreen != null && statsScreen.isOpen) ||
+               (resultsScreen != null && resultsScreen.isOpen);
+    }
+
+    /**
+     * Open the arena results screen for a victory.
+     * @param imperfect Whether this was an imperfect victory (player took damage)
+     */
+    public static void openResultsScreenVictory(boolean imperfect) {
+        if (resultsScreen != null) {
+            resultsScreen.openVictory(imperfect);
+        }
+    }
+
+    /**
+     * Open the arena results screen for a defeat.
+     */
+    public static void openResultsScreenDefeat() {
+        if (resultsScreen != null) {
+            resultsScreen.openDefeat();
+        }
+    }
+
+    /**
+     * Close the arena results screen.
+     */
+    public static void closeResultsScreen() {
+        if (resultsScreen != null) {
+            resultsScreen.close();
+        }
     }
 }

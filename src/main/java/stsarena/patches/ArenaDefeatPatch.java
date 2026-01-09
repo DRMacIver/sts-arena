@@ -20,19 +20,11 @@ public class ArenaDefeatPatch {
     @SpirePostfixPatch
     public static void Postfix(DeathScreen __instance, MonsterGroup m) {
         if (ArenaRunner.isArenaRun()) {
-            STSArena.logger.info("ARENA: DeathScreen created - recording defeat");
+            STSArena.logger.info("ARENA: DeathScreen created - recording defeat and opening results screen");
             ArenaRunner.recordDefeat();
 
-            // In screenshot mode, don't auto-return - let the death screen be captured
-            if (STSArena.isScreenshotMode()) {
-                STSArena.logger.info("ARENA: Screenshot mode - skipping auto-return from DeathScreen");
-                return;
-            }
-
-            // Trigger automatic return to main menu after a brief delay
-            // This is set by recordDefeat() via STSArena.setReturnToArenaOnMainMenu()
-            // Force immediate return for test consistency
-            triggerReturnToMainMenu();
+            // Open our custom results screen for defeat
+            STSArena.openResultsScreenDefeat();
         }
     }
 

@@ -39,19 +39,25 @@ public class ArenaDeathScreenButtonsPatch {
     private static boolean tryAgainClickStarted = false;
 
     /**
-     * Skip death screen update entirely when startOver is triggered.
-     * This allows the game to process the transition to main menu.
+     * Skip death screen update when our results screen is shown or startOver is triggered.
+     * This allows our custom results screen to take over.
      */
     @SpirePatch(cls = "com.megacrit.cardcrawl.screens.DeathScreen", method = "update")
     public static class SkipUpdateOnStartOver {
         @SpirePrefixPatch
         public static SpireReturn<Void> Prefix(DeathScreen __instance) {
-            // If startOver was triggered (e.g., by lose command), skip the death screen
-            // and let the game process the transition to main menu
-            if (ArenaRunner.isArenaRun() && CardCrawlGame.startOver) {
-                buttonsVisible = false;
-                STSArena.logger.info("ARENA: Skipping death screen update - startOver is true");
-                return SpireReturn.Return(null);
+            if (ArenaRunner.isArenaRun()) {
+                // If our results screen is open, skip the death screen update
+                if (STSArena.resultsScreen != null && STSArena.resultsScreen.isOpen) {
+                    buttonsVisible = false;
+                    return SpireReturn.Return(null);
+                }
+                // If startOver was triggered, skip the death screen
+                if (CardCrawlGame.startOver) {
+                    buttonsVisible = false;
+                    STSArena.logger.info("ARENA: Skipping death screen update - startOver is true");
+                    return SpireReturn.Return(null);
+                }
             }
             return SpireReturn.Continue();
         }
@@ -159,15 +165,21 @@ public class ArenaDeathScreenButtonsPatch {
     }
 
     /**
-     * Skip death screen render when startOver is triggered.
+     * Skip death screen render when our results screen is shown or startOver is triggered.
      */
     @SpirePatch(cls = "com.megacrit.cardcrawl.screens.DeathScreen", method = "render")
     public static class SkipRenderOnStartOver {
         @SpirePrefixPatch
         public static SpireReturn<Void> Prefix(DeathScreen __instance, SpriteBatch sb) {
-            // If startOver was triggered, skip rendering the death screen entirely
-            if (ArenaRunner.isArenaRun() && CardCrawlGame.startOver) {
-                return SpireReturn.Return(null);
+            if (ArenaRunner.isArenaRun()) {
+                // If our results screen is open, skip the death screen render
+                if (STSArena.resultsScreen != null && STSArena.resultsScreen.isOpen) {
+                    return SpireReturn.Return(null);
+                }
+                // If startOver was triggered, skip rendering
+                if (CardCrawlGame.startOver) {
+                    return SpireReturn.Return(null);
+                }
             }
             return SpireReturn.Continue();
         }
