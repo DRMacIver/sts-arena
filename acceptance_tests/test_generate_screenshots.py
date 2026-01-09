@@ -655,15 +655,45 @@ def test_generate_documentation_screenshots(at_main_menu):
     coordinator.game_is_ready = False
     coordinator.send_message("screenshot_mode off")
     wait_for_ready(coordinator)
+    print("  screenshot_mode off completed")
+
+    # Check for any errors
+    if coordinator.last_error:
+        print(f"  WARNING: Error after screenshot_mode off: {coordinator.last_error}")
+        coordinator.last_error = None
 
     # ====================
     # Practice in Arena from Normal Run (Pause menu)
     # ====================
     print("\n[10/11] Pause menu with 'Practice in Arena' button...")
-    # Return to menu
+    # Return to menu - use longer timeout since arena_back may take time
+    print("  Sending arena_back command...")
     coordinator.game_is_ready = False
+    coordinator.last_error = None
     coordinator.send_message("arena_back")
-    wait_for_ready(coordinator)
+    try:
+        wait_for_ready(coordinator, timeout=30)
+    except Exception as e:
+        print(f"  ERROR: arena_back command failed: {e}")
+        if coordinator.last_error:
+            print(f"  last_error: {coordinator.last_error}")
+        # Try to get state to understand current situation
+        print("  Attempting to get current state...")
+        coordinator.game_is_ready = False
+        coordinator.send_message("state")
+        try:
+            wait_for_ready(coordinator, timeout=10)
+            print(f"  in_game: {coordinator.in_game}")
+            if coordinator.last_game_state:
+                print(f"  screen_type: {coordinator.last_game_state.screen_type}")
+        except:
+            print("  Could not get state")
+        raise
+
+    if coordinator.last_error:
+        print(f"  WARNING: Error from arena_back: {coordinator.last_error}")
+
+    print("  Waiting for main menu...")
     wait_for_main_menu(coordinator)
 
     # Get a loadout ID BEFORE starting the normal run (commands don't work well during runs)

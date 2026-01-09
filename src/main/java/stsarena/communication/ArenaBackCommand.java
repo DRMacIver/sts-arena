@@ -47,8 +47,9 @@ public class ArenaBackCommand implements CommandExecutor.CommandExtension {
         // 2. When in an arena run (to exit VictoryScreen/DeathScreen back to menu)
         boolean inDungeon = CommandExecutor.isInDungeon();
         boolean isArena = ArenaRunner.isArenaRun();
-        STSArena.logger.info("arena_back isAvailable check: inDungeon=" + inDungeon + ", isArenaRun=" + isArena);
-        return !inDungeon || isArena;
+        boolean result = !inDungeon || isArena;
+        STSArena.logger.info("arena_back isAvailable check: inDungeon=" + inDungeon + ", isArenaRun=" + isArena + " => " + result);
+        return result;
     }
 
     @Override

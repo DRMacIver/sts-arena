@@ -136,7 +136,25 @@ _output_pipe_path = os.environ.get("STS_GAME_OUTPUT_PIPE")
 
 if not _input_pipe_path or not _output_pipe_path:
     raise RuntimeError(
-        "STS_GAME_INPUT_PIPE and STS_GAME_OUTPUT_PIPE must be set"
+        "STS_GAME_INPUT_PIPE and STS_GAME_OUTPUT_PIPE must be set.\n"
+        "\n"
+        "These tests cannot be run directly with pytest. They must be run through\n"
+        "the acceptance test harness, which starts the game and sets up communication.\n"
+        "\n"
+        "To run the tests, use:\n"
+        "\n"
+        "    ./scripts/run-acceptance-tests.sh [pytest args...]\n"
+        "\n"
+        "Examples:\n"
+        "    ./scripts/run-acceptance-tests.sh                    # Run all tests\n"
+        "    ./scripts/run-acceptance-tests.sh -k test_basic      # Run specific tests\n"
+        "    ./scripts/run-acceptance-tests.sh test_generate_screenshots.py  # Run one file\n"
+        "\n"
+        "The script will:\n"
+        "  1. Build the mod\n"
+        "  2. Start the game with ModTheSpire in Xvfb\n"
+        "  3. Configure CommunicationMod to run the tests\n"
+        "  4. Wait for tests to complete\n"
     )
 
 # Open the named pipes
