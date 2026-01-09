@@ -394,7 +394,7 @@ def test_generate_documentation_screenshots(at_main_menu):
     print("  Loadouts cleared")
 
     # ====================
-    # Create 5 loadouts with 2-3 fights each for history/stats screenshots
+    # Create fight history with interleaved wins and losses
     # ====================
     print("\n[Setup] Creating loadouts with fight history...")
 
@@ -407,55 +407,59 @@ def test_generate_documentation_screenshots(at_main_menu):
         "Strike Deck Enjoyer"
     ]
 
-    # Loadout 1: Ironclad vs normal enemies
-    print("  Creating Ironclad loadout (3 fights)...")
-    create_loadout_with_fights(coordinator, "IRONCLAD",
-        ["Cultist", "JawWorm", "2Louse"])
+    # Fight sequence: interleave wins and losses for more realistic history
+    # Format: (character, encounter, win=True/lose=False)
+    fight_sequence = [
+        ("IRONCLAD", "Cultist", True),
+        ("THE_SILENT", "JawWorm", True),
+        ("IRONCLAD", "JawWorm", False),  # Loss
+        ("DEFECT", "Cultist", True),
+        ("WATCHER", "Cultist", True),
+        ("THE_SILENT", "Cultist", False),  # Loss
+        ("IRONCLAD", "2Louse", True),
+        ("DEFECT", "2Louse", True),
+        ("DEFECT", "JawWorm", False),  # Loss
+        ("WATCHER", "JawWorm", True),
+        ("IRONCLAD", "Cultist", True),
+        ("THE_SILENT", "2Louse", True),
+        ("IRONCLAD", "JawWorm", True),
+        ("DEFECT", "Cultist", False),  # Loss
+        ("WATCHER", "2Louse", True),
+    ]
 
-    # Loadout 2: Silent vs normal enemies
-    print("  Creating Silent loadout (2 fights)...")
-    create_loadout_with_fights(coordinator, "THE_SILENT",
-        ["Cultist", "JawWorm"])
+    wins = 0
+    losses = 0
+    for i, (character, encounter, is_win) in enumerate(fight_sequence):
+        action = "Fighting" if is_win else "Losing to"
+        print(f"    [{i+1}/{len(fight_sequence)}] {action} {encounter} as {character}...")
 
-    # Loadout 3: Defect vs normal enemies
-    print("  Creating Defect loadout (3 fights)...")
-    create_loadout_with_fights(coordinator, "DEFECT",
-        ["Cultist", "2Louse", "JawWorm"])
+        coordinator.game_is_ready = False
+        coordinator.send_message(f"arena {character} {encounter}")
+        wait_for_ready(coordinator)
+        wait_for_combat(coordinator)
+        time.sleep(0.3)
 
-    # Loadout 4: Watcher vs normal enemies
-    print("  Creating Watcher loadout (2 fights)...")
-    create_loadout_with_fights(coordinator, "WATCHER",
-        ["Cultist", "JawWorm"])
+        coordinator.game_is_ready = False
+        coordinator.send_message("win" if is_win else "lose")
+        wait_for_ready(coordinator)
+        wait_for_main_menu(coordinator)
 
-    # Loadout 5: Another Ironclad loadout (2 fights)
-    print("  Creating second Ironclad loadout (2 fights)...")
-    create_loadout_with_fights(coordinator, "IRONCLAD",
-        ["2Louse", "Cultist"])
+        coordinator.game_is_ready = False
+        coordinator.send_message("arena_back")
+        wait_for_ready(coordinator)
+        time.sleep(0.3)
 
-    print("  Created 5 loadouts with 12 total fights")
+        if is_win:
+            wins += 1
+        else:
+            losses += 1
 
-    # Add some losses to show in history/stats
-    print("  Adding some losses for variety...")
-    add_loss_to_history(coordinator, "IRONCLAD", "Cultist")
-    add_loss_to_history(coordinator, "THE_SILENT", "JawWorm")
-    add_loss_to_history(coordinator, "DEFECT", "2Louse")
-    print("  Added 3 losses")
+    print(f"  Created fight history: {wins} wins, {losses} losses")
 
     # Rename loadouts to entertaining names
-    print("  Renaming loadouts...")
-    import json
-    coordinator.game_is_ready = False
-    coordinator.send_message("arena-loadout list")
-    wait_for_ready(coordinator)
-    if coordinator.last_message:
-        try:
-            loadouts = json.loads(coordinator.last_message)
-            for i, loadout in enumerate(loadouts):
-                if i < len(loadout_names):
-                    rename_loadout(coordinator, loadout["id"], loadout_names[i])
-                    print(f"    Renamed loadout {loadout['id']} to '{loadout_names[i]}'")
-        except json.JSONDecodeError:
-            print("  Warning: Could not parse loadout list for renaming")
+    # Note: We skip renaming for now since the loadout list retrieval has timing issues
+    # The loadouts will have auto-generated names, which is acceptable for screenshots
+    print("  Skipping loadout renaming (loadouts use auto-generated names)")
 
     # ====================
     # Main Menu Screenshot
@@ -489,7 +493,12 @@ def test_generate_documentation_screenshots(at_main_menu):
     # Loadout Creator Screen (Cards tab)
     # ====================
     print("\n[3/11] Loadout creator - cards tab...")
-    open_arena_screen(coordinator, "creator")
+    # Open the creator with an existing loadout to show a customized deck
+    loadout_for_creator = get_loadout_id(coordinator, index=0)
+    if loadout_for_creator:
+        open_arena_screen(coordinator, f"creator {loadout_for_creator}")
+    else:
+        open_arena_screen(coordinator, "creator")
     wait_for_visual_stable(coordinator)
     take_screenshot(coordinator, "loadout_creator_cards")
 
@@ -622,6 +631,13 @@ def test_generate_documentation_screenshots(at_main_menu):
     wait_for_ready(coordinator)
     wait_for_main_menu(coordinator)
 
+    # Get a loadout ID BEFORE starting the normal run (commands don't work well during runs)
+    saved_loadout_id = get_loadout_id(coordinator, index=0)
+    if saved_loadout_id:
+        print(f"  Saved loadout ID {saved_loadout_id} for later use")
+    else:
+        print("  Warning: Could not get loadout ID before starting normal run")
+
     # Start a normal run
     coordinator.game_is_ready = False
     coordinator.send_message("start IRONCLAD 0")
@@ -656,25 +672,30 @@ def test_generate_documentation_screenshots(at_main_menu):
     wait_for_ready(coordinator)
     time.sleep(1.0)
 
-    # Set up arena retry data so the "Try Again in Arena Mode" button appears
-    # Get an actual loadout ID from the loadouts we created earlier
-    actual_loadout_id = get_loadout_id(coordinator, index=0)
-    if actual_loadout_id:
-        print(f"  Setting retry data with loadout {actual_loadout_id}")
-        coordinator.game_is_ready = False
-        coordinator.send_message(f"set_retry_data {actual_loadout_id} Cultist")
-        wait_for_ready(coordinator)
-    else:
-        print("  Warning: Could not get loadout ID for retry data")
-
-    # Lose the fight to show death screen
+    # Lose the fight to show death screen first
+    # IMPORTANT: We must lose BEFORE setting retry data because the death screen
+    # construction triggers saveLoadoutOnDefeat() which would overwrite our values
     coordinator.game_is_ready = False
     coordinator.send_message("lose")
     wait_for_ready(coordinator)
 
     # Wait for death screen to appear
     print("  Waiting for death screen to appear...")
-    time.sleep(2.0)  # Let death screen animations complete
+    time.sleep(1.0)  # Give death screen time to initialize
+
+    # NOW set up arena retry data so the "Try Again in Arena Mode" button appears
+    # This must be done AFTER the death screen is created to avoid being overwritten
+    # Use the saved_loadout_id we got before starting the normal run
+    if saved_loadout_id:
+        print(f"  Setting retry data with loadout {saved_loadout_id}")
+        coordinator.game_is_ready = False
+        coordinator.send_message(f"set_retry_data {saved_loadout_id} Cultist")
+        wait_for_ready(coordinator)
+    else:
+        print("  Warning: No loadout ID available for retry data")
+
+    # Wait for the button to appear (needs a frame update)
+    time.sleep(1.0)
     wait_for_visual_stable(coordinator)
     take_screenshot(coordinator, "normal_run_death")
 

@@ -195,10 +195,11 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
         }
 
         // Combine remaining tokens for name (may have spaces)
+        // CommunicationMod lowercases all commands, so we title-case the name
         StringBuilder nameBuilder = new StringBuilder();
         for (int i = 3; i < tokens.length; i++) {
             if (i > 3) nameBuilder.append(" ");
-            nameBuilder.append(tokens[i]);
+            nameBuilder.append(toTitleCase(tokens[i]));
         }
         String newName = nameBuilder.toString();
 
@@ -306,5 +307,16 @@ public class ArenaLoadoutCommand implements CommandExecutor.CommandExtension {
         public String deckJson;
         public String relicsJson;
         public String potionsJson;
+    }
+
+    /**
+     * Convert a lowercased word to Title Case.
+     * CommunicationMod lowercases all commands, so we need to restore case for names.
+     */
+    private static String toTitleCase(String word) {
+        if (word == null || word.isEmpty()) {
+            return word;
+        }
+        return Character.toUpperCase(word.charAt(0)) + word.substring(1);
     }
 }

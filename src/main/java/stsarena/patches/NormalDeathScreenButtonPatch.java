@@ -44,9 +44,8 @@ public class NormalDeathScreenButtonPatch {
                 return;
             }
 
-            // Don't show if the run was abandoned
-            // CardCrawlGame.startOver is true when abandoning
-            if (ArenaPauseButtonPatch.isAbandoning || CardCrawlGame.startOver) {
+            // Don't show if the run was explicitly abandoned (not just died)
+            if (ArenaPauseButtonPatch.isAbandoning) {
                 buttonVisible = false;
                 return;
             }

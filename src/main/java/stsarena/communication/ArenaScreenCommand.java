@@ -88,6 +88,23 @@ public class ArenaScreenCommand implements CommandExecutor.CommandExtension {
 
             case "creator":
                 closeAllArenaScreens();
+                // Optional loadout ID to open creator with existing loadout
+                if (tokens.length >= 3) {
+                    try {
+                        long loadoutId = Long.parseLong(tokens[2]);
+                        ArenaRepository repo = getRepository();
+                        if (repo != null) {
+                            ArenaRepository.LoadoutRecord loadout = repo.getLoadoutById(loadoutId);
+                            if (loadout != null) {
+                                STSArena.openLoadoutCreatorWithLoadout(loadout);
+                                STSArena.logger.info("ARENA_SCREEN: Opened creator with loadout " + loadoutId);
+                                break;
+                            }
+                        }
+                    } catch (NumberFormatException e) {
+                        // Fall through to open without loadout
+                    }
+                }
                 STSArena.openLoadoutCreatorScreen();
                 STSArena.logger.info("ARENA_SCREEN: Opened loadout creator screen");
                 break;
@@ -119,6 +136,17 @@ public class ArenaScreenCommand implements CommandExecutor.CommandExtension {
         // Signal ready for next command and trigger a state response
         GameStateListener.signalReadyForCommand();
         CommunicationMod.publishOnGameStateChange();
+    }
+
+    /**
+     * Get the arena repository for database access.
+     */
+    private ArenaRepository getRepository() {
+        ArenaDatabase db = ArenaDatabase.getInstance();
+        if (db == null) {
+            return null;
+        }
+        return new ArenaRepository(db);
     }
 
     /**
