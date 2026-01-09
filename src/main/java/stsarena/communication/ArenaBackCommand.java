@@ -1,5 +1,7 @@
 package stsarena.communication;
 
+import com.megacrit.cardcrawl.core.CardCrawlGame;
+import com.megacrit.cardcrawl.core.Settings;
 import communicationmod.CommunicationMod;
 import communicationmod.CommandExecutor;
 import communicationmod.GameStateListener;
@@ -40,22 +42,53 @@ public class ArenaBackCommand implements CommandExecutor.CommandExtension {
 
     @Override
     public boolean isAvailable() {
-        // Command is available when not in a dungeon (at main menu area)
-        // and either arena screens are open or there's arena state to clean up
-        return !CommandExecutor.isInDungeon();
+        // Command is available:
+        // 1. When not in a dungeon (at main menu area), or
+        // 2. When in an arena run (to exit VictoryScreen/DeathScreen back to menu)
+        boolean inDungeon = CommandExecutor.isInDungeon();
+        boolean isArena = ArenaRunner.isArenaRun();
+        STSArena.logger.info("arena_back isAvailable check: inDungeon=" + inDungeon + ", isArenaRun=" + isArena);
+        return !inDungeon || isArena;
     }
 
     @Override
     public void execute(String[] tokens) throws InvalidCommandException {
         STSArena.logger.info("arena_back command: closing arena screens and cleaning up state");
 
-        // Close encounter select screen if open
+        // If we're in a dungeon (VictoryScreen, DeathScreen, etc.), trigger return to menu
+        if (CommandExecutor.isInDungeon()) {
+            STSArena.logger.info("arena_back: in dungeon, triggering startOver to return to menu");
+
+            // Clean up arena state
+            ArenaRunner.clearArenaRun();
+
+            // Clear trial/daily/endless flags
+            Settings.isTrial = false;
+            Settings.isDailyRun = false;
+            Settings.isEndless = false;
+
+            // Clear the return-to-arena flag so screens don't reopen
+            STSArena.clearReturnToArenaOnMainMenu();
+
+            // Trigger return to main menu
+            // Note: startOver() is async - the game will transition on next update.
+            // We signal ready immediately so the caller knows the command was processed,
+            // but they should still wait for in_game=false before proceeding.
+            CardCrawlGame.startOver();
+
+            // Signal that the command was processed (caller should wait for main menu separately)
+            GameStateListener.signalReadyForCommand();
+
+            STSArena.logger.info("arena_back command triggered startOver (async transition)");
+            return;
+        }
+
+        // At main menu - close any open arena screens
         if (STSArena.encounterSelectScreen != null && STSArena.encounterSelectScreen.isOpen) {
             STSArena.logger.info("arena_back: closing encounter select screen");
             STSArena.encounterSelectScreen.close();
         }
 
-        // Close loadout select screen if open
         if (STSArena.loadoutSelectScreen != null && STSArena.loadoutSelectScreen.isOpen) {
             STSArena.logger.info("arena_back: closing loadout select screen");
             STSArena.loadoutSelectScreen.close();
@@ -69,8 +102,6 @@ public class ArenaBackCommand implements CommandExecutor.CommandExtension {
         STSArena.clearReturnToArenaOnMainMenu();
 
         // Force a state update to be sent back to the caller
-        // Without this, no response would be sent since we're already at main menu
-        // and closing arena screens doesn't trigger a detectable state change
         GameStateListener.signalReadyForCommand();
         CommunicationMod.mustSendGameState = true;
 

@@ -4,7 +4,9 @@ import com.megacrit.cardcrawl.core.CardCrawlGame;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.powers.AbstractPower;
+import communicationmod.CommunicationMod;
 import communicationmod.CommandExecutor;
+import communicationmod.GameStateListener;
 import communicationmod.InvalidCommandException;
 import stsarena.STSArena;
 import stsarena.arena.ArenaRunner;
@@ -80,6 +82,10 @@ public class LoseCommand implements CommandExecutor.CommandExtension {
         ));
 
         STSArena.logger.info("LOSE command: Player death triggered, DeathScreen will show");
+
+        // Signal ready for next command and trigger a state response
+        GameStateListener.signalReadyForCommand();
+        CommunicationMod.publishOnGameStateChange();
     }
 
     /**

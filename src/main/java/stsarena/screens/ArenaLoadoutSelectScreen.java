@@ -38,7 +38,8 @@ public class ArenaLoadoutSelectScreen {
     private static final float LEFT_PANEL_WIDTH = 480.0f * Settings.scale;
     private static final float LEFT_PANEL_X = 80.0f * Settings.scale;
     private static final float TITLE_Y = Settings.HEIGHT - 100.0f * Settings.scale;
-    private static final float LIST_START_Y = TITLE_Y - 80.0f * Settings.scale;
+    // List starts below the search box with proper spacing
+    private static final float LIST_START_Y = TITLE_Y - 120.0f * Settings.scale;
     private static final float ROW_HEIGHT = 40.0f * Settings.scale;
     private static final float BUTTON_HEIGHT = 35.0f * Settings.scale;
 
@@ -127,8 +128,8 @@ public class ArenaLoadoutSelectScreen {
     private Hitbox searchBoxHitbox;
     private static final float SEARCH_BOX_WIDTH = LEFT_PANEL_WIDTH - 20.0f * Settings.scale;  // Nearly full width
     private static final float SEARCH_BOX_HEIGHT = 30.0f * Settings.scale;
-    // Position search box below the filter tabs, left-aligned on the left panel
-    private static final float SEARCH_BOX_Y = FILTER_TAB_Y - 35.0f * Settings.scale;
+    // Position search box below the filter tabs with proper spacing (between tabs and list)
+    private static final float SEARCH_BOX_Y = TITLE_Y - 85.0f * Settings.scale;  // Between filter tabs and list
     private static final float SEARCH_BOX_X = LEFT_PANEL_X + 10.0f * Settings.scale;
 
     // Unfiltered loadouts (for filtering)

@@ -244,9 +244,14 @@ def get_loadout_id(coordinator, index=0):
     """
     import json
 
+    # Clear the previous message to ensure we get fresh data
+    coordinator.last_message = None
     coordinator.game_is_ready = False
     coordinator.send_message("arena-loadout list")
     wait_for_ready(coordinator)
+
+    # Wait a moment for the message to be fully received
+    time.sleep(0.1)
 
     # Parse the loadout list from the message
     if coordinator.last_message:
@@ -316,17 +321,49 @@ def create_loadout_with_fights(coordinator, character, encounters, loadout_name=
         coordinator.game_is_ready = False
         coordinator.send_message("win")
         wait_for_ready(coordinator)
-        time.sleep(0.5)
 
-        # Return to menu
-        coordinator.game_is_ready = False
-        coordinator.send_message("arena-back")
-        wait_for_ready(coordinator)
+        # Wait for the game to process victory and return to menu
+        # (arena victory screen auto-returns after a brief delay)
         wait_for_main_menu(coordinator)
+
+        # Clean up any arena screens/state
+        coordinator.game_is_ready = False
+        coordinator.send_message("arena_back")
+        wait_for_ready(coordinator)
         time.sleep(0.3)
 
     # Get the ID of the newly created loadout
     return get_loadout_id(coordinator, index=0)
+
+
+def add_loss_to_history(coordinator, character, encounter):
+    """Add a loss to the fight history by starting and losing a fight.
+
+    Args:
+        coordinator: The game coordinator
+        character: Character class
+        encounter: Encounter name to fight
+    """
+    print(f"    Losing against {encounter}...")
+    coordinator.game_is_ready = False
+    coordinator.send_message(f"arena {character} {encounter}")
+    wait_for_ready(coordinator)
+    wait_for_combat(coordinator)
+    time.sleep(0.3)
+
+    # Lose the fight
+    coordinator.game_is_ready = False
+    coordinator.send_message("lose")
+    wait_for_ready(coordinator)
+
+    # Wait for the game to process defeat and return to menu
+    wait_for_main_menu(coordinator)
+
+    # Clean up any arena screens/state
+    coordinator.game_is_ready = False
+    coordinator.send_message("arena_back")
+    wait_for_ready(coordinator)
+    time.sleep(0.3)
 
 
 def test_generate_documentation_screenshots(at_main_menu):
@@ -397,6 +434,13 @@ def test_generate_documentation_screenshots(at_main_menu):
 
     print("  Created 5 loadouts with 12 total fights")
 
+    # Add some losses to show in history/stats
+    print("  Adding some losses for variety...")
+    add_loss_to_history(coordinator, "IRONCLAD", "Cultist")
+    add_loss_to_history(coordinator, "THE_SILENT", "JawWorm")
+    add_loss_to_history(coordinator, "DEFECT", "2Louse")
+    print("  Added 3 losses")
+
     # Rename loadouts to entertaining names
     print("  Renaming loadouts...")
     import json
@@ -418,6 +462,9 @@ def test_generate_documentation_screenshots(at_main_menu):
     # ====================
     # Note: The Save Slot screen is prevented by setting DEFAULT_SLOT in STSSaveSlots preferences
     print("\n[1/11] Main menu with Arena Mode button...")
+    # Close all arena screens to get back to main menu
+    open_arena_screen(coordinator, "close")
+    time.sleep(0.5)
     wait_for_visual_stable(coordinator)
     take_screenshot(coordinator, "main_menu")
 
@@ -516,7 +563,7 @@ def test_generate_documentation_screenshots(at_main_menu):
     print("\n[9/11] Arena defeat screen...")
     # Return to menu first
     coordinator.game_is_ready = False
-    coordinator.send_message("arena-back")
+    coordinator.send_message("arena_back")
     wait_for_ready(coordinator)
     wait_for_main_menu(coordinator)
 
@@ -550,7 +597,7 @@ def test_generate_documentation_screenshots(at_main_menu):
     print("\n[10/11] Pause menu with 'Practice in Arena' button...")
     # Return to menu
     coordinator.game_is_ready = False
-    coordinator.send_message("arena-back")
+    coordinator.send_message("arena_back")
     wait_for_ready(coordinator)
     wait_for_main_menu(coordinator)
 

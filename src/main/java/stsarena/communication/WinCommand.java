@@ -2,7 +2,9 @@ package stsarena.communication;
 
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.monsters.AbstractMonster;
+import communicationmod.CommunicationMod;
 import communicationmod.CommandExecutor;
+import communicationmod.GameStateListener;
 import communicationmod.InvalidCommandException;
 import stsarena.STSArena;
 
@@ -64,5 +66,9 @@ public class WinCommand implements CommandExecutor.CommandExtension {
         }
 
         STSArena.logger.info("WIN command: All monsters killed");
+
+        // Signal ready for next command and trigger a state response
+        GameStateListener.signalReadyForCommand();
+        CommunicationMod.publishOnGameStateChange();
     }
 }

@@ -180,7 +180,7 @@ class TestStory1_5_1_6_LoadoutManagement:
         wait_for_ready(coord)
 
         # Go back to main menu
-        coord.send_message("arena-back")
+        coord.send_message("arena_back")
         wait_for_ready(coord)
         wait_for_main_menu(coord)
 
@@ -213,7 +213,7 @@ class TestStory1_5_1_6_LoadoutManagement:
         wait_for_ready(coord)
 
         # Go back to main menu
-        coord.send_message("arena-back")
+        coord.send_message("arena_back")
         wait_for_ready(coord)
         wait_for_main_menu(coord)
 
@@ -244,7 +244,7 @@ class TestStory1_5_1_6_LoadoutManagement:
         wait_for_ready(coord)
 
         # Go back to main menu
-        coord.send_message("arena-back")
+        coord.send_message("arena_back")
         wait_for_ready(coord)
         wait_for_main_menu(coord)
 
@@ -286,7 +286,7 @@ class TestStartWithSavedLoadout:
         wait_for_ready(coord)
 
         # Go back to main menu
-        coord.send_message("arena-back")
+        coord.send_message("arena_back")
         wait_for_ready(coord)
         wait_for_main_menu(coord)
 
