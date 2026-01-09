@@ -60,6 +60,8 @@ def _process_message(coordinator, msg):
     coordinator.game_is_ready = communication_state.get("ready_for_command")
     if coordinator.last_error is None:
         coordinator.in_game = communication_state.get("in_game")
+        # Debug: save the raw in_game value we received
+        coordinator._last_in_game_raw = communication_state.get("in_game")
         if coordinator.in_game:
             from spirecomm.spire.game import Game
 
@@ -219,9 +221,17 @@ def wait_for_in_game(coordinator, timeout=DEFAULT_TIMEOUT):
 
 def wait_for_main_menu(coordinator, timeout=DEFAULT_TIMEOUT):
     """Block until we're at main menu using the wait_for command."""
+    # First wait for the main_menu condition to be met
     coordinator.game_is_ready = False
     coordinator.send_message("wait_for main_menu")
     wait_for_ready(coordinator, timeout=timeout)
+
+    # Then wait for visual stability to ensure the transition is complete
+    # This handles the case where we receive an intermediate state before
+    # the game has fully transitioned to main menu
+    wait_for_visual_stable(coordinator, timeout=timeout)
+
+    print(f"[DEBUG wait_for_main_menu] in_game={coordinator.in_game}, raw_in_game={getattr(coordinator, '_last_in_game_raw', 'N/A')}", file=sys.stderr, flush=True)
     if coordinator.in_game:
         raise GameTimeout("Expected to be at main menu but we're in game")
 

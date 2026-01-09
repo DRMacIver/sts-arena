@@ -162,11 +162,16 @@ public class ArenaVictoryScreenPatch {
             buttonsVisible = false;
 
             // Return to encounter selection via main menu
-            ArenaRunner.clearArenaRun();
             Settings.isTrial = false;
             Settings.isDailyRun = false;
             Settings.isEndless = false;
             STSArena.setReturnToArenaOnMainMenu();
+            // Clear the "run in progress" flag so ClearArenaOnMainMenuPatch will clear state.
+            ArenaRunner.setArenaRunInProgress(false);
+            // IMPORTANT: Do NOT clear isArenaRun before startOver()! The victory screen
+            // will continue updating during the async transition, and we need isArenaRun
+            // to be true so arena patches can skip normal game flow.
+            // ClearArenaOnMainMenuPatch handles clearing when MainMenuScreen is created.
             CardCrawlGame.startOver();
         }
 

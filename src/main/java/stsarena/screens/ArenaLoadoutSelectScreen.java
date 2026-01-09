@@ -664,9 +664,12 @@ public class ArenaLoadoutSelectScreen {
 
                     // Select the next saved loadout (skip headers and special items)
                     selectedItem = null;
-                    if (deletedIndex >= 0) {
-                        // Try to select the item at the same position, or the previous one
-                        for (int i = deletedIndex; i < items.size(); i++) {
+                    if (deletedIndex >= 0 && items.size() > 0) {
+                        // Bound deletedIndex to new list size (list shrunk after deletion)
+                        int startIndex = Math.min(deletedIndex, items.size() - 1);
+
+                        // Try to select the item at the same position, or the next one
+                        for (int i = startIndex; i < items.size(); i++) {
                             if (items.get(i).savedLoadout != null) {
                                 selectedItem = items.get(i);
                                 break;
@@ -674,7 +677,7 @@ public class ArenaLoadoutSelectScreen {
                         }
                         // If nothing found after, try before
                         if (selectedItem == null) {
-                            for (int i = deletedIndex - 1; i >= 0; i--) {
+                            for (int i = startIndex - 1; i >= 0; i--) {
                                 if (items.get(i).savedLoadout != null) {
                                     selectedItem = items.get(i);
                                     break;

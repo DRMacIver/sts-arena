@@ -71,33 +71,15 @@ public class ArenaSkipCombatRewardScreenPatch {
 
     /**
      * Trigger the return to main menu after arena victory.
+     * Note: Victory recording is already done by ArenaVictoryPatch when endBattle() is called,
+     * so we don't record again here (that would cause duplicate database entries).
      */
     private static void triggerReturnToMainMenu() {
         try {
             STSArena.logger.info("ARENA: triggerReturnToMainMenu called from CombatRewardScreen patch");
 
-            // IMPORTANT: Record the victory BEFORE clearing arena state
-            // This ensures the database is updated before we return to menu
-            // Check if this is truly a victory (monsters dead, player alive)
-            if (AbstractDungeon.player != null && AbstractDungeon.player.currentHealth > 0) {
-                if (AbstractDungeon.getMonsters() != null && AbstractDungeon.getMonsters().areMonstersBasicallyDead()) {
-                    // Record victory
-                    boolean imperfect = false;
-                    if (ArenaRunner.getCurrentLoadout() != null) {
-                        int startHp = ArenaRunner.getCurrentLoadout().currentHp;
-                        int endHp = AbstractDungeon.player.currentHealth;
-                        imperfect = endHp < startHp;
-                    }
-                    STSArena.logger.info("ARENA: Recording victory from CombatRewardScreen patch (imperfect=" + imperfect + ")");
-                    ArenaRunner.recordVictory(imperfect);
-                }
-            }
-
             // Set the flag to return to arena selection when main menu is reached
             STSArena.setReturnToArenaOnMainMenu();
-
-            // Clear the arena run state
-            ArenaRunner.clearArenaRun();
 
             // Mark room as complete
             if (AbstractDungeon.getCurrRoom() != null) {
@@ -109,7 +91,15 @@ public class ArenaSkipCombatRewardScreenPatch {
             Settings.isDailyRun = false;
             Settings.isEndless = false;
 
+            // Clear the "run in progress" flag so ClearArenaOnMainMenuPatch will clear state.
+            // We keep isArenaRun true so patches can still detect arena mode during the transition.
+            ArenaRunner.setArenaRunInProgress(false);
+
             // Trigger return to main menu
+            // IMPORTANT: Do NOT clear isArenaRun here! startOver() is async and game screens
+            // will continue updating. Arena patches check isArenaRun to skip normal game flow
+            // during the transition. ClearArenaOnMainMenuPatch will clear the arena state
+            // when MainMenuScreen is created.
             CardCrawlGame.startOver();
 
             STSArena.logger.info("ARENA: Initiated return to main menu");

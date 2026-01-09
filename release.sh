@@ -92,16 +92,37 @@ fi
 echo "Using version: ${VERSION}"
 echo ""
 
+# Update version in ModTheSpire.json
+echo "Updating ModTheSpire.json with version ${VERSION}..."
+sed -i.bak -E "s/\"version\": \"[0-9]+\.[0-9]+\.[0-9]+\"/\"version\": \"${VERSION}\"/" src/main/resources/ModTheSpire.json
+rm -f src/main/resources/ModTheSpire.json.bak
+
+# Update version in pom.xml (only the project version, not dependencies)
+echo "Updating pom.xml with version ${VERSION}..."
+# Match the version line that comes right after artifactId STSArena
+sed -i.bak -E "/<artifactId>STSArena<\/artifactId>/,/<version>.*<\/version>/ { s/<version>[0-9]+\.[0-9]+\.[0-9]+<\/version>/<version>${VERSION}<\/version>/; }" pom.xml
+rm -f pom.xml.bak
+
+# Rebuild with updated version
+echo "Rebuilding with updated version..."
+mvn clean package -q
+
 # Update download link in docs
 echo "Updating docs/index.html with new version..."
 sed -i.bak -E "s|releases/download/v[0-9]+\.[0-9]+\.[0-9]+/STSArena-[0-9]+\.[0-9]+\.[0-9]+\.jar\">STSArena-[0-9]+\.[0-9]+\.[0-9]+\.jar|releases/download/${TAG}/${RELEASE_JAR}\">${RELEASE_JAR}|g" docs/index.html
 rm -f docs/index.html.bak
 
-# Commit docs update if changed
-if ! git diff --quiet docs/index.html; then
-    echo "Committing docs update..."
-    git add docs/index.html
-    git commit -m "Update download link to ${VERSION}"
+# Commit version and docs updates if changed
+CHANGED_FILES=""
+for f in src/main/resources/ModTheSpire.json pom.xml docs/index.html; do
+    if ! git diff --quiet "$f" 2>/dev/null; then
+        CHANGED_FILES="${CHANGED_FILES} ${f}"
+    fi
+done
+if [ -n "${CHANGED_FILES}" ]; then
+    echo "Committing updates:${CHANGED_FILES}..."
+    git add ${CHANGED_FILES}
+    git commit -m "Bump version to ${VERSION}"
     git push
 fi
 

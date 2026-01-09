@@ -43,9 +43,6 @@ public class ArenaDefeatPatch {
         try {
             STSArena.logger.info("ARENA: triggerReturnToMainMenu from DefeatPatch");
 
-            // Clear the arena run state
-            ArenaRunner.clearArenaRun();
-
             // Mark room as complete
             if (AbstractDungeon.getCurrRoom() != null) {
                 AbstractDungeon.getCurrRoom().phase = AbstractRoom.RoomPhase.COMPLETE;
@@ -56,7 +53,19 @@ public class ArenaDefeatPatch {
             Settings.isDailyRun = false;
             Settings.isEndless = false;
 
+            // Set return flag BEFORE clearing arena state
+            // This ensures the arena selection screen opens after returning to menu
+            STSArena.setReturnToArenaOnMainMenu();
+
+            // Clear the "run in progress" flag so ClearArenaOnMainMenuPatch will clear state.
+            // We keep isArenaRun true so patches can still detect arena mode during the transition.
+            ArenaRunner.setArenaRunInProgress(false);
+
             // Trigger return to main menu
+            // IMPORTANT: Do NOT clear isArenaRun here! startOver() is async and the death screen
+            // will continue updating. ArenaDeathScreenButtonsPatch.SkipUpdateOnStartOver checks
+            // (isArenaRun && startOver) to skip updates during the transition.
+            // ClearArenaOnMainMenuPatch will clear the arena state when MainMenuScreen is created.
             CardCrawlGame.startOver();
 
             STSArena.logger.info("ARENA: Initiated return to main menu after defeat");

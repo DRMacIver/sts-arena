@@ -284,6 +284,14 @@ public class ArenaRunner {
     }
 
     /**
+     * Set whether an arena run is currently being set up.
+     * Used by patches that need to clear this flag without clearing the full arena state.
+     */
+    public static void setArenaRunInProgress(boolean inProgress) {
+        arenaRunInProgress = inProgress;
+    }
+
+    /**
      * Check if we have a pending loadout to apply.
      */
     public static boolean hasPendingLoadout() {
@@ -381,12 +389,13 @@ public class ArenaRunner {
             STSArena.logger.error("Failed to record victory", e);
         }
 
-        // For perfect victories, trigger return to main menu immediately
-        // For imperfect victories, let the VictoryScreen handle the "Try Again?" prompt
-        if (!imperfect) {
-            pendingReturnToMainMenu = true;
-            STSArena.setReturnToArenaOnMainMenu();
-        }
+        // Note: For both perfect and imperfect victories, we DO NOT set pendingReturnToMainMenu here.
+        // The return to menu is handled by:
+        // - ArenaSkipCombatRewardScreenPatch for perfect victories (when reward screen opens)
+        // - ArenaVictoryScreenPatch buttons for imperfect victories (user choice)
+        // Setting pendingReturnToMainMenu here would cause a race condition where the
+        // arena state gets cleared before CombatRewardScreen.open() is called, allowing
+        // the normal game flow to continue and show the map screen.
     }
 
     /**
@@ -456,14 +465,20 @@ public class ArenaRunner {
     /**
      * Check if we need to return to main menu after an arena fight.
      * Called from STSArena's update loop.
+     *
+     * NOTE: This should never actually trigger anymore. The pendingReturnToMainMenu flag
+     * is no longer set by recordVictory() to avoid race conditions. Return to menu is now
+     * handled by ArenaSkipCombatRewardScreenPatch when CombatRewardScreen.open() is called.
+     * This method is kept as a safety net in case something unexpected sets the flag.
      */
     public static void checkPendingReturnToMainMenu() {
         if (!pendingReturnToMainMenu) {
             return;
         }
 
-        // Force return to main menu
-        STSArena.logger.info("ARENA: Forcing return to main menu");
+        // This should not happen - log a warning
+        STSArena.logger.info("ARENA: WARNING - pendingReturnToMainMenu was unexpectedly true. " +
+            "This indicates a code path that should be reviewed. Proceeding with return to menu.");
         pendingReturnToMainMenu = false;
 
         try {

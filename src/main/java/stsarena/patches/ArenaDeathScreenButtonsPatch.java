@@ -133,11 +133,17 @@ public class ArenaDeathScreenButtonsPatch {
         }
 
         private static void handleRetreat() {
-            // Clear arena state and return to main menu
-            ArenaRunner.clearArenaRun();
+            // Return to main menu
             Settings.isTrial = false;
             Settings.isDailyRun = false;
             Settings.isEndless = false;
+            STSArena.setReturnToArenaOnMainMenu();
+            // Clear the "run in progress" flag so ClearArenaOnMainMenuPatch will clear state.
+            ArenaRunner.setArenaRunInProgress(false);
+            // IMPORTANT: Do NOT clear isArenaRun before startOver()! The death screen
+            // will continue updating during the async transition, and we need isArenaRun
+            // to be true so SkipUpdateOnStartOver can skip the updates correctly.
+            // ClearArenaOnMainMenuPatch handles clearing when MainMenuScreen is created.
             CardCrawlGame.startOver();
         }
 

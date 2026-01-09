@@ -98,9 +98,6 @@ public class ArenaSkipCardRewardScreenPatch {
             // Set the flag to return to arena selection when main menu is reached
             STSArena.setReturnToArenaOnMainMenu();
 
-            // Clear the arena run state
-            ArenaRunner.clearArenaRun();
-
             // Mark room as complete
             if (AbstractDungeon.getCurrRoom() != null) {
                 AbstractDungeon.getCurrRoom().phase = AbstractRoom.RoomPhase.COMPLETE;
@@ -111,7 +108,15 @@ public class ArenaSkipCardRewardScreenPatch {
             Settings.isDailyRun = false;
             Settings.isEndless = false;
 
+            // Clear the "run in progress" flag so ClearArenaOnMainMenuPatch will clear state.
+            // We keep isArenaRun true so patches can still detect arena mode during the transition.
+            ArenaRunner.setArenaRunInProgress(false);
+
             // Trigger return to main menu
+            // IMPORTANT: Do NOT clear isArenaRun here! startOver() is async and game screens
+            // will continue updating. Arena patches check isArenaRun to skip normal game flow
+            // during the transition. ClearArenaOnMainMenuPatch will clear the arena state
+            // when MainMenuScreen is created.
             CardCrawlGame.startOver();
 
             STSArena.logger.info("ARENA: Initiated return to main menu");

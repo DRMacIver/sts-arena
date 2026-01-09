@@ -21,6 +21,9 @@ public class ClearArenaOnMainMenuPatch {
     )
     public static class ClearOnMainMenu {
         public static void Postfix(MainMenuScreen __instance, boolean playBgm) {
+            STSArena.logger.info("ARENA: MainMenuScreen created - isArenaRunInProgress=" +
+                ArenaRunner.isArenaRunInProgress() + ", isArenaRun=" + ArenaRunner.isArenaRun());
+
             // Only clear if we're not in the middle of setting up an arena run
             // ArenaRunner.isArenaRunInProgress() is true during the setup phase
             if (ArenaRunner.isArenaRunInProgress()) {
