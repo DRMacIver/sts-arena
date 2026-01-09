@@ -23,12 +23,21 @@ if ! gh auth status &> /dev/null; then
     exit 1
 fi
 
-# Extract version from pom.xml
-VERSION=$(grep -m1 '<version>' pom.xml | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
-
-# Override version from argument if provided
+# Determine version: use argument, or auto-increment from latest tag
 if [ $# -ge 1 ]; then
     VERSION="$1"
+else
+    # Get latest tag version and increment minor
+    LATEST_TAG=$(git tag -l 'v*' | sort -V | tail -1)
+    if [ -n "${LATEST_TAG}" ]; then
+        LATEST_VERSION="${LATEST_TAG#v}"
+        IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST_VERSION}"
+        VERSION="${MAJOR}.$((MINOR + 1)).0"
+        echo "Latest release: ${LATEST_TAG}"
+    else
+        # No tags yet, use pom.xml version
+        VERSION=$(grep -m1 '<version>' pom.xml | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+    fi
 fi
 
 # JAR name doesn't include version (configured in pom.xml)
