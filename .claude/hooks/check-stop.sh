@@ -15,9 +15,10 @@ cd "$PROJECT_DIR" || exit 1
 check_open_issues() {
     if command -v bd &> /dev/null; then
         # bd ready shows issues that are ready to work on (open, not blocked)
-        READY_COUNT=$(bd ready 2>/dev/null | grep -E "^\s*(beads-|sts-arena-)" | wc -l || echo 0)
-        # Also check for in_progress issues
-        IN_PROGRESS_COUNT=$(bd list --status=in_progress 2>/dev/null | grep -E "^\s*(beads-|sts-arena-)" | wc -l || echo 0)
+        # Format: "📋 Ready work (N issues with no blockers):" - extract N from header
+        READY_COUNT=$(bd ready 2>/dev/null | grep -oP '\(\d+ issues' | grep -oP '\d+' || echo 0)
+        # Also check for in_progress issues (format: "sts-arena-xxx [P2] [type] in_progress")
+        IN_PROGRESS_COUNT=$(bd list --status=in_progress 2>/dev/null | grep -cE '^(beads-|sts-arena-)' || echo 0)
         echo $((READY_COUNT + IN_PROGRESS_COUNT))
     else
         echo 0
