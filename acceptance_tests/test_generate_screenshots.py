@@ -657,10 +657,15 @@ def test_generate_documentation_screenshots(at_main_menu):
     time.sleep(1.0)
 
     # Set up arena retry data so the "Try Again in Arena Mode" button appears
-    # We use loadout 1 and the current encounter
-    coordinator.game_is_ready = False
-    coordinator.send_message("set_retry_data 1 Cultist")
-    wait_for_ready(coordinator)
+    # Get an actual loadout ID from the loadouts we created earlier
+    actual_loadout_id = get_loadout_id(coordinator, index=0)
+    if actual_loadout_id:
+        print(f"  Setting retry data with loadout {actual_loadout_id}")
+        coordinator.game_is_ready = False
+        coordinator.send_message(f"set_retry_data {actual_loadout_id} Cultist")
+        wait_for_ready(coordinator)
+    else:
+        print("  Warning: Could not get loadout ID for retry data")
 
     # Lose the fight to show death screen
     coordinator.game_is_ready = False

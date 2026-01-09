@@ -236,13 +236,13 @@ public class ArenaVictoryScreenPatch {
             }
 
             // Draw button background
+            // Position offset is NOT scaled - scaling happens around the origin (center)
             sb.setColor(buttonColor);
-            float btnScale = Settings.scale;
             sb.draw(ImageMaster.DYNAMIC_BTN_IMG2,
-                x - 256.0f * btnScale, y - 256.0f * btnScale,
-                256.0f, 256.0f,  // origin in source coordinates (center of 512x512 image)
+                x - 256.0f, y - 256.0f,
+                256.0f, 256.0f,
                 512.0f, 512.0f,
-                btnScale, btnScale,
+                Settings.scale, Settings.scale,
                 0.0f,
                 0, 0, 512, 512,
                 false, false);
