@@ -102,6 +102,9 @@ public class ArenaLoadoutSelectScreen {
     private static final float BULK_BUTTON_WIDTH = 140.0f * Settings.scale;
     private static final float BULK_BUTTON_HEIGHT = 35.0f * Settings.scale;
 
+    // Anchor index for shift-click range selection (-1 = no anchor)
+    private int selectionAnchorIndex = -1;
+
     // Backspace repeat timing
     private float backspaceHeldTime = 0f;
     private static final float BACKSPACE_INITIAL_DELAY = 0.4f;
@@ -213,6 +216,7 @@ public class ArenaLoadoutSelectScreen {
         // Reset multi-select state
         this.isMultiSelectMode = false;
         this.selectedLoadoutIds.clear();
+        this.selectionAnchorIndex = -1;
 
         // Load all loadouts from database
         loadAllLoadouts();
@@ -795,22 +799,53 @@ public class ArenaLoadoutSelectScreen {
             }
         }
 
+        // Find the index of the clicked item
+        int clickedIndex = -1;
+        for (int i = 0; i < items.size(); i++) {
+            if (items.get(i) == item) {
+                clickedIndex = i;
+                break;
+            }
+        }
+
         // For saved loadouts
         if (item.savedLoadout != null) {
-            if (isMultiSelectClick) {
-                // Shift/Ctrl-click: toggle selection for bulk operations
+            if (isShiftHeld && selectionAnchorIndex >= 0) {
+                // Shift-click: select range from anchor to clicked item
+                int start = Math.min(selectionAnchorIndex, clickedIndex);
+                int end = Math.max(selectionAnchorIndex, clickedIndex);
+
+                // Select all saved loadouts in the range
+                for (int i = start; i <= end; i++) {
+                    if (i >= 0 && i < items.size()) {
+                        ListItem rangeItem = items.get(i);
+                        if (rangeItem.savedLoadout != null) {
+                            Long id = rangeItem.savedLoadout.dbId;
+                            if (!selectedLoadoutIds.contains(id)) {
+                                selectedLoadoutIds.add(id);
+                            }
+                        }
+                    }
+                }
+                // Don't update anchor on shift-click (allow extending the range)
+            } else if (isCtrlHeld) {
+                // Ctrl-click: toggle selection of clicked item
                 Long id = item.savedLoadout.dbId;
                 if (selectedLoadoutIds.contains(id)) {
                     selectedLoadoutIds.remove(id);
                 } else {
                     selectedLoadoutIds.add(id);
                 }
+                // Set anchor to clicked item for future shift-clicks
+                selectionAnchorIndex = clickedIndex;
             } else {
                 // Normal click: single select, clear any multi-selection
                 selectedLoadoutIds.clear();
                 selectedItem = item;
                 isRenaming = false;
                 isConfirmingDelete = false;
+                // Set anchor to clicked item
+                selectionAnchorIndex = clickedIndex;
             }
         }
     }

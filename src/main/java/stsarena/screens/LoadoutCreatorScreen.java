@@ -33,7 +33,9 @@ import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -157,6 +159,27 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         }
     }
 
+    /**
+     * Stores per-character state so switching characters preserves selections.
+     */
+    private static class CharacterState {
+        List<DeckCard> deckCards = new ArrayList<>();
+        List<AbstractRelic> selectedRelics = new ArrayList<>();
+        List<AbstractPotion> selectedPotions = new ArrayList<>();
+        int currentHp;
+        int maxHp;
+        int ascensionLevel;
+
+        CharacterState(int currentHp, int maxHp, int ascensionLevel) {
+            this.currentHp = currentHp;
+            this.maxHp = maxHp;
+            this.ascensionLevel = ascensionLevel;
+        }
+    }
+
+    // Per-character state storage (preserved across character switches within a session)
+    private Map<AbstractPlayer.PlayerClass, CharacterState> characterStates = new HashMap<>();
+
     public LoadoutCreatorScreen() {
         this.cancelButton = new MenuCancelButton();
         this.availableCards = new ArrayList<>();
@@ -226,6 +249,9 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
         this.isEditMode = false;
         this.editLoadoutId = -1;
         this.isRetryEditMode = false;
+
+        // Clear per-character state storage for fresh session
+        this.characterStates.clear();
 
         // Set default HP for selected class
         this.maxHp = LoadoutConfig.getBaseMaxHp(selectedClass);
@@ -725,13 +751,15 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
                 if (!isEditMode) {
                     AbstractPlayer.PlayerClass newClass = LoadoutConfig.getPlayerClasses()[i];
                     if (newClass != selectedClass) {
+                        // Save current character's state before switching
+                        saveCurrentCharacterState();
+
+                        // Switch to new character
                         selectedClass = newClass;
-                        // Update HP for new class
-                        maxHp = LoadoutConfig.getBaseMaxHp(selectedClass);
-                        currentHp = Math.min(currentHp, maxHp);
-                        // Update starter relic and deck
-                        updateStarterRelic();
-                        addStarterDeck();
+
+                        // Restore saved state or initialize with defaults
+                        restoreCharacterState(newClass);
+
                         // Reinitialize potions for new class
                         PotionHelper.initialize(selectedClass);
                         refreshAvailableItems();
@@ -1233,6 +1261,91 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
                     deckCards.add(new DeckCard(card.makeCopy()));
                 }
             }
+        }
+
+        refreshSelectedHitboxes();
+    }
+
+    /**
+     * Save current state for the selected character.
+     */
+    private void saveCurrentCharacterState() {
+        CharacterState state = new CharacterState(currentHp, maxHp, ascensionLevel);
+        // Copy deck cards
+        for (DeckCard dc : deckCards) {
+            DeckCard copy = new DeckCard(dc.card.makeCopy());
+            copy.upgraded = dc.upgraded;
+            state.deckCards.add(copy);
+        }
+        // Copy relics
+        for (AbstractRelic r : selectedRelics) {
+            state.selectedRelics.add(r.makeCopy());
+        }
+        // Copy potions
+        for (AbstractPotion p : selectedPotions) {
+            state.selectedPotions.add(p.makeCopy());
+        }
+        characterStates.put(selectedClass, state);
+    }
+
+    /**
+     * Restore saved state for the given character, or initialize with defaults.
+     */
+    private void restoreCharacterState(AbstractPlayer.PlayerClass charClass) {
+        CharacterState state = characterStates.get(charClass);
+        if (state != null) {
+            // Restore saved state
+            currentHp = state.currentHp;
+            maxHp = state.maxHp;
+            ascensionLevel = state.ascensionLevel;
+
+            deckCards.clear();
+            for (DeckCard dc : state.deckCards) {
+                DeckCard copy = new DeckCard(dc.card.makeCopy());
+                copy.upgraded = dc.upgraded;
+                deckCards.add(copy);
+            }
+
+            selectedRelics.clear();
+            for (AbstractRelic r : state.selectedRelics) {
+                selectedRelics.add(r.makeCopy());
+            }
+
+            selectedPotions.clear();
+            for (AbstractPotion p : state.selectedPotions) {
+                selectedPotions.add(p.makeCopy());
+            }
+        } else {
+            // Initialize with defaults for this character
+            maxHp = LoadoutConfig.getBaseMaxHp(charClass);
+            currentHp = maxHp;
+            // Keep ascension level from previous selection
+
+            // Add starter relic
+            selectedRelics.clear();
+            String starterRelicId = LoadoutConfig.getStarterRelicId(charClass);
+            if (starterRelicId != null) {
+                AbstractRelic starterRelic = RelicLibrary.getRelic(starterRelicId);
+                if (starterRelic != null) {
+                    selectedRelics.add(starterRelic.makeCopy());
+                }
+            }
+
+            // Add starter deck
+            deckCards.clear();
+            AbstractPlayer character = com.megacrit.cardcrawl.core.CardCrawlGame.characterManager.recreateCharacter(charClass);
+            if (character != null) {
+                java.util.ArrayList<String> starterCardIds = character.getStartingDeck();
+                for (String cardId : starterCardIds) {
+                    AbstractCard card = CardLibrary.getCard(cardId);
+                    if (card != null) {
+                        deckCards.add(new DeckCard(card.makeCopy()));
+                    }
+                }
+            }
+
+            // Clear potions
+            selectedPotions.clear();
         }
 
         refreshSelectedHitboxes();
