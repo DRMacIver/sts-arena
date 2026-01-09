@@ -92,6 +92,19 @@ fi
 echo "Using version: ${VERSION}"
 echo ""
 
+# Update download link in docs
+echo "Updating docs/index.html with new version..."
+sed -i.bak -E "s|releases/download/v[0-9]+\.[0-9]+\.[0-9]+/STSArena-[0-9]+\.[0-9]+\.[0-9]+\.jar\">STSArena-[0-9]+\.[0-9]+\.[0-9]+\.jar|releases/download/${TAG}/${RELEASE_JAR}\">${RELEASE_JAR}|g" docs/index.html
+rm -f docs/index.html.bak
+
+# Commit docs update if changed
+if ! git diff --quiet docs/index.html; then
+    echo "Committing docs update..."
+    git add docs/index.html
+    git commit -m "Update download link to ${VERSION}"
+    git push
+fi
+
 # Copy JAR with version in name for release
 cp "${JAR_PATH}" "target/${RELEASE_JAR}"
 echo "Release JAR: target/${RELEASE_JAR}"
