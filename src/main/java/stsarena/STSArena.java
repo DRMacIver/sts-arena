@@ -21,6 +21,7 @@ import stsarena.communication.ArenaLoadoutCommand;
 import stsarena.communication.ArenaScreenCommand;
 import stsarena.communication.CursorHideCommand;
 import stsarena.communication.LoseCommand;
+import stsarena.communication.ScreenshotModeCommand;
 import stsarena.communication.WinCommand;
 import stsarena.data.ArenaDatabase;
 import stsarena.data.ArenaRepository;
@@ -58,6 +59,10 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     // Flag to return to arena selection after returning to main menu
     private static boolean returnToArenaOnMainMenu = false;
 
+    // Screenshot mode - when true, prevents automatic screen transitions
+    // Used during documentation screenshot generation
+    private static boolean screenshotMode = false;
+
     // Pending loadout to open for editing (for retry deck tweaks)
     private static ArenaRepository.LoadoutRecord pendingLoadoutEditorRecord = null;
 
@@ -90,6 +95,7 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
             ArenaScreenCommand.register();
             CursorHideCommand.register();
             LoseCommand.register();
+            ScreenshotModeCommand.register();
             WinCommand.register();
             logger.info("CommunicationMod detected - commands registered");
         } catch (ClassNotFoundException e) {
@@ -368,6 +374,22 @@ public class STSArena implements PostInitializeSubscriber, PostDungeonInitialize
     public static void clearReturnToArenaOnMainMenu() {
         returnToArenaOnMainMenu = false;
         logger.info("ARENA: Cleared return-to-arena flag");
+    }
+
+    /**
+     * Enable screenshot mode - prevents automatic screen transitions.
+     * Used during documentation screenshot generation.
+     */
+    public static void setScreenshotMode(boolean enabled) {
+        screenshotMode = enabled;
+        logger.info("ARENA: Screenshot mode " + (enabled ? "enabled" : "disabled"));
+    }
+
+    /**
+     * Check if screenshot mode is enabled.
+     */
+    public static boolean isScreenshotMode() {
+        return screenshotMode;
     }
 
     /**

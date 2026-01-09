@@ -23,6 +23,12 @@ public class ArenaDefeatPatch {
             STSArena.logger.info("ARENA: DeathScreen created - recording defeat");
             ArenaRunner.recordDefeat();
 
+            // In screenshot mode, don't auto-return - let the death screen be captured
+            if (STSArena.isScreenshotMode()) {
+                STSArena.logger.info("ARENA: Screenshot mode - skipping auto-return from DeathScreen");
+                return;
+            }
+
             // Trigger automatic return to main menu after a brief delay
             // This is set by recordDefeat() via STSArena.setReturnToArenaOnMainMenu()
             // Force immediate return for test consistency
