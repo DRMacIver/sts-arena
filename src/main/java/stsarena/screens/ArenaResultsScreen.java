@@ -149,11 +149,14 @@ public class ArenaResultsScreen {
             if (fadeAlpha > 1.0f) fadeAlpha = 1.0f;
         }
 
-        // Auto-close timer for perfect victories
-        if (autoCloseEnabled && fadeAlpha >= 1.0f) {
+        // Auto-close logic - check screenshot mode dynamically
+        // Auto-close is enabled for perfect victories and defeats when NOT in screenshot mode
+        // Imperfect victories always require user interaction
+        boolean shouldAutoClose = !STSArena.isScreenshotMode() && (!isVictory || !isImperfect);
+        if (shouldAutoClose && fadeAlpha >= 1.0f) {
             autoCloseTimer += Gdx.graphics.getDeltaTime();
             if (autoCloseTimer >= AUTO_CLOSE_DELAY) {
-                STSArena.logger.info("ARENA: Auto-closing results screen (perfect victory)");
+                STSArena.logger.info("ARENA: Auto-closing results screen");
                 handleContinue();
                 return;
             }

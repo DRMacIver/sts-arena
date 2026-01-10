@@ -33,6 +33,9 @@ public class ClearArenaOnMainMenuPatch {
 
             STSArena.logger.info("ARENA: MainMenuScreen created - clearing arena run state");
             ArenaRunner.clearArenaRun();
+
+            // Also close the results screen if it's open
+            STSArena.closeResultsScreen();
         }
     }
 }

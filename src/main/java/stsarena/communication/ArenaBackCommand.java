@@ -56,6 +56,9 @@ public class ArenaBackCommand implements CommandExecutor.CommandExtension {
     public void execute(String[] tokens) throws InvalidCommandException {
         STSArena.logger.info("arena_back command: closing arena screens and cleaning up state");
 
+        // Close the results screen if it's open
+        STSArena.closeResultsScreen();
+
         // If we're in a dungeon (VictoryScreen, DeathScreen, etc.), trigger return to menu
         if (CommandExecutor.isInDungeon()) {
             STSArena.logger.info("arena_back: in dungeon, triggering startOver to return to menu");

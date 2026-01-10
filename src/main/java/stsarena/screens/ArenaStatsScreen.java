@@ -210,7 +210,7 @@ public class ArenaStatsScreen {
 
         // Subtitle
         FontHelper.renderFontCentered(sb, FontHelper.cardDescFont_N,
-            "Click [+] to expand and see Pareto-best victories (optimal in turns, damage taken, or potions used)",
+            "Click [+] to see your best victories (least damage taken or fewest potions used)",
             Settings.WIDTH / 2.0f, TITLE_Y - 30.0f * Settings.scale, Settings.CREAM_COLOR);
 
         // Column headers
@@ -330,10 +330,9 @@ public class ArenaStatsScreen {
         sb.draw(ImageMaster.WHITE_SQUARE_IMG, LEFT_X + 30.0f * Settings.scale, y - PARETO_ROW_HEIGHT,
             TABLE_WIDTH - 30.0f * Settings.scale, PARETO_ROW_HEIGHT - 2);
 
-        // Build description of this Pareto-optimal victory
+        // Build description of this victory
         StringBuilder desc = new StringBuilder();
-        desc.append(String.format("%d turns", victory.turnsTaken));
-        desc.append(String.format("  |  %d dmg taken", victory.damageTaken));
+        desc.append(String.format("%d dmg taken", victory.damageTaken));
         desc.append(String.format("  |  %d potions", victory.potionsUsed));
         desc.append(String.format("  |  %d/%d HP remaining", victory.endingHp, victory.startingHp));
 

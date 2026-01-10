@@ -161,8 +161,9 @@ public class ArenaCommand implements CommandExecutor.CommandExtension {
     /**
      * Normalize an encounter name to match the correct case from LoadoutConfig.ENCOUNTERS.
      * CommunicationMod may lowercase commands, so we need case-insensitive lookup.
+     * Also handles spaceless versions like "JawWorm" -> "Jaw Worm".
      *
-     * @param rawEncounter The raw encounter name (possibly lowercase)
+     * @param rawEncounter The raw encounter name (possibly lowercase or without spaces)
      * @return The correctly-cased encounter name, or the original if not found
      */
     private static String normalizeEncounterName(String rawEncounter) {
@@ -171,11 +172,14 @@ public class ArenaCommand implements CommandExecutor.CommandExtension {
         }
 
         String lowerRaw = rawEncounter.toLowerCase();
+        String lowerRawNoSpaces = lowerRaw.replace(" ", "");
 
         // Search through all encounter categories
         for (LoadoutConfig.EncounterCategory category : LoadoutConfig.ENCOUNTER_CATEGORIES) {
             for (String encounter : category.encounters) {
-                if (encounter.toLowerCase().equals(lowerRaw)) {
+                String lowerEnc = encounter.toLowerCase();
+                String lowerEncNoSpaces = lowerEnc.replace(" ", "");
+                if (lowerEnc.equals(lowerRaw) || lowerEncNoSpaces.equals(lowerRawNoSpaces)) {
                     STSArena.logger.info("ARENA: Normalized encounter '" + rawEncounter + "' -> '" + encounter + "'");
                     return encounter;
                 }
@@ -184,7 +188,9 @@ public class ArenaCommand implements CommandExecutor.CommandExtension {
 
         // Also check the flat ENCOUNTERS array (for any stragglers)
         for (String encounter : LoadoutConfig.ENCOUNTERS) {
-            if (encounter.toLowerCase().equals(lowerRaw)) {
+            String lowerEnc = encounter.toLowerCase();
+            String lowerEncNoSpaces = lowerEnc.replace(" ", "");
+            if (lowerEnc.equals(lowerRaw) || lowerEncNoSpaces.equals(lowerRawNoSpaces)) {
                 STSArena.logger.info("ARENA: Normalized encounter '" + rawEncounter + "' -> '" + encounter + "'");
                 return encounter;
             }

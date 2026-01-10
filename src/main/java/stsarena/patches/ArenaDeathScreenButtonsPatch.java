@@ -196,6 +196,11 @@ public class ArenaDeathScreenButtonsPatch {
                 return;
             }
 
+            // Don't render if our results screen is open - it has its own buttons
+            if (STSArena.resultsScreen != null && STSArena.resultsScreen.isOpen) {
+                return;
+            }
+
             // Render Retreat button
             renderButton(sb, retreatHb, "Retreat", retreatClickStarted);
 

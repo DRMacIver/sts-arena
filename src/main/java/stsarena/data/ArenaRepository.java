@@ -789,22 +789,19 @@ public class ArenaRepository {
         /**
          * Check if this victory is dominated by another (other is strictly better in all metrics).
          * A victory is dominated if another victory has:
-         * - Same or fewer turns
          * - Same or less damage taken
          * - Same or fewer potions used
          * - AND is strictly better in at least one of these
          */
         public boolean isDominatedBy(VictoryRecord other) {
-            boolean sameOrBetterTurns = other.turnsTaken <= this.turnsTaken;
             boolean sameOrBetterDamage = other.damageTaken <= this.damageTaken;
             boolean sameOrBetterPotions = other.potionsUsed <= this.potionsUsed;
 
             boolean strictlyBetterSomewhere =
-                other.turnsTaken < this.turnsTaken ||
                 other.damageTaken < this.damageTaken ||
                 other.potionsUsed < this.potionsUsed;
 
-            return sameOrBetterTurns && sameOrBetterDamage && sameOrBetterPotions && strictlyBetterSomewhere;
+            return sameOrBetterDamage && sameOrBetterPotions && strictlyBetterSomewhere;
         }
     }
 
