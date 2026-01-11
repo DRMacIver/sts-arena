@@ -1317,10 +1317,22 @@ public class ArenaLoadoutSelectScreen {
             x, y, Settings.GOLD_COLOR);
         y -= 25.0f * Settings.scale;
 
-        // Parse relics
+        // Parse relics - handle both new format (RelicData) and old format (strings)
         try {
-            Type listType = new TypeToken<List<String>>(){}.getType();
-            List<String> relicIds = gson.fromJson(loadout.relicsJson, listType);
+            List<String> relicIds = new ArrayList<>();
+
+            // Try new format first (RelicData with id and counter)
+            Type relicDataListType = new TypeToken<List<ArenaRepository.RelicData>>(){}.getType();
+            List<ArenaRepository.RelicData> relicDataList = gson.fromJson(loadout.relicsJson, relicDataListType);
+            if (relicDataList != null && !relicDataList.isEmpty() && relicDataList.get(0).id != null) {
+                for (ArenaRepository.RelicData relicData : relicDataList) {
+                    relicIds.add(relicData.id);
+                }
+            } else {
+                // Fall back to old format (list of strings)
+                Type listType = new TypeToken<List<String>>(){}.getType();
+                relicIds = gson.fromJson(loadout.relicsJson, listType);
+            }
 
             if (relicIds != null && !relicIds.isEmpty()) {
                 float relicSize = 48.0f * Settings.scale;

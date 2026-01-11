@@ -777,16 +777,20 @@ def test_generate_documentation_screenshots(at_main_menu):
     if not navigate_to_combat(coordinator):
         raise RuntimeError("Failed to navigate to combat for pause menu screenshot")
 
-    # Wait for combat to fully stabilize
-    time.sleep(1.5)
+    # Wait for combat to fully stabilize and the "1st turn" banner to fade
+    # The turnPhaseEffectActive check in visual_stable should catch this, but
+    # add a small delay after to ensure the banner animation fully completes
     wait_for_visual_stable(coordinator)
+    time.sleep(0.3)  # Extra buffer for turn banner fade animation
 
     # Now press escape to open pause menu
     coordinator.game_is_ready = False
     coordinator.send_message("key ESCAPE")
     wait_for_ready(coordinator)
     print("  Waiting for pause menu to appear...")
-    time.sleep(2.0)  # Pause menu has fade-in animation
+    # Wait for pause menu fade-in, then check visual stability again
+    # to ensure no turn banners are showing
+    time.sleep(1.0)
     wait_for_visual_stable(coordinator)
     take_screenshot(coordinator, "pause_menu_practice")
 
