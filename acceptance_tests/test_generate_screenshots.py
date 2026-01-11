@@ -445,11 +445,17 @@ def test_generate_documentation_screenshots(at_main_menu):
         coordinator.send_message(f"arena {character} {encounter}")
         wait_for_ready(coordinator)
         wait_for_combat(coordinator)
-        time.sleep(0.3)
+        # Wait for combat animations to fully initialize before sending win/lose
+        # This ensures the game is in a stable state for command processing
+        wait_for_visual_stable(coordinator)
 
         coordinator.game_is_ready = False
         coordinator.send_message("win" if is_win else "lose")
         wait_for_ready(coordinator)
+        # For losses, the ArenaResultsScreen auto-closes after ~2.5s
+        # before transitioning to main menu. Give it time.
+        if not is_win:
+            time.sleep(3.0)
         wait_for_main_menu(coordinator)
 
         coordinator.game_is_ready = False
