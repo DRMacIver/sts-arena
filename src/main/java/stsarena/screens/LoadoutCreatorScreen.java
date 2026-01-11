@@ -356,16 +356,33 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
             STSArena.logger.error("Failed to parse deck from loadout", e);
         }
 
-        // Parse and populate relics
+        // Parse and populate relics - handle both new format (RelicData) and old format (strings)
         try {
-            Type relicListType = new TypeToken<List<String>>(){}.getType();
-            List<String> relicIds = gson.fromJson(loadout.relicsJson, relicListType);
-            if (relicIds != null) {
-                for (String relicId : relicIds) {
-                    if (RelicLibrary.isARelic(relicId)) {
-                        AbstractRelic relic = RelicLibrary.getRelic(relicId);
+            // Try new format first (RelicData with id and counter)
+            Type relicDataListType = new TypeToken<List<ArenaRepository.RelicData>>(){}.getType();
+            List<ArenaRepository.RelicData> relicDataList = gson.fromJson(loadout.relicsJson, relicDataListType);
+            if (relicDataList != null && !relicDataList.isEmpty() && relicDataList.get(0).id != null) {
+                for (ArenaRepository.RelicData relicData : relicDataList) {
+                    if (RelicLibrary.isARelic(relicData.id)) {
+                        AbstractRelic relic = RelicLibrary.getRelic(relicData.id);
                         if (relic != null) {
-                            selectedRelics.add(relic.makeCopy());
+                            AbstractRelic copy = relic.makeCopy();
+                            copy.counter = relicData.counter;
+                            selectedRelics.add(copy);
+                        }
+                    }
+                }
+            } else {
+                // Fall back to old format (list of strings)
+                Type relicListType = new TypeToken<List<String>>(){}.getType();
+                List<String> relicIds = gson.fromJson(loadout.relicsJson, relicListType);
+                if (relicIds != null) {
+                    for (String relicId : relicIds) {
+                        if (RelicLibrary.isARelic(relicId)) {
+                            AbstractRelic relic = RelicLibrary.getRelic(relicId);
+                            if (relic != null) {
+                                selectedRelics.add(relic.makeCopy());
+                            }
                         }
                     }
                 }
@@ -454,16 +471,33 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
             STSArena.logger.error("Failed to parse deck from loadout", e);
         }
 
-        // Parse and populate relics
+        // Parse and populate relics - handle both new format (RelicData) and old format (strings)
         try {
-            Type relicListType = new TypeToken<List<String>>(){}.getType();
-            List<String> relicIds = gson.fromJson(loadout.relicsJson, relicListType);
-            if (relicIds != null) {
-                for (String relicId : relicIds) {
-                    if (RelicLibrary.isARelic(relicId)) {
-                        AbstractRelic relic = RelicLibrary.getRelic(relicId);
+            // Try new format first (RelicData with id and counter)
+            Type relicDataListType = new TypeToken<List<ArenaRepository.RelicData>>(){}.getType();
+            List<ArenaRepository.RelicData> relicDataList = gson.fromJson(loadout.relicsJson, relicDataListType);
+            if (relicDataList != null && !relicDataList.isEmpty() && relicDataList.get(0).id != null) {
+                for (ArenaRepository.RelicData relicData : relicDataList) {
+                    if (RelicLibrary.isARelic(relicData.id)) {
+                        AbstractRelic relic = RelicLibrary.getRelic(relicData.id);
                         if (relic != null) {
-                            selectedRelics.add(relic.makeCopy());
+                            AbstractRelic copy = relic.makeCopy();
+                            copy.counter = relicData.counter;
+                            selectedRelics.add(copy);
+                        }
+                    }
+                }
+            } else {
+                // Fall back to old format (list of strings)
+                Type relicListType = new TypeToken<List<String>>(){}.getType();
+                List<String> relicIds = gson.fromJson(loadout.relicsJson, relicListType);
+                if (relicIds != null) {
+                    for (String relicId : relicIds) {
+                        if (RelicLibrary.isARelic(relicId)) {
+                            AbstractRelic relic = RelicLibrary.getRelic(relicId);
+                            if (relic != null) {
+                                selectedRelics.add(relic.makeCopy());
+                            }
                         }
                     }
                 }
