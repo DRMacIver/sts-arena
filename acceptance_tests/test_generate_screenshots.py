@@ -306,6 +306,38 @@ def rename_loadout(coordinator, loadout_id, new_name):
     time.sleep(0.1)
 
 
+def add_card_to_creator(coordinator, card_id):
+    """Add a card to the open loadout creator."""
+    coordinator.game_is_ready = False
+    coordinator.send_message(f"arena_creator add_card {card_id}")
+    wait_for_ready(coordinator)
+    time.sleep(0.1)
+
+
+def add_relic_to_creator(coordinator, relic_id):
+    """Add a relic to the open loadout creator."""
+    coordinator.game_is_ready = False
+    coordinator.send_message(f"arena_creator add_relic {relic_id}")
+    wait_for_ready(coordinator)
+    time.sleep(0.1)
+
+
+def set_creator_hp(coordinator, current, max_hp):
+    """Set HP values in the open loadout creator."""
+    coordinator.game_is_ready = False
+    coordinator.send_message(f"arena_creator set_hp {current} {max_hp}")
+    wait_for_ready(coordinator)
+    time.sleep(0.1)
+
+
+def set_creator_ascension(coordinator, level):
+    """Set ascension level in the open loadout creator."""
+    coordinator.game_is_ready = False
+    coordinator.send_message(f"arena_creator set_asc {level}")
+    wait_for_ready(coordinator)
+    time.sleep(0.1)
+
+
 def create_loadout_with_fights(coordinator, character, encounters, loadout_name=None):
     """Create a loadout by winning fights against specified encounters.
 
@@ -452,11 +484,21 @@ def test_generate_documentation_screenshots(at_main_menu):
         coordinator.game_is_ready = False
         coordinator.send_message("win" if is_win else "lose")
         wait_for_ready(coordinator)
-        # For losses, the ArenaResultsScreen auto-closes after ~2.5s
-        # before transitioning to main menu. Give it time.
-        if not is_win:
-            time.sleep(3.0)
-        wait_for_main_menu(coordinator)
+        # ArenaResultsScreen auto-closes after ~2s for wins, ~2.5s for losses
+        # Give it time to complete the victory/defeat sequence and return to menu
+        # The death/victory animations can vary in duration, so we wait longer
+        time.sleep(5.0)
+        # Try to wait for main menu with longer timeout
+        try:
+            wait_for_main_menu(coordinator, timeout=30)
+        except Exception as e:
+            print(f"    Warning: wait_for_main_menu failed: {e}, retrying with arena_back...")
+            # Try sending arena_back to force return to menu
+            coordinator.game_is_ready = False
+            coordinator.send_message("arena_back")
+            wait_for_ready(coordinator)
+            time.sleep(1.0)
+            wait_for_main_menu(coordinator, timeout=30)
 
         coordinator.game_is_ready = False
         coordinator.send_message("arena_back")
@@ -540,6 +582,21 @@ def test_generate_documentation_screenshots(at_main_menu):
         open_arena_screen(coordinator, f"creator {loadout_for_creator}")
     else:
         open_arena_screen(coordinator, "creator")
+
+    # Add some cards and relics to show a modified loadout
+    # These are Ironclad cards that work well together for the screenshot
+    print("  Adding cards and relics to show a modified loadout...")
+    add_card_to_creator(coordinator, "Demon Form")
+    add_card_to_creator(coordinator, "Limit Break")
+    add_card_to_creator(coordinator, "Reaper")
+    add_card_to_creator(coordinator, "Offering")
+    add_card_to_creator(coordinator, "Battle Trance")
+    add_relic_to_creator(coordinator, "Vajra")
+    add_relic_to_creator(coordinator, "Bag of Marbles")
+    set_creator_hp(coordinator, 65, 80)
+    set_creator_ascension(coordinator, 10)
+
+    time.sleep(0.3)  # Let UI update
     wait_for_visual_stable(coordinator)
     take_screenshot(coordinator, "loadout_creator_cards")
 

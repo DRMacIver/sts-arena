@@ -2331,4 +2331,40 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
             default: return Settings.CREAM_COLOR;
         }
     }
+
+    // ===== Public methods for command-based manipulation =====
+
+    /**
+     * Add a card to the deck from a command.
+     * @param card The card to add (should be a copy)
+     */
+    public void addCardFromCommand(AbstractCard card) {
+        addCardToDeck(card);
+    }
+
+    /**
+     * Add a relic from a command.
+     * @param relic The relic to add (should be a copy)
+     */
+    public void addRelicFromCommand(AbstractRelic relic) {
+        addRelic(relic);
+    }
+
+    /**
+     * Set HP values from a command.
+     * @param current Current HP
+     * @param max Max HP
+     */
+    public void setHpFromCommand(int current, int max) {
+        this.maxHp = Math.max(1, Math.min(999, max));
+        this.currentHp = Math.max(1, Math.min(this.maxHp, current));
+    }
+
+    /**
+     * Set ascension level from a command.
+     * @param level Ascension level (0-20)
+     */
+    public void setAscensionFromCommand(int level) {
+        this.ascensionLevel = Math.max(0, Math.min(20, level));
+    }
 }

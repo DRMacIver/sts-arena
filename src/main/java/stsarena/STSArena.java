@@ -18,6 +18,7 @@ import stsarena.arena.ArenaRunner;
 import stsarena.arena.SaveFileManager;
 import stsarena.communication.ArenaBackCommand;
 import stsarena.communication.ArenaCommand;
+import stsarena.communication.ArenaCreatorCommand;
 import stsarena.communication.ArenaLoadoutCommand;
 import stsarena.communication.ArenaScreenCommand;
 import stsarena.communication.CursorHideCommand;
@@ -96,6 +97,7 @@ public class STSArena implements EditStringsSubscriber, PostInitializeSubscriber
             // CommunicationMod is available - now safe to load and register our commands
             ArenaCommand.register();
             ArenaBackCommand.register();
+            ArenaCreatorCommand.register();
             ArenaLoadoutCommand.register();
             ArenaScreenCommand.register();
             CursorHideCommand.register();
