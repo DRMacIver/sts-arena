@@ -147,7 +147,11 @@ class TestArenaMode:
             assert not coord.in_game, f"Fight {fight_num+1}: Should be back at main menu after arena victory"
 
     def test_arena_no_card_reward_after_loss(self, at_main_menu: Coordinator):
-        """Test that arena fights don't show card reward screens after loss."""
+        """Test that arena fights don't show card reward screens after loss.
+
+        After losing, the arena results screen is shown with Continue/Retry/Edit options.
+        The player must use arena_back to return to main menu.
+        """
         coord = at_main_menu
 
         # Run multiple arena fights to test consistency
@@ -168,17 +172,21 @@ class TestArenaMode:
             # Wait for lose command response first
             wait_for_ready(coord)
 
+            # After loss, arena shows results screen with options (Continue/Retry/Edit)
+            # Use arena_back to return to main menu
+            coord.send_message("arena_back")
+            wait_for_ready(coord)
+
             # Wait for return to main menu
             wait_for_main_menu(coord)
             assert not coord.in_game, f"Fight {fight_num+1}: Should be back at main menu after arena loss"
 
-    def test_arena_loss_returns_to_menu(self, at_main_menu: Coordinator):
-        """Test that losing an arena fight automatically returns to main menu.
+    def test_arena_loss_shows_results_screen(self, at_main_menu: Coordinator):
+        """Test that losing an arena fight shows the results screen with retry options.
 
-        This is a regression test for a bug where the game would stay on the death
-        screen after an arena loss instead of returning to the main menu.
-        The 'lose' command should trigger an automatic return to menu without
-        needing a manual 'abandon' command.
+        After losing an arena fight, the player should see a results screen with
+        Continue/Retry/Edit Loadout buttons. They can use arena_back to return
+        to the main menu.
         """
         coord = at_main_menu
 
@@ -197,10 +205,14 @@ class TestArenaMode:
         # Wait for lose command response first
         wait_for_ready(coord)
 
-        # Wait for return to main menu - should happen automatically
+        # After loss, the results screen is shown - use arena_back to return to menu
+        coord.send_message("arena_back")
+        wait_for_ready(coord)
+
+        # Wait for return to main menu
         wait_for_main_menu(coord)
         assert not coord.in_game, (
-            "Arena loss should automatically return to main menu without needing abandon command."
+            "Should be back at main menu after using arena_back from results screen."
         )
 
     def test_arena_back_cleans_up_after_victory(self, at_main_menu: Coordinator):
@@ -252,6 +264,7 @@ class TestArenaMode:
         """Test that arena_back properly cleans up save files after loss.
 
         Similar to test_arena_back_cleans_up_after_victory but for defeats.
+        After losing, the results screen is shown - use arena_back to return to menu.
         """
         coord = at_main_menu
 
@@ -262,16 +275,14 @@ class TestArenaMode:
         wait_for_combat(coord)
         assert coord.in_game, "Should be in arena fight"
 
-        # Lose the fight
+        # Lose the fight - this shows the results screen (doesn't auto-return)
         coord.send_message("lose")
         wait_for_ready(coord)
-        wait_for_main_menu(coord)
-        assert not coord.in_game, "Should be at main menu after arena loss"
 
-        # Call arena_back to exit arena screens and clean up save files
+        # Call arena_back to exit results screen and clean up save files
         coord.send_message("arena_back")
         wait_for_ready(coord)
-        # The arena_back response already contains current state
+        wait_for_main_menu(coord)
         assert not coord.in_game, "Should be at main menu after arena_back"
 
     def test_multiple_arena_fights_with_back_cleanup(self, at_main_menu: Coordinator):
@@ -296,16 +307,16 @@ class TestArenaMode:
         wait_for_ready(coord)
         assert not coord.in_game, "Fight 1: Should be at main menu"
 
-        # Fight 2: Lose
+        # Fight 2: Lose (shows results screen, need arena_back to return)
         coord.send_message("arena DEFECT Jaw Worm 44444")
         wait_for_ready(coord)
         wait_for_in_game(coord)
         wait_for_combat(coord)
         coord.send_message("lose")
         wait_for_ready(coord)
-        wait_for_main_menu(coord)
         coord.send_message("arena_back")
         wait_for_ready(coord)
+        wait_for_main_menu(coord)
         assert not coord.in_game, "Fight 2: Should be at main menu"
 
         # Verify normal run starts fresh with a different character

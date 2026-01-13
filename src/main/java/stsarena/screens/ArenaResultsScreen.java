@@ -90,12 +90,10 @@ public class ArenaResultsScreen {
         this.fadeAlpha = 0.0f;
         this.autoCloseTimer = 0.0f;
 
-        // Auto-close is enabled for:
-        // - Perfect victories (not imperfect) when NOT in screenshot mode
-        // - All defeats when NOT in screenshot mode
-        // Imperfect victories require user interaction (retry/modify options)
-        // In screenshot mode, the screen stays open so it can be captured
-        boolean shouldAutoClose = !STSArena.isScreenshotMode() && (!isVictory || !isImperfect);
+        // Auto-close is enabled ONLY for perfect victories when NOT in screenshot mode.
+        // Imperfect victories and defeats require user interaction (retry/modify options).
+        // In screenshot mode, the screen stays open so it can be captured.
+        boolean shouldAutoClose = !STSArena.isScreenshotMode() && isVictory && !isImperfect;
         this.autoCloseEnabled = shouldAutoClose;
 
         // Capture stats
@@ -150,9 +148,9 @@ public class ArenaResultsScreen {
         }
 
         // Auto-close logic - check screenshot mode dynamically
-        // Auto-close is enabled for perfect victories and defeats when NOT in screenshot mode
-        // Imperfect victories always require user interaction
-        boolean shouldAutoClose = !STSArena.isScreenshotMode() && (!isVictory || !isImperfect);
+        // Auto-close is enabled ONLY for perfect victories when NOT in screenshot mode
+        // Imperfect victories and defeats always require user interaction
+        boolean shouldAutoClose = !STSArena.isScreenshotMode() && isVictory && !isImperfect;
         if (shouldAutoClose && fadeAlpha >= 1.0f) {
             autoCloseTimer += Gdx.graphics.getDeltaTime();
             if (autoCloseTimer >= AUTO_CLOSE_DELAY) {

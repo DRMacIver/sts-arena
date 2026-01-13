@@ -92,4 +92,27 @@ public class DisableArenaSavePatch {
             return SpireReturn.Continue();
         }
     }
+
+    /**
+     * Patch SaveHelper.saveIfAppropriate() to skip saving during arena runs.
+     * This catches saves triggered during dungeon initialization (e.g., Exordium constructor).
+     */
+    @SpirePatch(
+        cls = "com.megacrit.cardcrawl.helpers.SaveHelper",
+        method = "saveIfAppropriate"
+    )
+    public static class DisableSaveIfAppropriate {
+        public static SpireReturn<Void> Prefix(SaveFile.SaveType saveType) {
+            boolean inArenaRun = ArenaRunner.isArenaRun();
+            boolean hasMarker = SaveFileManager.hasActiveArenaSession();
+
+            if (inArenaRun || hasMarker) {
+                STSArena.logger.info("Skipping SaveHelper.saveIfAppropriate() during arena mode " +
+                    "(saveType=" + saveType + ", isArenaRun=" + inArenaRun +
+                    ", hasActiveMarker=" + hasMarker + ")");
+                return SpireReturn.Return(null);
+            }
+            return SpireReturn.Continue();
+        }
+    }
 }
