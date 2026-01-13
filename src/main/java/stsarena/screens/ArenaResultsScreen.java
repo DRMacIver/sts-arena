@@ -327,7 +327,14 @@ public class ArenaResultsScreen {
         Settings.isDailyRun = false;
         Settings.isEndless = false;
         STSArena.setReturnToArenaOnMainMenu();
-        ArenaRunner.setArenaRunInProgress(false);
+
+        // Clear arena state BEFORE calling startOver() to ensure:
+        // 1. The original save file is restored (or arena save deleted if no original)
+        // 2. The marker file is removed
+        // 3. All arena flags are cleared
+        // This prevents NPE when clicking Continue on main menu after arena run.
+        ArenaRunner.clearArenaRun();
+
         CardCrawlGame.startOver();
     }
 
