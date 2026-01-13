@@ -41,6 +41,11 @@ public class ArenaSkipCombatRewardScreenPatch {
                 // Clear the rewards to prevent any processing
                 __instance.rewards.clear();
 
+                // Prevent POST_COMBAT save in AbstractRoom.update() after this method returns.
+                // AbstractRoom.update() checks: if (!CardCrawlGame.loadingSave && !AbstractDungeon.loading_post_combat)
+                // Setting loading_post_combat=true prevents the save from triggering.
+                AbstractDungeon.loading_post_combat = true;
+
                 // Open our custom results screen
                 STSArena.logger.info("ARENA: Skipping CombatRewardScreen.open() - opening ArenaResultsScreen (imperfect=" + imperfect + ")");
                 STSArena.openResultsScreenVictory(imperfect);
