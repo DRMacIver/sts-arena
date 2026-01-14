@@ -174,6 +174,9 @@ public class STSArena implements EditStringsSubscriber, PostInitializeSubscriber
             logger.info("ARENA: Setting pendingFightStart = true");
             pendingFightStart = true;
         }
+
+        // Clear the resumingNormalRun flag now that the dungeon is initialized
+        ArenaRunner.clearResumingNormalRun();
     }
 
     /**

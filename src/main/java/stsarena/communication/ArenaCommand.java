@@ -64,7 +64,7 @@ public class ArenaCommand implements CommandExecutor.CommandExtension {
         }
 
         // Standard random loadout mode: arena <CHARACTER> <ENCOUNTER> [SEED]
-        String characterName = tokens[1].toUpperCase();
+        String characterName = normalizeCharacterName(tokens[1].toUpperCase());
 
         // Check if last token is a numeric seed
         Long seed = null;
@@ -98,7 +98,7 @@ public class ArenaCommand implements CommandExecutor.CommandExtension {
             playerClass = AbstractPlayer.PlayerClass.valueOf(characterName);
         } catch (IllegalArgumentException e) {
             throw new InvalidCommandException("Invalid character: " + characterName +
-                ". Valid options: IRONCLAD, SILENT, DEFECT, WATCHER");
+                ". Valid options: IRONCLAD, SILENT (or THE_SILENT), DEFECT, WATCHER");
         }
 
         // Generate a loadout for the specified character (random ascension)
@@ -199,5 +199,27 @@ public class ArenaCommand implements CommandExecutor.CommandExtension {
         // Not found - return as-is (will likely fail, but with a clear error)
         STSArena.logger.warn("ARENA: Unknown encounter name: " + rawEncounter);
         return rawEncounter;
+    }
+
+    /**
+     * Normalize character name to match PlayerClass enum values.
+     * Handles common aliases like "SILENT" -> "THE_SILENT".
+     *
+     * @param rawName The raw character name from user input
+     * @return The normalized name that matches PlayerClass enum
+     */
+    private static String normalizeCharacterName(String rawName) {
+        if (rawName == null) {
+            return rawName;
+        }
+        // Handle common aliases
+        switch (rawName.toUpperCase()) {
+            case "SILENT":
+                return "THE_SILENT";
+            case "THESILENT":
+                return "THE_SILENT";
+            default:
+                return rawName;
+        }
     }
 }

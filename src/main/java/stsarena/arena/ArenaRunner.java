@@ -45,6 +45,10 @@ public class ArenaRunner {
 
     // Track if arena was started from a normal run (Practice in Arena button)
     private static boolean startedFromNormalRun = false;
+
+    // Flag to indicate we're in the middle of resuming a normal run
+    // Used to prevent ClearArenaOnMainMenuPatch from clearing state during transition
+    private static boolean resumingNormalRun = false;
     private static com.megacrit.cardcrawl.characters.AbstractPlayer.PlayerClass normalRunPlayerClass = null;
 
     /**
@@ -307,6 +311,25 @@ public class ArenaRunner {
     }
 
     /**
+     * Check if we're in the middle of resuming a normal run.
+     * Used by ClearArenaOnMainMenuPatch to avoid clearing state during transition.
+     */
+    public static boolean isResumingNormalRun() {
+        return resumingNormalRun;
+    }
+
+    /**
+     * Clear the resumingNormalRun flag.
+     * Called after the normal run dungeon is fully initialized.
+     */
+    public static void clearResumingNormalRun() {
+        if (resumingNormalRun) {
+            STSArena.logger.info("ARENA: Normal run resume complete, clearing resumingNormalRun flag");
+            resumingNormalRun = false;
+        }
+    }
+
+    /**
      * Clear the arena run flag. Called when returning to main menu.
      * Also restores the original save file if one was backed up.
      */
@@ -325,6 +348,7 @@ public class ArenaRunner {
 
         isArenaRun = false;
         arenaRunInProgress = false;
+        resumingNormalRun = false;
         currentRunDbId = -1;
         currentLoadoutDbId = -1;
         currentLoadout = null;
@@ -632,6 +656,9 @@ public class ArenaRunner {
 
         STSArena.logger.info("ARENA: Resuming normal run for " + normalRunPlayerClass);
 
+        // Set flag to prevent ClearArenaOnMainMenuPatch from interfering during transition
+        resumingNormalRun = true;
+
         // Restore the original save file
         SaveFileManager.restoreOriginalSave();
 
@@ -781,18 +808,13 @@ public class ArenaRunner {
         // Convert saved loadout to GeneratedLoadout
         RandomLoadoutGenerator.GeneratedLoadout loadout = RandomLoadoutGenerator.fromSavedLoadout(savedLoadout);
 
-        // If starting from a normal run, force a save first to ensure any pending
-        // changes (like shop purchases) are persisted before we back up the save file.
-        // IMPORTANT: This must happen BEFORE setting isArenaRun=true, or DisableArenaSavePatch will block it.
-        if (startedFromNormalRun && AbstractDungeon.player != null) {
-            STSArena.logger.info("ARENA: Forcing save before backup to preserve pending changes (e.g., shop purchases)");
-            try {
-                SaveFile saveFile = new SaveFile(SaveFile.SaveType.POST_COMBAT);
-                SaveAndContinue.save(saveFile);
-            } catch (Exception e) {
-                STSArena.logger.error("ARENA: Failed to force save before backup", e);
-            }
-        }
+        // When starting from a normal run, DON'T force a new save.
+        // The game already autosaved with ENTER_ROOM type when the player entered the combat room.
+        // That autosave contains the correct pre-combat state.
+        // If we force a save now with POST_COMBAT type, we'd overwrite the good save with a bad one
+        // that puts the player at the loot screen instead of in combat.
+        // We'll just back up the existing autosave as-is.
+        STSArena.logger.info("ARENA: Using existing autosave for backup (already saved at ENTER_ROOM)");
 
         // Use the existing dbId for the loadout instead of saving a new one
         pendingLoadout = loadout;

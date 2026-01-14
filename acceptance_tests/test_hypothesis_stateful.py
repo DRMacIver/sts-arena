@@ -42,6 +42,7 @@ from conftest import (
     SCREENSHOTS_ENABLED,
     GameTimeout,
     VisualStabilityTimeout,
+    click_results_button,
     drain_pending_messages,
     wait_for_combat,
     wait_for_in_game,
@@ -595,7 +596,29 @@ class ArenaStateMachine(ScreenshotStateMixin, RuleBasedStateMachine):
 
         # After loss, handle based on arena vs normal run
         if self.model_is_arena:
-            # Arena should return to menu
+            # Arena shows results screen after defeat - need to click Continue
+            # Wait a bit for death animation and results screen to appear
+            time.sleep(1.0)
+
+            # Check if we're still in combat (lose command might have failed)
+            wait_for_state_update(self.coord)
+            if self.coord.last_game_state and self.coord.last_game_state.in_combat:
+                # Lose command didn't work or player isn't dead yet
+                # Try sending lose again
+                note("Player still in combat, retrying lose")
+                self.coord.send_message("lose")
+                wait_for_ready(self.coord)
+                time.sleep(1.0)
+
+            # Try to click continue on results screen
+            try:
+                click_results_button(self.coord, "continue")
+            except Exception as e:
+                note(f"click_results_button failed: {e}")
+                # Results screen might not be open, try arena_back instead
+                self.coord.send_message("arena_back")
+                wait_for_ready(self.coord)
+
             wait_for_arena_end(self.coord)
             self.model_in_game = False
             self.model_in_combat = False

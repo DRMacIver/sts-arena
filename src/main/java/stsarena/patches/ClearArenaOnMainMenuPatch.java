@@ -22,12 +22,20 @@ public class ClearArenaOnMainMenuPatch {
     public static class ClearOnMainMenu {
         public static void Postfix(MainMenuScreen __instance, boolean playBgm) {
             STSArena.logger.info("ARENA: MainMenuScreen created - isArenaRunInProgress=" +
-                ArenaRunner.isArenaRunInProgress() + ", isArenaRun=" + ArenaRunner.isArenaRun());
+                ArenaRunner.isArenaRunInProgress() + ", isArenaRun=" + ArenaRunner.isArenaRun() +
+                ", isResumingNormalRun=" + ArenaRunner.isResumingNormalRun());
 
             // Only clear if we're not in the middle of setting up an arena run
             // ArenaRunner.isArenaRunInProgress() is true during the setup phase
             if (ArenaRunner.isArenaRunInProgress()) {
                 STSArena.logger.info("ARENA: MainMenuScreen created during arena setup - NOT clearing state");
+                return;
+            }
+
+            // Also skip if we're resuming a normal run (leave_arena from Practice in Arena)
+            // The MainMenuScreen may be created as part of the transition
+            if (ArenaRunner.isResumingNormalRun()) {
+                STSArena.logger.info("ARENA: MainMenuScreen created during normal run resume - NOT clearing state");
                 return;
             }
 
