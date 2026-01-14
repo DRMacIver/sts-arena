@@ -4,6 +4,8 @@ import com.megacrit.cardcrawl.core.CardCrawlGame;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.powers.AbstractPower;
+import com.megacrit.cardcrawl.screens.select.GridCardSelectScreen;
+import com.megacrit.cardcrawl.screens.select.HandCardSelectScreen;
 import communicationmod.CommunicationMod;
 import communicationmod.CommandExecutor;
 import communicationmod.GameStateListener;
@@ -61,6 +63,10 @@ public class LoseCommand implements CommandExecutor.CommandExtension {
         if (AbstractDungeon.player.isDead) {
             throw new InvalidCommandException("Player is already dead");
         }
+
+        // Dismiss any pending card selection screens (e.g., Gambling Chip)
+        // These block combat from proceeding properly
+        dismissPendingCardSelections();
 
         STSArena.logger.info("LOSE command: Forcing player death directly");
 
@@ -122,6 +128,42 @@ public class LoseCommand implements CommandExecutor.CommandExtension {
         if (AbstractDungeon.player.currentBlock > 0) {
             STSArena.logger.info("LOSE command: Clearing " + AbstractDungeon.player.currentBlock + " block");
             AbstractDungeon.player.loseBlock();
+        }
+    }
+
+    /**
+     * Dismiss any pending card selection screens (Gambling Chip, Watcher cards, etc.)
+     * that might block combat from proceeding.
+     */
+    private static void dismissPendingCardSelections() {
+        try {
+            // Check for hand card select screen (used by Gambling Chip, etc.)
+            if (AbstractDungeon.handCardSelectScreen != null &&
+                AbstractDungeon.handCardSelectScreen.wereCardsRetrieved == false) {
+                STSArena.logger.info("LOSE command: Dismissing pending hand card selection");
+                // Clear the selection without choosing cards
+                AbstractDungeon.handCardSelectScreen.selectedCards.clear();
+                AbstractDungeon.handCardSelectScreen.wereCardsRetrieved = true;
+                AbstractDungeon.overlayMenu.cancelButton.hide();
+            }
+
+            // Check for grid card select screen
+            if (AbstractDungeon.gridSelectScreen != null &&
+                AbstractDungeon.gridSelectScreen.selectedCards != null &&
+                !AbstractDungeon.gridSelectScreen.selectedCards.isEmpty()) {
+                STSArena.logger.info("LOSE command: Clearing pending grid selection");
+                AbstractDungeon.gridSelectScreen.selectedCards.clear();
+            }
+
+            // Close any currently open screen
+            if (AbstractDungeon.screen != null &&
+                AbstractDungeon.screen == AbstractDungeon.CurrentScreen.HAND_SELECT) {
+                STSArena.logger.info("LOSE command: Closing hand select screen");
+                AbstractDungeon.closeCurrentScreen();
+            }
+        } catch (Exception e) {
+            STSArena.logger.warn("LOSE command: Error dismissing card selections: " + e.getMessage());
+            // Continue anyway - the lose command should still work
         }
     }
 }

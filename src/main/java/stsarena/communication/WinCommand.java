@@ -2,6 +2,8 @@ package stsarena.communication;
 
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.monsters.AbstractMonster;
+import com.megacrit.cardcrawl.screens.select.GridCardSelectScreen;
+import com.megacrit.cardcrawl.screens.select.HandCardSelectScreen;
 import communicationmod.CommunicationMod;
 import communicationmod.CommandExecutor;
 import communicationmod.GameStateListener;
@@ -51,6 +53,10 @@ public class WinCommand implements CommandExecutor.CommandExtension {
             throw new InvalidCommandException("No monsters found");
         }
 
+        // Dismiss any pending card selection screens (e.g., Gambling Chip)
+        // These block combat from proceeding properly
+        dismissPendingCardSelections();
+
         STSArena.logger.info("WIN command: Killing all monsters");
 
         // Kill all monsters
@@ -70,5 +76,41 @@ public class WinCommand implements CommandExecutor.CommandExtension {
         // Signal ready for next command and trigger a state response
         GameStateListener.signalReadyForCommand();
         CommunicationMod.publishOnGameStateChange();
+    }
+
+    /**
+     * Dismiss any pending card selection screens (Gambling Chip, Watcher cards, etc.)
+     * that might block combat from proceeding.
+     */
+    private static void dismissPendingCardSelections() {
+        try {
+            // Check for hand card select screen (used by Gambling Chip, etc.)
+            if (AbstractDungeon.handCardSelectScreen != null &&
+                AbstractDungeon.handCardSelectScreen.wereCardsRetrieved == false) {
+                STSArena.logger.info("WIN command: Dismissing pending hand card selection");
+                // Clear the selection without choosing cards
+                AbstractDungeon.handCardSelectScreen.selectedCards.clear();
+                AbstractDungeon.handCardSelectScreen.wereCardsRetrieved = true;
+                AbstractDungeon.overlayMenu.cancelButton.hide();
+            }
+
+            // Check for grid card select screen
+            if (AbstractDungeon.gridSelectScreen != null &&
+                AbstractDungeon.gridSelectScreen.selectedCards != null &&
+                !AbstractDungeon.gridSelectScreen.selectedCards.isEmpty()) {
+                STSArena.logger.info("WIN command: Clearing pending grid selection");
+                AbstractDungeon.gridSelectScreen.selectedCards.clear();
+            }
+
+            // Close any currently open screen
+            if (AbstractDungeon.screen != null &&
+                AbstractDungeon.screen == AbstractDungeon.CurrentScreen.HAND_SELECT) {
+                STSArena.logger.info("WIN command: Closing hand select screen");
+                AbstractDungeon.closeCurrentScreen();
+            }
+        } catch (Exception e) {
+            STSArena.logger.warn("WIN command: Error dismissing card selections: " + e.getMessage());
+            // Continue anyway - the win command should still work
+        }
     }
 }
