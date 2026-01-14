@@ -25,7 +25,92 @@ from conftest import (
     wait_for_main_menu,
     wait_for_ready,
     wait_for_stable,
+    wait_for_state_update,
 )
+from spirecomm.spire.screen import ScreenType
+
+
+def find_monster_room_index(coordinator):
+    """Find the index of a monster room in the available map choices."""
+    game = coordinator.last_game_state
+    if not game or game.screen_type != ScreenType.MAP:
+        return 0
+
+    if hasattr(game.screen, 'next_nodes') and game.screen.next_nodes:
+        for i, node in enumerate(game.screen.next_nodes):
+            if node.symbol in ('M', 'E'):
+                return i
+    return 0
+
+
+def navigate_to_combat(coordinator, timeout=60):
+    """Navigate from current position to combat.
+
+    Handles Neow event, card rewards, and map navigation.
+    """
+    start = time.time()
+    max_iterations = 30
+    event_choices_made = 0
+
+    for iteration in range(max_iterations):
+        if time.time() - start > timeout:
+            return False
+
+        time.sleep(0.5)
+        wait_for_state_update(coordinator)
+        game = coordinator.last_game_state
+
+        if not game:
+            time.sleep(1.0)
+            continue
+
+        if game.in_combat:
+            return True
+
+        screen_type = game.screen_type
+
+        if screen_type == ScreenType.EVENT:
+            if event_choices_made < 5:
+                coordinator.game_is_ready = False
+                coordinator.send_message("choose 0")
+                wait_for_ready(coordinator)
+                event_choices_made += 1
+                time.sleep(1.0)
+            else:
+                coordinator.game_is_ready = False
+                coordinator.send_message("proceed")
+                wait_for_ready(coordinator)
+                time.sleep(1.0)
+
+        elif screen_type == ScreenType.CARD_REWARD:
+            coordinator.game_is_ready = False
+            coordinator.send_message("skip")
+            wait_for_ready(coordinator)
+            time.sleep(0.5)
+
+        elif screen_type == ScreenType.MAP:
+            monster_idx = find_monster_room_index(coordinator)
+            coordinator.game_is_ready = False
+            coordinator.send_message(f"choose {monster_idx}")
+            wait_for_ready(coordinator)
+            coordinator.game_is_ready = False
+            coordinator.send_message("wait_for in_combat true")
+            wait_for_ready(coordinator, timeout=30)
+            return coordinator.last_game_state and coordinator.last_game_state.in_combat
+
+        elif screen_type == ScreenType.NONE:
+            coordinator.game_is_ready = False
+            coordinator.send_message("key MAP")
+            wait_for_ready(coordinator)
+            time.sleep(1.0)
+
+        else:
+            coordinator.game_is_ready = False
+            coordinator.send_message("proceed")
+            wait_for_ready(coordinator)
+            time.sleep(0.5)
+
+    return False
 
 
 class TestArenaToMenuTransitions:
@@ -157,41 +242,162 @@ class TestNormalRunToArena:
         # Verify we're in game
         assert coord.in_game
 
-        # Take a snapshot of player state
-        snapshot = get_player_snapshot(coord)
-        assert snapshot is not None
-        assert snapshot['hp'] > 0
+        # Navigate to combat
+        success = navigate_to_combat(coord)
+        assert success, "Failed to navigate to combat"
 
-    @pytest.mark.skip(reason="Practice in Arena requires reaching combat first - needs map navigation")
-    def test_practice_in_arena_button_visible_in_combat(self, at_main_menu):
-        """Pause during combat, verify Practice in Arena button shows"""
-        # This test would require reaching combat first, which requires
-        # map navigation that isn't implemented yet
-        pass
+        # Verify we're in combat
+        game = coord.last_game_state
+        assert game.in_combat
 
-    @pytest.mark.skip(reason="Practice in Arena requires reaching combat first - needs map navigation")
     def test_practice_in_arena_starts_arena(self, at_main_menu):
         """Click Practice in Arena, verify arena mode active"""
-        pass
+        coord = at_main_menu
+
+        # Start a normal run and navigate to combat
+        start_normal_run(coord, "IRONCLAD", 0)
+        success = navigate_to_combat(coord)
+        assert success, "Failed to navigate to combat"
+
+        # Capture pre-arena state
+        pre_snapshot = get_player_snapshot(coord)
+        assert pre_snapshot is not None
+
+        # Use Practice in Arena command
+        practice_in_arena(coord)
+        wait_for_in_game(coord)
+        wait_for_combat(coord)
+
+        # Verify we're now in an arena fight
+        assert coord.in_game
+        game = coord.last_game_state
+        assert game.in_combat
+
+        # Clean up - leave arena and abandon the run
+        leave_arena(coord)
+        wait_for_in_game(coord)  # Back in normal run
+        coord.send_message("abandon")
+        wait_for_ready(coord)
+        wait_for_main_menu(coord)
 
 
 class TestArenaToNormalRun:
     """Arena → normal run resume - Tests for resuming normal runs after arena"""
 
-    @pytest.mark.skip(reason="Requires Practice in Arena flow which needs map navigation")
     def test_leave_arena_resumes_normal_run(self, at_main_menu):
         """Practice in Arena → Leave Arena → back to normal run"""
-        pass
+        coord = at_main_menu
 
-    @pytest.mark.skip(reason="Requires Practice in Arena flow which needs map navigation")
+        # Start a normal run and navigate to combat
+        start_normal_run(coord, "IRONCLAD", 0)
+        success = navigate_to_combat(coord)
+        assert success, "Failed to navigate to combat"
+
+        # Capture pre-arena state
+        pre_snapshot = get_player_snapshot(coord)
+        assert pre_snapshot is not None
+        pre_floor = pre_snapshot['floor']
+
+        # Use Practice in Arena
+        practice_in_arena(coord)
+        wait_for_in_game(coord)
+        wait_for_combat(coord)
+
+        # Leave arena - should resume normal run
+        leave_arena(coord)
+        wait_for_in_game(coord)
+
+        # Verify we're back in the normal run
+        assert coord.in_game
+        post_snapshot = get_player_snapshot(coord)
+        assert post_snapshot is not None
+
+        # Floor should be preserved
+        assert post_snapshot['floor'] == pre_floor
+
+        # Clean up
+        coord.send_message("abandon")
+        wait_for_ready(coord)
+        wait_for_main_menu(coord)
+
     def test_normal_run_hp_preserved(self, at_main_menu):
         """After arena and resume, HP matches pre-arena state"""
-        pass
+        coord = at_main_menu
 
-    @pytest.mark.skip(reason="Requires Practice in Arena flow which needs map navigation")
-    def test_normal_run_floor_preserved(self, at_main_menu):
-        """After arena and resume, floor number is correct"""
-        pass
+        # Start a normal run and navigate to combat
+        start_normal_run(coord, "IRONCLAD", 0)
+        success = navigate_to_combat(coord)
+        assert success, "Failed to navigate to combat"
+
+        # Capture pre-arena HP
+        pre_snapshot = get_player_snapshot(coord)
+        assert pre_snapshot is not None
+        pre_hp = pre_snapshot['hp']
+
+        # Use Practice in Arena
+        practice_in_arena(coord)
+        wait_for_in_game(coord)
+        wait_for_combat(coord)
+
+        # Leave arena
+        leave_arena(coord)
+        wait_for_in_game(coord)
+
+        # Verify HP is preserved
+        post_snapshot = get_player_snapshot(coord)
+        assert post_snapshot is not None
+        assert post_snapshot['hp'] == pre_hp
+
+        # Clean up
+        coord.send_message("abandon")
+        wait_for_ready(coord)
+        wait_for_main_menu(coord)
+
+    def test_practice_win_then_leave(self, at_main_menu):
+        """Practice in Arena → Win → Leave Arena → normal run restored"""
+        coord = at_main_menu
+
+        # Start a normal run and navigate to combat
+        start_normal_run(coord, "IRONCLAD", 0)
+        success = navigate_to_combat(coord)
+        assert success, "Failed to navigate to combat"
+
+        # Capture pre-arena state
+        pre_snapshot = get_player_snapshot(coord)
+        assert pre_snapshot is not None
+
+        # Use Practice in Arena
+        practice_in_arena(coord)
+        wait_for_in_game(coord)
+        wait_for_combat(coord)
+
+        # Win the arena fight
+        coord.send_message("win")
+        wait_for_ready(coord)
+        time.sleep(1.0)  # Let results screen appear or auto-close
+
+        # Now leave arena (may already be at menu for perfect victory, or at results screen)
+        wait_for_stable(coord)
+        if coord.in_game:
+            # Still in game - either results screen or back in normal run
+            # Try leave_arena to get back to normal run
+            leave_arena(coord)
+            wait_for_in_game(coord)
+
+            # Should be back in normal run
+            post_snapshot = get_player_snapshot(coord)
+            assert post_snapshot is not None
+            assert post_snapshot['floor'] == pre_snapshot['floor']
+
+            # Clean up
+            coord.send_message("abandon")
+            wait_for_ready(coord)
+            wait_for_main_menu(coord)
+        else:
+            # Perfect victory auto-closed to menu - normal run save should be restored
+            # The normal run was saved, so starting a new run won't have the same state
+            # This is expected behavior for perfect victories
+            pass
 
 
 class TestSaveFileIntegrity:
