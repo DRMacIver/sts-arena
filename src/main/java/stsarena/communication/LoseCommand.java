@@ -76,6 +76,9 @@ public class LoseCommand implements CommandExecutor.CommandExtension {
         int hpBefore = AbstractDungeon.player.currentHealth;
         STSArena.logger.info("LOSE command: HP before: " + hpBefore);
 
+        // Clear death-preventing relics (Lizard Tail, Fairy in a Bottle)
+        clearDeathPreventingRelics();
+
         // Deal enough damage to kill the player through normal game mechanics
         // This ensures the DeathScreen is shown properly (with arena retry buttons if in arena)
         int damageNeeded = AbstractDungeon.player.currentHealth + AbstractDungeon.player.currentBlock + 999;
@@ -87,11 +90,44 @@ public class LoseCommand implements CommandExecutor.CommandExtension {
             com.megacrit.cardcrawl.cards.DamageInfo.DamageType.HP_LOSS
         ));
 
+        // If player survived due to a relic we missed, try again
+        if (!AbstractDungeon.player.isDead && AbstractDungeon.player.currentHealth > 0) {
+            STSArena.logger.info("LOSE command: Player survived, dealing damage again");
+            clearDamagePreventingPowers();  // Clear any powers that triggered
+            damageNeeded = AbstractDungeon.player.currentHealth + AbstractDungeon.player.currentBlock + 999;
+            AbstractDungeon.player.damage(new com.megacrit.cardcrawl.cards.DamageInfo(
+                null,
+                damageNeeded,
+                com.megacrit.cardcrawl.cards.DamageInfo.DamageType.HP_LOSS
+            ));
+        }
+
         STSArena.logger.info("LOSE command: Player death triggered, DeathScreen will show");
 
         // Signal ready for next command and trigger a state response
         GameStateListener.signalReadyForCommand();
         CommunicationMod.publishOnGameStateChange();
+    }
+
+    /**
+     * Clear relics that prevent death, such as Lizard Tail and Fairy in a Bottle.
+     * These relics heal the player when they would die, preventing the LOSE command from working.
+     */
+    private static void clearDeathPreventingRelics() {
+        if (AbstractDungeon.player == null || AbstractDungeon.player.relics == null) {
+            return;
+        }
+
+        for (com.megacrit.cardcrawl.relics.AbstractRelic relic : AbstractDungeon.player.relics) {
+            // Mark death-preventing relics as used up so they don't trigger
+            if (relic.relicId.equals("Lizard Tail") || relic.relicId.equals("Fairy in a Bottle")) {
+                if (!relic.usedUp) {
+                    STSArena.logger.info("LOSE command: Marking " + relic.relicId + " as used up");
+                    relic.usedUp = true;
+                    relic.grayscale = true;
+                }
+            }
+        }
     }
 
     /**
