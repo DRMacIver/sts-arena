@@ -21,8 +21,12 @@ import stsarena.communication.ArenaCommand;
 import stsarena.communication.ArenaCreatorCommand;
 import stsarena.communication.ArenaLoadoutCommand;
 import stsarena.communication.ArenaScreenCommand;
+import stsarena.communication.ArenaStateCommand;
 import stsarena.communication.CursorHideCommand;
+import stsarena.communication.LeaveArenaCommand;
 import stsarena.communication.LoseCommand;
+import stsarena.communication.PracticeInArenaCommand;
+import stsarena.communication.ResultsButtonCommand;
 import stsarena.communication.ScreenshotModeCommand;
 import stsarena.communication.SetRetryDataCommand;
 import stsarena.communication.WinCommand;
@@ -100,8 +104,12 @@ public class STSArena implements EditStringsSubscriber, PostInitializeSubscriber
             ArenaCreatorCommand.register();
             ArenaLoadoutCommand.register();
             ArenaScreenCommand.register();
+            ArenaStateCommand.register();
             CursorHideCommand.register();
+            LeaveArenaCommand.register();
             LoseCommand.register();
+            PracticeInArenaCommand.register();
+            ResultsButtonCommand.register();
             ScreenshotModeCommand.register();
             SetRetryDataCommand.register();
             WinCommand.register();
@@ -468,5 +476,13 @@ public class STSArena implements EditStringsSubscriber, PostInitializeSubscriber
         if (resultsScreen != null) {
             resultsScreen.close();
         }
+    }
+
+    /**
+     * Get the arena results screen.
+     * Used by CommunicationMod commands for testing.
+     */
+    public static ArenaResultsScreen getResultsScreen() {
+        return resultsScreen;
     }
 }

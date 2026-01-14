@@ -319,6 +319,30 @@ public class ArenaResultsScreen {
         hb.render(sb);
     }
 
+    /**
+     * Click the Continue/Return to Menu button.
+     * Public method for CommunicationMod command access.
+     */
+    public void clickContinue() {
+        handleContinue();
+    }
+
+    /**
+     * Click the Rematch/Retry button.
+     * Public method for CommunicationMod command access.
+     */
+    public void clickRetry() {
+        handleRetry();
+    }
+
+    /**
+     * Click the Modify Deck button.
+     * Public method for CommunicationMod command access.
+     */
+    public void clickModifyDeck() {
+        handleModifyDeck();
+    }
+
     private void handleContinue() {
         close();
 

@@ -463,6 +463,13 @@ public class ArenaRunner {
     }
 
     /**
+     * Get the current loadout's database ID.
+     */
+    public static long getCurrentLoadoutDbId() {
+        return currentLoadoutDbId;
+    }
+
+    /**
      * Check if we need to return to main menu after an arena fight.
      * Called from STSArena's update loop.
      *

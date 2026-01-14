@@ -468,6 +468,189 @@ def pytest_sessionfinish(session, exitstatus):
             pass
 
 
+# =============================================================================
+# Arena transition test helpers
+# =============================================================================
+
+
+def start_normal_run(coordinator, character="IRONCLAD", ascension=0, timeout=DEFAULT_TIMEOUT):
+    """
+    Start a normal (non-arena) run and wait until in game.
+
+    Args:
+        coordinator: The game coordinator
+        character: Character class (IRONCLAD, SILENT, DEFECT, WATCHER)
+        ascension: Ascension level (0-20)
+        timeout: Timeout for the operation
+
+    Returns:
+        The coordinator for chaining
+    """
+    coordinator.send_message(f"start {character} {ascension}")
+    wait_for_ready(coordinator, timeout=timeout)
+    wait_for_in_game(coordinator, timeout=timeout)
+    return coordinator
+
+
+def reach_first_combat(coordinator, timeout=120):
+    """
+    Progress a normal run until we reach the first combat room.
+
+    This uses keyboard navigation to select a combat node on the map
+    and proceed to it.
+
+    Args:
+        coordinator: The game coordinator
+        timeout: Maximum time to wait for combat
+
+    Returns:
+        The coordinator for chaining
+    """
+    import time
+
+    start_time = time.time()
+
+    # Wait for map screen to be available
+    wait_for_stable(coordinator, timeout=30)
+
+    # Try to find and enter a combat room
+    # The map starts with floor 0, and there are always combat nodes available
+    # We'll use the "proceed" command to auto-select and enter the next room
+    while time.time() - start_time < timeout:
+        wait_for_stable(coordinator)
+        game = coordinator.last_game_state
+
+        if game and game.in_combat:
+            return coordinator
+
+        # If we're on the map, try to proceed
+        if game and hasattr(game, 'screen_type'):
+            coordinator.send_message("proceed")
+            wait_for_ready(coordinator)
+            time.sleep(0.5)
+
+    raise GameTimeout(f"Timed out after {timeout}s waiting to reach combat")
+
+
+def open_pause_menu(coordinator, timeout=DEFAULT_TIMEOUT):
+    """
+    Open the pause menu (settings screen).
+
+    Args:
+        coordinator: The game coordinator
+        timeout: Timeout for the operation
+    """
+    coordinator.send_message("key ESCAPE")
+    wait_for_ready(coordinator, timeout=timeout)
+    # Give the menu time to open
+    import time
+    time.sleep(0.3)
+
+
+def get_arena_state(coordinator, timeout=DEFAULT_TIMEOUT):
+    """
+    Query the current arena state flags.
+
+    Returns a dict with:
+        - is_arena_run: bool
+        - arena_run_in_progress: bool
+        - started_from_normal_run: bool
+        - has_marker_file: bool
+        - results_screen_open: bool
+        - current_encounter: str or None
+        - current_loadout_id: int
+
+    Note: The arena_state command logs to the game log but doesn't return
+    the state in the message field. We infer state from other indicators.
+    """
+    coordinator.send_message("arena_state")
+    wait_for_ready(coordinator, timeout=timeout)
+    # The state is logged but not directly returned
+    # Tests should check coordinator.in_game and last_game_state instead
+    return coordinator
+
+
+def get_player_snapshot(coordinator):
+    """
+    Capture the current player state for comparison.
+
+    Returns a dict with:
+        - hp: current HP
+        - max_hp: maximum HP
+        - deck: list of card IDs
+        - relics: list of relic IDs
+        - potions: list of potion IDs
+        - floor: current floor number
+        - gold: current gold
+
+    Returns None if not in game or no player state available.
+    """
+    if not coordinator.in_game or not coordinator.last_game_state:
+        return None
+
+    game = coordinator.last_game_state
+    player = getattr(game, 'player', None)
+    if not player:
+        return None
+
+    return {
+        'hp': getattr(game, 'current_hp', 0),
+        'max_hp': getattr(game, 'max_hp', 0),
+        'deck': [card.card_id for card in getattr(game, 'deck', [])],
+        'relics': [relic.relic_id for relic in getattr(game, 'relics', [])],
+        'potions': [p.potion_id for p in getattr(game, 'potions', []) if hasattr(p, 'potion_id')],
+        'floor': getattr(game, 'floor', 0),
+        'gold': getattr(game, 'gold', 0),
+    }
+
+
+def practice_in_arena(coordinator, encounter=None, timeout=DEFAULT_TIMEOUT):
+    """
+    Execute the Practice in Arena command.
+
+    This saves the current player state and starts an arena fight.
+    Must be called while in combat during a normal run.
+
+    Args:
+        coordinator: The game coordinator
+        encounter: Optional encounter to use (defaults to current combat encounter)
+        timeout: Timeout for the operation
+    """
+    if encounter:
+        coordinator.send_message(f"practice_in_arena {encounter}")
+    else:
+        coordinator.send_message("practice_in_arena")
+    wait_for_ready(coordinator, timeout=timeout)
+
+
+def leave_arena(coordinator, timeout=DEFAULT_TIMEOUT):
+    """
+    Leave arena mode.
+
+    If the arena was started from a normal run (via Practice in Arena),
+    this resumes the normal run. Otherwise, it returns to the main menu.
+
+    Args:
+        coordinator: The game coordinator
+        timeout: Timeout for the operation
+    """
+    coordinator.send_message("leave_arena")
+    wait_for_ready(coordinator, timeout=timeout)
+
+
+def click_results_button(coordinator, button="continue", timeout=DEFAULT_TIMEOUT):
+    """
+    Click a button on the arena results screen.
+
+    Args:
+        coordinator: The game coordinator
+        button: Which button to click ("continue", "rematch", or "modify")
+        timeout: Timeout for the operation
+    """
+    coordinator.send_message(f"results_button {button}")
+    wait_for_ready(coordinator, timeout=timeout)
+
+
 @pytest.fixture
 def screenshot(request):
     """
