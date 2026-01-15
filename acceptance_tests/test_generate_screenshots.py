@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from conftest import (
+    GameTimeout,
     wait_for_combat,
     wait_for_main_menu,
     wait_for_ready,
@@ -476,30 +477,37 @@ def test_generate_documentation_screenshots(at_main_menu):
         coordinator.game_is_ready = False
         coordinator.send_message(f"arena {character} {encounter}")
         wait_for_ready(coordinator)
-        wait_for_combat(coordinator)
-        # Wait for combat animations to fully initialize before sending win/lose
-        # This ensures the game is in a stable state for command processing
-        wait_for_visual_stable(coordinator)
+        # Use polling for combat detection - the wait_for command can return
+        # during loading transitions before combat is fully initialized
+        for _ in range(30):  # 30 second timeout
+            time.sleep(1.0)
+            wait_for_visual_stable(coordinator)
+            if coordinator.in_game and coordinator.last_game_state and coordinator.last_game_state.in_combat:
+                break
+        else:
+            raise GameTimeout(f"Expected to be in combat for {character} vs {encounter}")
 
         coordinator.game_is_ready = False
         coordinator.send_message("win" if is_win else "lose")
         wait_for_ready(coordinator)
-        # ArenaResultsScreen auto-closes after ~2s for wins, ~2.5s for losses
-        # Give it time to complete the victory/defeat sequence and return to menu
-        # The death/victory animations can vary in duration, so we wait longer
-        time.sleep(5.0)
-        # Try to wait for main menu with longer timeout
-        try:
-            wait_for_main_menu(coordinator, timeout=30)
-        except Exception as e:
-            print(f"    Warning: wait_for_main_menu failed: {e}, retrying with arena_back...")
-            # Try sending arena_back to force return to menu
-            coordinator.game_is_ready = False
-            coordinator.send_message("arena_back")
-            wait_for_ready(coordinator)
-            time.sleep(1.0)
-            wait_for_main_menu(coordinator, timeout=30)
 
+        # Wait for the game to return to main menu after win/lose
+        # Use polling since the transition can take varying time
+        for attempt in range(30):  # 30 second timeout
+            time.sleep(1.0)
+            wait_for_visual_stable(coordinator)
+            if not coordinator.in_game:
+                break
+            # If still in game after 10 seconds, try arena_back
+            if attempt == 10:
+                print(f"    Warning: still in game after win/lose, sending arena_back...")
+                coordinator.game_is_ready = False
+                coordinator.send_message("arena_back")
+                wait_for_ready(coordinator)
+        else:
+            raise GameTimeout(f"Failed to return to main menu after {character} vs {encounter}")
+
+        # Ensure we're at encounter selection
         coordinator.game_is_ready = False
         coordinator.send_message("arena_back")
         wait_for_ready(coordinator)
