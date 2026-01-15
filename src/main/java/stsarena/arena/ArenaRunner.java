@@ -43,6 +43,12 @@ public class ArenaRunner {
     // Flag to trigger return to main menu after arena fight ends
     private static boolean pendingReturnToMainMenu = false;
 
+    // Flag and data for pending arena restart (used when restarting from imperfect victory)
+    private static boolean pendingArenaRestart = false;
+    private static RandomLoadoutGenerator.GeneratedLoadout pendingRestartLoadout = null;
+    private static String pendingRestartEncounter = null;
+    private static long pendingRestartLoadoutDbId = -1;
+
     // Track if arena was started from a normal run (Practice in Arena button)
     private static boolean startedFromNormalRun = false;
 
@@ -349,6 +355,8 @@ public class ArenaRunner {
         isArenaRun = false;
         arenaRunInProgress = false;
         resumingNormalRun = false;
+        startedFromNormalRun = false;
+        normalRunPlayerClass = null;
         currentRunDbId = -1;
         currentLoadoutDbId = -1;
         currentLoadout = null;
@@ -532,6 +540,73 @@ public class ArenaRunner {
     }
 
     /**
+     * Schedule an arena restart to happen after returning to main menu.
+     * This is used when we need to restart from a state where direct mode change doesn't work
+     * (e.g., imperfect victory where CombatRewardScreen was intercepted).
+     */
+    public static void scheduleArenaRestart() {
+        if (currentLoadout == null || currentEncounter == null) {
+            STSArena.logger.error("Cannot schedule arena restart - no current loadout/encounter stored");
+            return;
+        }
+
+        STSArena.logger.info("ARENA: Scheduling arena restart for loadout: " + currentLoadout.name +
+            ", encounter: " + currentEncounter);
+
+        // Store the loadout/encounter for restart after returning to main menu
+        pendingArenaRestart = true;
+        pendingRestartLoadout = currentLoadout;
+        pendingRestartEncounter = currentEncounter;
+        pendingRestartLoadoutDbId = currentLoadoutDbId;
+
+        // Return to main menu - the arena will be restarted when main menu is reached
+        Settings.isTrial = false;
+        Settings.isDailyRun = false;
+        Settings.isEndless = false;
+
+        // Mark room as complete
+        if (AbstractDungeon.getCurrRoom() != null) {
+            AbstractDungeon.getCurrRoom().phase = AbstractRoom.RoomPhase.COMPLETE;
+        }
+
+        // Clear arena state and return to main menu
+        clearArenaRun();
+        STSArena.setReturnToArenaOnMainMenu();  // This ensures we go to arena selection
+        CardCrawlGame.startOver();
+    }
+
+    /**
+     * Check if there's a pending arena restart and execute it.
+     * Called from STSArena.receivePostUpdate() when at main menu.
+     */
+    public static void checkPendingArenaRestart() {
+        if (!pendingArenaRestart || pendingRestartLoadout == null || pendingRestartEncounter == null) {
+            return;
+        }
+
+        STSArena.logger.info("ARENA: Executing pending arena restart");
+
+        // Clear the pending flag
+        RandomLoadoutGenerator.GeneratedLoadout loadout = pendingRestartLoadout;
+        String encounter = pendingRestartEncounter;
+        long loadoutDbId = pendingRestartLoadoutDbId;
+        pendingArenaRestart = false;
+        pendingRestartLoadout = null;
+        pendingRestartEncounter = null;
+        pendingRestartLoadoutDbId = -1;
+
+        // Start the arena fight (using startFight which will create a new DB entry)
+        startFight(loadout, encounter);
+    }
+
+    /**
+     * Check if there's a pending arena restart.
+     */
+    public static boolean hasPendingArenaRestart() {
+        return pendingArenaRestart;
+    }
+
+    /**
      * Restart the current arena fight with the same loadout and encounter.
      * Called from the "Try Again" button on the arena death screen.
      */
@@ -599,6 +674,23 @@ public class ArenaRunner {
             CardCrawlGame.mainMenuScreen.fadeOutMusic();
         }
         CardCrawlGame.music.fadeOutTempBGM();
+
+        // If we're still in a dungeon (e.g., after imperfect victory where we intercepted
+        // CombatRewardScreen), we need to properly clean up before transitioning.
+        // Mark the room as complete to help with state cleanup.
+        if (AbstractDungeon.getCurrRoom() != null) {
+            AbstractDungeon.getCurrRoom().phase = AbstractRoom.RoomPhase.COMPLETE;
+        }
+
+        // Close any open screens that might interfere with the transition
+        try {
+            if (AbstractDungeon.screen != null &&
+                AbstractDungeon.screen != AbstractDungeon.CurrentScreen.NONE) {
+                AbstractDungeon.closeCurrentScreen();
+            }
+        } catch (Exception e) {
+            STSArena.logger.warn("ARENA: Error closing screen during restart: " + e.getMessage());
+        }
 
         // Close the death screen and trigger game restart
         CardCrawlGame.mode = CardCrawlGame.GameMode.CHAR_SELECT;

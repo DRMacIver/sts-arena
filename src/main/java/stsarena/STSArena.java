@@ -258,6 +258,18 @@ public class STSArena implements EditStringsSubscriber, PostInitializeSubscriber
             return;  // Don't also open encounter select
         }
 
+        // Check if we should restart an arena fight after returning to main menu
+        // This is used when restarting from imperfect victory where direct mode change doesn't work
+        if (ArenaRunner.hasPendingArenaRestart() &&
+            CardCrawlGame.mainMenuScreen != null &&
+            AbstractDungeon.player == null &&
+            !CardCrawlGame.loadingSave) {
+            returnToArenaOnMainMenu = false;  // Clear this flag since we're starting a fight instead
+            logger.info("ARENA: Returned to main menu, executing pending arena restart");
+            ArenaRunner.checkPendingArenaRestart();
+            return;  // Don't also open encounter select
+        }
+
         // Check if we should return to arena selection after returning to main menu
         // We detect main menu by: mainMenuScreen exists, no dungeon active, not loading
         if (returnToArenaOnMainMenu &&

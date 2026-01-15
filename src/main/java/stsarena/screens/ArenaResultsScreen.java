@@ -362,7 +362,9 @@ public class ArenaResultsScreen {
     private void handleRetry() {
         close();
 
-        // Restart the current fight
-        ArenaRunner.restartCurrentFight();
+        // For results screen (shown after imperfect victory or defeat while still in dungeon),
+        // we use scheduleArenaRestart() which properly returns to main menu first.
+        // This avoids issues with trying to restart directly from the intercepted game state.
+        ArenaRunner.scheduleArenaRestart();
     }
 }

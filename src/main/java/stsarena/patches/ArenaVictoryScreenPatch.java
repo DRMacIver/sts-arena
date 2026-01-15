@@ -214,8 +214,9 @@ public class ArenaVictoryScreenPatch {
             damageTaken = 0;
             buttonsVisible = false;
 
-            // Restart the current fight
-            ArenaRunner.restartCurrentFight();
+            // Use scheduleArenaRestart() to properly return to main menu first,
+            // then restart the arena fight
+            ArenaRunner.scheduleArenaRestart();
         }
 
         private static void handleModifyDeck() {

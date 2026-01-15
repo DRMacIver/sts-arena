@@ -154,8 +154,10 @@ public class ArenaDeathScreenButtonsPatch {
         }
 
         private static void handleTryAgain() {
-            // Restart the current fight
-            ArenaRunner.restartCurrentFight();
+            // Use scheduleArenaRestart() to properly return to main menu first,
+            // then restart the arena fight. This is more reliable than trying to
+            // restart directly from the death screen state.
+            ArenaRunner.scheduleArenaRestart();
         }
 
         private static void handleModifyDeck() {
