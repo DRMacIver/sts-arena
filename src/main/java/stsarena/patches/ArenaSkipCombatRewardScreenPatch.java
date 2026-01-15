@@ -31,15 +31,11 @@ public class ArenaSkipCombatRewardScreenPatch {
         public static SpireReturn<Void> Prefix(CombatRewardScreen __instance) {
             if (ArenaRunner.isArenaRun()) {
                 // Check if this is an imperfect victory (player took damage or got cursed)
-                boolean imperfect = false;
-                if (AbstractDungeon.player != null && ArenaRunner.getCurrentLoadout() != null) {
-                    int startHp = ArenaRunner.getCurrentLoadout().currentHp;
-                    int endHp = AbstractDungeon.player.currentHealth;
-                    imperfect = endHp < startHp;
-
-                    // Also check if player got cursed during combat (e.g., Writhing Mass)
-                    // TODO: Track curses gained during combat for perfect victory check
-                }
+                // Use didTakeDamageThisCombat() flag instead of comparing HP, because relics like
+                // Burning Blood can heal the player at end of combat before this check runs.
+                boolean imperfect = ArenaRunner.didTakeDamageThisCombat();
+                STSArena.logger.info("ARENA: CombatRewardScreen imperfect check - tookDamage=" + imperfect);
+                // TODO: Also track curses gained during combat for perfect victory check
 
                 // Clear the rewards to prevent any processing
                 __instance.rewards.clear();

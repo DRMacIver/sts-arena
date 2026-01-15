@@ -39,6 +39,7 @@ public class ArenaRunner {
     // Combat tracking
     private static int combatStartHp = 0;
     private static List<String> potionsUsedThisCombat = new ArrayList<>();
+    private static boolean tookDamageThisCombat = false;
 
     // Flag to trigger return to main menu after arena fight ends
     private static boolean pendingReturnToMainMenu = false;
@@ -100,6 +101,7 @@ public class ArenaRunner {
         currentEncounter = encounter;
         combatStartHp = loadout.currentHp;
         potionsUsedThisCombat.clear();
+        tookDamageThisCombat = false;
 
         STSArena.logger.info("Starting arena: " + loadout.playerClass + " vs " + encounter);
 
@@ -336,6 +338,34 @@ public class ArenaRunner {
     }
 
     /**
+     * Get the player's HP at combat start.
+     * Used for imperfect victory detection to compare against end-of-combat HP.
+     */
+    public static int getCombatStartHp() {
+        return combatStartHp;
+    }
+
+    /**
+     * Record that the player took damage this combat.
+     * Called from DamageCommand and can be called from damage-tracking patches.
+     */
+    public static void recordDamageTaken() {
+        if (isArenaRun) {
+            tookDamageThisCombat = true;
+            STSArena.logger.info("ARENA: Recorded damage taken this combat");
+        }
+    }
+
+    /**
+     * Check if the player took any damage during the current combat.
+     * This is used for imperfect victory detection, which is more reliable than
+     * comparing HP values at end of combat (since relics may heal the player).
+     */
+    public static boolean didTakeDamageThisCombat() {
+        return tookDamageThisCombat;
+    }
+
+    /**
      * Clear the arena run flag. Called when returning to main menu.
      * Also restores the original save file if one was backed up.
      */
@@ -361,6 +391,7 @@ public class ArenaRunner {
         currentLoadoutDbId = -1;
         currentLoadout = null;
         currentEncounter = null;
+        tookDamageThisCombat = false;
 
         // Clear pending state too
         pendingLoadout = null;
@@ -545,6 +576,9 @@ public class ArenaRunner {
      * (e.g., imperfect victory where CombatRewardScreen was intercepted).
      */
     public static void scheduleArenaRestart() {
+        STSArena.logger.info("=== ARENA: scheduleArenaRestart() called ===");
+        STSArena.logger.info("ARENA: currentLoadout=" + currentLoadout + ", currentEncounter=" + currentEncounter);
+
         if (currentLoadout == null || currentEncounter == null) {
             STSArena.logger.error("Cannot schedule arena restart - no current loadout/encounter stored");
             return;
@@ -554,10 +588,15 @@ public class ArenaRunner {
             ", encounter: " + currentEncounter);
 
         // Store the loadout/encounter for restart after returning to main menu
+        // IMPORTANT: Store these BEFORE calling clearArenaRun() which clears currentLoadout/currentEncounter
         pendingArenaRestart = true;
         pendingRestartLoadout = currentLoadout;
         pendingRestartEncounter = currentEncounter;
         pendingRestartLoadoutDbId = currentLoadoutDbId;
+
+        STSArena.logger.info("ARENA: pendingArenaRestart=" + pendingArenaRestart +
+            ", pendingRestartLoadout=" + (pendingRestartLoadout != null ? pendingRestartLoadout.name : "null") +
+            ", pendingRestartEncounter=" + pendingRestartEncounter);
 
         // Return to main menu - the arena will be restarted when main menu is reached
         Settings.isTrial = false;
@@ -580,7 +619,13 @@ public class ArenaRunner {
      * Called from STSArena.receivePostUpdate() when at main menu.
      */
     public static void checkPendingArenaRestart() {
+        STSArena.logger.info("=== ARENA: checkPendingArenaRestart() called ===");
+        STSArena.logger.info("ARENA: pendingArenaRestart=" + pendingArenaRestart +
+            ", pendingRestartLoadout=" + (pendingRestartLoadout != null ? pendingRestartLoadout.name : "null") +
+            ", pendingRestartEncounter=" + pendingRestartEncounter);
+
         if (!pendingArenaRestart || pendingRestartLoadout == null || pendingRestartEncounter == null) {
+            STSArena.logger.info("ARENA: checkPendingArenaRestart - conditions not met, returning early");
             return;
         }
 
@@ -637,6 +682,7 @@ public class ArenaRunner {
         currentEncounter = encounter;
         combatStartHp = loadout.currentHp;
         potionsUsedThisCombat.clear();
+        tookDamageThisCombat = false;
         currentLoadoutDbId = loadoutDbId;
 
         // Start tracking a new run
@@ -918,6 +964,7 @@ public class ArenaRunner {
         currentEncounter = encounter;
         combatStartHp = loadout.currentHp;
         potionsUsedThisCombat.clear();
+        tookDamageThisCombat = false;
         currentLoadoutDbId = savedLoadout.dbId;
 
         STSArena.logger.info("Starting arena with saved loadout: " + loadout.playerClass + " vs " + encounter);

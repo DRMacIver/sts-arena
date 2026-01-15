@@ -23,6 +23,7 @@ import stsarena.communication.ArenaLoadoutCommand;
 import stsarena.communication.ArenaScreenCommand;
 import stsarena.communication.ArenaStateCommand;
 import stsarena.communication.CursorHideCommand;
+import stsarena.communication.DamageCommand;
 import stsarena.communication.LeaveArenaCommand;
 import stsarena.communication.LoseCommand;
 import stsarena.communication.PracticeInArenaCommand;
@@ -106,6 +107,7 @@ public class STSArena implements EditStringsSubscriber, PostInitializeSubscriber
             ArenaScreenCommand.register();
             ArenaStateCommand.register();
             CursorHideCommand.register();
+            DamageCommand.register();
             LeaveArenaCommand.register();
             LoseCommand.register();
             PracticeInArenaCommand.register();
@@ -260,10 +262,17 @@ public class STSArena implements EditStringsSubscriber, PostInitializeSubscriber
 
         // Check if we should restart an arena fight after returning to main menu
         // This is used when restarting from imperfect victory where direct mode change doesn't work
-        if (ArenaRunner.hasPendingArenaRestart() &&
-            CardCrawlGame.mainMenuScreen != null &&
-            AbstractDungeon.player == null &&
-            !CardCrawlGame.loadingSave) {
+        boolean hasPending = ArenaRunner.hasPendingArenaRestart();
+        boolean hasMenuScreen = CardCrawlGame.mainMenuScreen != null;
+        boolean noPlayer = AbstractDungeon.player == null;
+        boolean notLoading = !CardCrawlGame.loadingSave;
+
+        if (hasPending) {
+            logger.info("ARENA: hasPendingArenaRestart=true, checking conditions: mainMenuScreen=" +
+                hasMenuScreen + ", player==null=" + noPlayer + ", !loadingSave=" + notLoading);
+        }
+
+        if (hasPending && hasMenuScreen && noPlayer && notLoading) {
             returnToArenaOnMainMenu = false;  // Clear this flag since we're starting a fight instead
             logger.info("ARENA: Returned to main menu, executing pending arena restart");
             ArenaRunner.checkPendingArenaRestart();

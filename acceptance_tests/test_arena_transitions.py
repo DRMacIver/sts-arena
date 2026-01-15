@@ -573,10 +573,18 @@ class TestResultsScreenFlows:
         wait_for_ready(coord)
         time.sleep(0.5)
 
-        # Rematch
+        # Rematch - uses scheduleArenaRestart which goes through main menu
         click_results_button(coord, "rematch")
-        wait_for_in_game(coord)
-        wait_for_combat(coord)
+
+        # Wait for combat - the game transitions: death screen -> main menu -> combat
+        # Use polling since the transition goes through multiple states
+        for _ in range(30):  # 30 second timeout
+            time.sleep(1.0)
+            wait_for_stable(coord)
+            if coord.in_game and coord.last_game_state and coord.last_game_state.in_combat:
+                break
+        else:
+            raise GameTimeout("Expected to be in combat after rematch")
 
         # Verify back in combat
         assert coord.in_game
@@ -613,34 +621,46 @@ class TestResultsScreenFlows:
         """Click Rematch after imperfect victory, fight restarts"""
         coord = at_main_menu
 
-        # Start arena - use a harder encounter that might cause damage
+        # Start arena fight
         coord.send_message("arena IRONCLAD Jaw Worm")
         wait_for_ready(coord)
         wait_for_in_game(coord)
         wait_for_combat(coord)
 
-        # Play a turn to take some damage, then win
-        # For now, just win - the game may or may not show as imperfect
+        # Deal damage to player to ensure imperfect victory
+        coord.send_message("damage 5")
+        wait_for_ready(coord)
+
+        # Now win the fight (imperfect because we took damage)
         coord.send_message("win")
         wait_for_ready(coord)
 
-        # Either we auto-return to menu (perfect) or results screen shows
-        # Give time for either path
+        # Give time for results screen to appear (imperfect victory shows results)
         time.sleep(1.0)
         wait_for_stable(coord)
 
-        # Check if we're already at menu (perfect victory auto-close)
-        if not coord.in_game:
-            # Perfect victory auto-closed, test is done
-            return
+        # Imperfect victory should show results screen, not auto-close
+        assert coord.in_game, "Imperfect victory should show results screen, not auto-close"
 
-        # If still in game, results screen should be open - click rematch
+        # Click rematch - this triggers scheduleArenaRestart which:
+        # 1. Goes to main menu first
+        # 2. Then restarts the fight via checkPendingArenaRestart
         click_results_button(coord, "rematch")
-        wait_for_in_game(coord)
-        wait_for_combat(coord)
+
+        # Wait for combat - the game transitions: results screen -> main menu -> combat
+        # Use polling since the transition goes through multiple states
+        for _ in range(30):  # 30 second timeout
+            time.sleep(1.0)
+            wait_for_stable(coord)
+            if coord.in_game and coord.last_game_state and coord.last_game_state.in_combat:
+                break
+        else:
+            raise GameTimeout("Expected to be in combat after rematch")
 
         # Verify back in combat
         assert coord.in_game
+        game = coord.last_game_state
+        assert game.in_combat
 
         # Clean up
         coord.send_message("win")

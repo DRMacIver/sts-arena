@@ -17,12 +17,10 @@ public class ArenaVictoryPatch {
         STSArena.logger.info("ARENA: endBattle called - isArenaRun=" + ArenaRunner.isArenaRun() + ", runDbId=" + ArenaRunner.getCurrentRunDbId());
         if (ArenaRunner.isArenaRun()) {
             // Check if this was an imperfect victory (player took damage)
-            boolean imperfect = false;
-            if (AbstractDungeon.player != null && ArenaRunner.getCurrentLoadout() != null) {
-                int startHp = ArenaRunner.getCurrentLoadout().currentHp;
-                int endHp = AbstractDungeon.player.currentHealth;
-                imperfect = endHp < startHp;
-            }
+            // Use didTakeDamageThisCombat() flag instead of comparing HP, because relics like
+            // Burning Blood can heal the player at end of combat before this check runs.
+            boolean imperfect = ArenaRunner.didTakeDamageThisCombat();
+            STSArena.logger.info("ARENA: endBattle imperfect check - tookDamage=" + imperfect);
 
             STSArena.logger.info("ARENA: endBattle - recording victory (imperfect=" + imperfect + ")");
             // Record victory but don't trigger return to menu for imperfect victories
