@@ -51,8 +51,12 @@ public class ArenaSkipCombatRewardScreenPatch {
                     // Imperfect victory: show results screen with retry/modify options
                     STSArena.logger.info("ARENA: Imperfect victory - opening ArenaResultsScreen");
                     STSArena.openResultsScreenVictory(true);
+                } else if (ArenaRunner.wasStartedFromNormalRun()) {
+                    // Perfect victory from normal run: show results screen so user can return to normal run
+                    STSArena.logger.info("ARENA: Perfect victory from normal run - opening ArenaResultsScreen");
+                    STSArena.openResultsScreenVictory(false);
                 } else {
-                    // Perfect victory: go directly to encounter selection
+                    // Perfect victory from main menu: go directly to encounter selection
                     STSArena.logger.info("ARENA: Perfect victory - returning to encounter selection");
                     triggerReturnToMainMenu();
                 }
