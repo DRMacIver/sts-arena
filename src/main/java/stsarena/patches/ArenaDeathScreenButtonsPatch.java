@@ -201,6 +201,9 @@ public class ArenaDeathScreenButtonsPatch {
                 return;
             }
 
+            // Save SpriteBatch color to restore after rendering (prevents cursor/UI issues)
+            Color prevColor = new Color(sb.getColor());
+
             // Render Retreat button
             renderButton(sb, retreatHb, "Retreat", retreatClickStarted);
 
@@ -209,6 +212,9 @@ public class ArenaDeathScreenButtonsPatch {
 
             // Render Rematch button
             renderButton(sb, tryAgainHb, "Rematch", tryAgainClickStarted);
+
+            // Restore SpriteBatch color to avoid affecting cursor rendering
+            sb.setColor(prevColor);
         }
 
         private static void renderButton(SpriteBatch sb, Hitbox hb, String label, boolean clickStarted) {

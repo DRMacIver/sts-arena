@@ -346,8 +346,19 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
                 for (ArenaRepository.CardData cardData : cardDataList) {
                     AbstractCard card = CardLibrary.getCard(cardData.id);
                     if (card != null) {
-                        DeckCard dc = new DeckCard(card.makeCopy());
+                        AbstractCard copy = card.makeCopy();
+                        // Apply upgrades to the card object (makeCopy doesn't preserve them)
+                        for (int i = 0; i < cardData.upgrades; i++) {
+                            if (copy.canUpgrade()) {
+                                copy.upgrade();
+                            }
+                        }
+                        DeckCard dc = new DeckCard(copy);
                         dc.upgraded = cardData.upgrades > 0;
+                        // Restore bottle flags
+                        dc.card.inBottleFlame = cardData.inBottleFlame;
+                        dc.card.inBottleLightning = cardData.inBottleLightning;
+                        dc.card.inBottleTornado = cardData.inBottleTornado;
                         deckCards.add(dc);
                     }
                 }
@@ -461,8 +472,19 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
                 for (ArenaRepository.CardData cardData : cardDataList) {
                     AbstractCard card = CardLibrary.getCard(cardData.id);
                     if (card != null) {
-                        DeckCard dc = new DeckCard(card.makeCopy());
+                        AbstractCard copy = card.makeCopy();
+                        // Apply upgrades to the card object (makeCopy doesn't preserve them)
+                        for (int i = 0; i < cardData.upgrades; i++) {
+                            if (copy.canUpgrade()) {
+                                copy.upgrade();
+                            }
+                        }
+                        DeckCard dc = new DeckCard(copy);
                         dc.upgraded = cardData.upgrades > 0;
+                        // Restore bottle flags
+                        dc.card.inBottleFlame = cardData.inBottleFlame;
+                        dc.card.inBottleLightning = cardData.inBottleLightning;
+                        dc.card.inBottleTornado = cardData.inBottleTornado;
                         deckCards.add(dc);
                     }
                 }
@@ -2400,5 +2422,57 @@ public class LoadoutCreatorScreen implements ScrollBarListener {
      */
     public void setAscensionFromCommand(int level) {
         this.ascensionLevel = Math.max(0, Math.min(20, level));
+    }
+
+    /**
+     * Toggle upgrade status for a card from a command.
+     * @param index The index of the card in the deck (0-based)
+     * @return true if the upgrade was toggled, false if index is invalid or card can't be upgraded
+     */
+    public boolean toggleUpgradeFromCommand(int index) {
+        if (index >= 0 && index < deckCards.size()) {
+            DeckCard dc = deckCards.get(index);
+            if (dc.card.canUpgrade() || dc.upgraded) {
+                dc.upgraded = !dc.upgraded;
+                // Also apply/remove the upgrade from the card object itself
+                if (dc.upgraded && dc.card.canUpgrade()) {
+                    dc.card.upgrade();
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get the number of cards currently in the deck.
+     * @return The deck size
+     */
+    public int getDeckSizeFromCommand() {
+        return deckCards.size();
+    }
+
+    /**
+     * Check if a card at the given index is upgraded.
+     * @param index The index of the card in the deck (0-based)
+     * @return true if upgraded, false otherwise
+     */
+    public boolean isCardUpgradedFromCommand(int index) {
+        if (index >= 0 && index < deckCards.size()) {
+            return deckCards.get(index).upgraded;
+        }
+        return false;
+    }
+
+    /**
+     * Get the card ID at the given index.
+     * @param index The index of the card in the deck (0-based)
+     * @return The card ID, or null if index is invalid
+     */
+    public String getCardIdFromCommand(int index) {
+        if (index >= 0 && index < deckCards.size()) {
+            return deckCards.get(index).card.cardID;
+        }
+        return null;
     }
 }

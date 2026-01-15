@@ -78,6 +78,39 @@ public class ArenaVictoryScreenPatch {
     }
 
     /**
+     * Hide the "Return to Menu" button (Proceed button) in arena mode for imperfect victories only.
+     * For perfect victories, we let the normal button show which leads to encounter selection.
+     * For imperfect victories, we use our own buttons for retry/modify options.
+     */
+    @SpirePatch(cls = "com.megacrit.cardcrawl.ui.buttons.ReturnToMenuButton", method = "update")
+    public static class HideReturnButtonUpdatePatch {
+        @SpirePrefixPatch
+        public static SpireReturn<Void> Prefix(com.megacrit.cardcrawl.ui.buttons.ReturnToMenuButton __instance) {
+            // Only hide for imperfect victories where we show our custom buttons
+            if (ArenaRunner.isArenaRun() && isImperfectVictory) {
+                __instance.show = false;
+                return SpireReturn.Return(null);
+            }
+            return SpireReturn.Continue();
+        }
+    }
+
+    /**
+     * Skip rendering the return button for imperfect victories in arena mode.
+     */
+    @SpirePatch(cls = "com.megacrit.cardcrawl.ui.buttons.ReturnToMenuButton", method = "render")
+    public static class HideReturnButtonRenderPatch {
+        @SpirePrefixPatch
+        public static SpireReturn<Void> Prefix(com.megacrit.cardcrawl.ui.buttons.ReturnToMenuButton __instance, SpriteBatch sb) {
+            // Only hide for imperfect victories
+            if (ArenaRunner.isArenaRun() && isImperfectVictory) {
+                return SpireReturn.Return(null);
+            }
+            return SpireReturn.Continue();
+        }
+    }
+
+    /**
      * Intercept update to handle our custom buttons in arena mode for imperfect victories.
      */
     @SpirePatch(cls = "com.megacrit.cardcrawl.screens.VictoryScreen", method = "update")

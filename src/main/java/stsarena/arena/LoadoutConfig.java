@@ -135,33 +135,35 @@ public class LoadoutConfig {
         // Shop-only / gold-related (useless in arena)
         "Courier", "Membership Card", "Smiling Mask", "The Courier",
         "Ceramic Fish", "Golden Idol", "Bloody Idol", "Old Coin",
-        "Maw Bank", "Ectoplasm",
+        "Maw Bank", "Ectoplasm", "Lee's Waffle", "Sling of Courage",
 
         // Map/event only
         "JuzuBracelet", "Ssserpent Head", "Nloth's Gift", "Matryoshka",
-        "Tiny Chest", "Shovel", "WingedGreaves",
+        "Tiny Chest", "Shovel", "WingedGreaves", "Winged Greaves",
 
         // Rest site only
         "Regal Pillow", "Dream Catcher", "Eternal Feather", "Peace Pipe",
-        "Coffee Dripper",
+        "Coffee Dripper", "Fusion Hammer",
 
-        // Run progression / between-combat
+        // Run progression / between-combat (useless in arena single fights)
         "Prayer Wheel", "Question Card", "Pantograph", "Black Star",
         "Calling Bell", "Empty Cage", "Pandora's Box", "Astrolabe",
         "Cauldron", "Orrery", "Prismatic Shard", "Singing Bowl",
         "Tiny House", "Dollys Mirror", "Orrery", "War Paint",
-        "Whetstone",
+        "Whetstone", "Omamori", "Potion Belt", "Darkstone Periapt",
+        "Strawberry", "Pear", "Mango", "Meal Ticket", "Meat on the Bone",
 
-        // Boss relics that replace starter
-        "Black Blood", "Ring of the Serpent", "FrozenCore", "HolyWater",
+        // Note: Boss relics that replace starter (Black Blood, Ring of the Serpent, etc.)
+        // are allowed - LoadoutBuilder handles the replacement logic
 
         // Problematic for arena
         "Circlet", "Red Circlet", "NeowsBlessing", "Spirit Poop",
         "Necronomicon", "Dead Branch", "NlothsMask", "Molten Egg 2",
         "Toxic Egg 2", "Frozen Egg 2", "Unceasing Top",
 
-        // Require specific conditions
+        // Require specific conditions or curses
         "Blue Candle", "Medical Kit", "Strange Spoon", "White Beast Statue",
+        "DuVuDoll", "Darkstone Periapt",
 
         // Time-based (arena is one fight)
         "Sundial", "Frozen Eye", "Juzu Bracelet"
@@ -312,26 +314,27 @@ public class LoadoutConfig {
             List<String> relicIds = new ArrayList<>();
 
             // Add shared relics (common, uncommon, rare)
+            // Also check for class restrictions since some relics in shared lists are class-specific
             for (com.megacrit.cardcrawl.relics.AbstractRelic relic :
                     com.megacrit.cardcrawl.helpers.RelicLibrary.commonList) {
-                if (!USELESS_RELICS.contains(relic.relicId)) {
+                if (!USELESS_RELICS.contains(relic.relicId) && isRelicAllowedForClass(relic.relicId, playerClass)) {
                     relicIds.add(relic.relicId);
                 }
             }
             for (com.megacrit.cardcrawl.relics.AbstractRelic relic :
                     com.megacrit.cardcrawl.helpers.RelicLibrary.uncommonList) {
-                if (!USELESS_RELICS.contains(relic.relicId)) {
+                if (!USELESS_RELICS.contains(relic.relicId) && isRelicAllowedForClass(relic.relicId, playerClass)) {
                     relicIds.add(relic.relicId);
                 }
             }
             for (com.megacrit.cardcrawl.relics.AbstractRelic relic :
                     com.megacrit.cardcrawl.helpers.RelicLibrary.rareList) {
-                if (!USELESS_RELICS.contains(relic.relicId)) {
+                if (!USELESS_RELICS.contains(relic.relicId) && isRelicAllowedForClass(relic.relicId, playerClass)) {
                     relicIds.add(relic.relicId);
                 }
             }
 
-            // Add class-specific relics
+            // Add class-specific relics (these are already filtered by class)
             java.util.ArrayList<com.megacrit.cardcrawl.relics.AbstractRelic> classRelics = getClassRelicList(playerClass);
             if (classRelics != null) {
                 for (com.megacrit.cardcrawl.relics.AbstractRelic relic : classRelics) {
@@ -346,6 +349,15 @@ public class LoadoutConfig {
             // RelicLibrary not loaded (standalone testing)
             return new ArrayList<>();
         }
+    }
+
+    /**
+     * Check if a relic is allowed for a given player class.
+     * Returns false if the relic is class-specific and for a different class.
+     */
+    private static boolean isRelicAllowedForClass(String relicId, String playerClass) {
+        String relicClass = getRelicClass(relicId);
+        return relicClass == null || relicClass.equals(playerClass);
     }
 
     /**

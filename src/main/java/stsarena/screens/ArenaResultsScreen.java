@@ -45,7 +45,7 @@ public class ArenaResultsScreen {
     private boolean isImperfect = false;
     private int damageTaken = 0;
     private int damageDealt = 0;
-    private int turnsTaken = 0;
+    // Note: turnsTaken removed - was always showing 1 due to timing issues
     private int endingHp = 0;
     private int startingHp = 0;
 
@@ -108,11 +108,6 @@ public class ArenaResultsScreen {
         }
 
         this.damageTaken = startingHp - endingHp;
-
-        // Get combat stats
-        if (AbstractDungeon.actionManager != null) {
-            this.turnsTaken = AbstractDungeon.actionManager.turn;
-        }
 
         // Calculate damage dealt
         this.damageDealt = 0;
@@ -232,7 +227,6 @@ public class ArenaResultsScreen {
         String[] historyStrings = LocalizedStrings.getAllText(LocalizedStrings.HISTORY);
         String damageDealtLabel = historyStrings.length > 7 ? historyStrings[7] : "Damage Dealt";
         String damageTakenLabel = historyStrings.length > 8 ? historyStrings[8] : "Damage Taken";
-        String turnsLabel = historyStrings.length > 9 ? historyStrings[9] : "Turns";
 
         // Draw title
         String title = isVictory ? victoryText : defeatText;
@@ -262,14 +256,10 @@ public class ArenaResultsScreen {
             damageTakenLabel + ": " + damageTaken,
             statsX, statsY - STATS_LINE_HEIGHT, statsColor);
 
-        FontHelper.renderFontCentered(sb, FontHelper.tipBodyFont,
-            turnsLabel + ": " + turnsTaken,
-            statsX, statsY - STATS_LINE_HEIGHT * 2, statsColor);
-
         if (isVictory) {
             FontHelper.renderFontCentered(sb, FontHelper.tipBodyFont,
                 "HP: " + endingHp + "/" + startingHp,
-                statsX, statsY - STATS_LINE_HEIGHT * 3, statsColor);
+                statsX, statsY - STATS_LINE_HEIGHT * 2, statsColor);
         }
 
         // Draw buttons with fade

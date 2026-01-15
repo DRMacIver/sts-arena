@@ -30,25 +30,32 @@ public class ArenaSkipCombatRewardScreenPatch {
         @SpirePrefixPatch
         public static SpireReturn<Void> Prefix(CombatRewardScreen __instance) {
             if (ArenaRunner.isArenaRun()) {
-                // Check if this is an imperfect victory (player took damage)
+                // Check if this is an imperfect victory (player took damage or got cursed)
                 boolean imperfect = false;
                 if (AbstractDungeon.player != null && ArenaRunner.getCurrentLoadout() != null) {
                     int startHp = ArenaRunner.getCurrentLoadout().currentHp;
                     int endHp = AbstractDungeon.player.currentHealth;
                     imperfect = endHp < startHp;
+
+                    // Also check if player got cursed during combat (e.g., Writhing Mass)
+                    // TODO: Track curses gained during combat for perfect victory check
                 }
 
                 // Clear the rewards to prevent any processing
                 __instance.rewards.clear();
 
                 // Prevent POST_COMBAT save in AbstractRoom.update() after this method returns.
-                // AbstractRoom.update() checks: if (!CardCrawlGame.loadingSave && !AbstractDungeon.loading_post_combat)
-                // Setting loading_post_combat=true prevents the save from triggering.
                 AbstractDungeon.loading_post_combat = true;
 
-                // Open our custom results screen
-                STSArena.logger.info("ARENA: Skipping CombatRewardScreen.open() - opening ArenaResultsScreen (imperfect=" + imperfect + ")");
-                STSArena.openResultsScreenVictory(imperfect);
+                if (imperfect) {
+                    // Imperfect victory: show results screen with retry/modify options
+                    STSArena.logger.info("ARENA: Imperfect victory - opening ArenaResultsScreen");
+                    STSArena.openResultsScreenVictory(true);
+                } else {
+                    // Perfect victory: go directly to encounter selection
+                    STSArena.logger.info("ARENA: Perfect victory - returning to encounter selection");
+                    triggerReturnToMainMenu();
+                }
 
                 return SpireReturn.Return(null);
             }

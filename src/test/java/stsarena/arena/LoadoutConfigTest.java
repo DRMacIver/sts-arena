@@ -106,13 +106,16 @@ public class LoadoutConfigTest {
 
     @Test
     public void testIsExcludedRelicBossUpgrades() {
-        assertTrue("Black Blood should be excluded",
+        // Boss upgrade relics (starter replacements) are now ALLOWED in arena
+        // because they provide useful combat benefits and LoadoutBuilder handles
+        // the replacement logic properly
+        assertFalse("Black Blood should not be excluded",
             LoadoutConfig.isExcludedRelic("Black Blood"));
-        assertTrue("Ring of the Serpent should be excluded",
+        assertFalse("Ring of the Serpent should not be excluded",
             LoadoutConfig.isExcludedRelic("Ring of the Serpent"));
-        assertTrue("FrozenCore should be excluded",
+        assertFalse("FrozenCore should not be excluded",
             LoadoutConfig.isExcludedRelic("FrozenCore"));
-        assertTrue("HolyWater should be excluded",
+        assertFalse("HolyWater should not be excluded",
             LoadoutConfig.isExcludedRelic("HolyWater"));
     }
 

@@ -15,12 +15,14 @@ import stsarena.screens.LoadoutCreatorScreen;
  * CommunicationMod command for manipulating the loadout creator screen.
  *
  * Usage:
- *   arena_creator add_card <card_id>   - Add a card to the deck
- *   arena_creator add_relic <relic_id> - Add a relic
+ *   arena_creator add_card <card_id>    - Add a card to the deck
+ *   arena_creator add_relic <relic_id>  - Add a relic
  *   arena_creator set_hp <current> <max> - Set HP values
- *   arena_creator set_asc <level>      - Set ascension level
+ *   arena_creator set_asc <level>       - Set ascension level
+ *   arena_creator toggle_upgrade <index> - Toggle upgrade on card at index
+ *   arena_creator deck_info             - Get deck info (size, cards, upgrades)
  *
- * This command is primarily used for documentation screenshot generation.
+ * This command is primarily used for documentation screenshot generation and testing.
  */
 public class ArenaCreatorCommand implements CommandExecutor.CommandExtension {
 
@@ -51,11 +53,13 @@ public class ArenaCreatorCommand implements CommandExecutor.CommandExtension {
     public void execute(String[] tokens) throws InvalidCommandException {
         if (tokens.length < 2) {
             throw new InvalidCommandException(
-                "Usage: arena_creator <add_card|add_relic|set_hp|set_asc> [args]\n" +
-                "  add_card <card_id>     - Add a card to the deck\n" +
-                "  add_relic <relic_id>   - Add a relic\n" +
-                "  set_hp <current> <max> - Set HP values\n" +
-                "  set_asc <level>        - Set ascension level");
+                "Usage: arena_creator <add_card|add_relic|set_hp|set_asc|toggle_upgrade|deck_info> [args]\n" +
+                "  add_card <card_id>      - Add a card to the deck\n" +
+                "  add_relic <relic_id>    - Add a relic\n" +
+                "  set_hp <current> <max>  - Set HP values\n" +
+                "  set_asc <level>         - Set ascension level\n" +
+                "  toggle_upgrade <index>  - Toggle upgrade on card at index\n" +
+                "  deck_info               - Get deck info (size, cards, upgrades)");
         }
 
         LoadoutCreatorScreen creator = STSArena.loadoutCreatorScreen;
@@ -92,6 +96,17 @@ public class ArenaCreatorCommand implements CommandExecutor.CommandExtension {
                     throw new InvalidCommandException("Usage: arena_creator set_asc <level>");
                 }
                 setAscension(creator, tokens[2]);
+                break;
+
+            case "toggle_upgrade":
+                if (tokens.length < 3) {
+                    throw new InvalidCommandException("Usage: arena_creator toggle_upgrade <index>");
+                }
+                toggleUpgrade(creator, tokens[2]);
+                break;
+
+            case "deck_info":
+                getDeckInfo(creator);
                 break;
 
             default:
@@ -180,5 +195,37 @@ public class ArenaCreatorCommand implements CommandExecutor.CommandExtension {
         } catch (NumberFormatException e) {
             throw new InvalidCommandException("Invalid ascension level: " + levelStr);
         }
+    }
+
+    private void toggleUpgrade(LoadoutCreatorScreen creator, String indexStr) throws InvalidCommandException {
+        try {
+            int index = Integer.parseInt(indexStr);
+            if (!creator.toggleUpgradeFromCommand(index)) {
+                throw new InvalidCommandException("Could not toggle upgrade at index " + index +
+                    " (invalid index or card cannot be upgraded)");
+            }
+            boolean isUpgraded = creator.isCardUpgradedFromCommand(index);
+            String cardId = creator.getCardIdFromCommand(index);
+            STSArena.logger.info("ARENA_CREATOR: Toggled upgrade on " + cardId + " at index " + index +
+                " (now " + (isUpgraded ? "upgraded" : "not upgraded") + ")");
+        } catch (NumberFormatException e) {
+            throw new InvalidCommandException("Invalid index: " + indexStr);
+        }
+    }
+
+    private void getDeckInfo(LoadoutCreatorScreen creator) {
+        int size = creator.getDeckSizeFromCommand();
+        StringBuilder info = new StringBuilder();
+        info.append("Deck size: ").append(size).append("\n");
+        for (int i = 0; i < size; i++) {
+            String cardId = creator.getCardIdFromCommand(i);
+            boolean upgraded = creator.isCardUpgradedFromCommand(i);
+            info.append(i).append(": ").append(cardId);
+            if (upgraded) {
+                info.append("+");
+            }
+            info.append("\n");
+        }
+        STSArena.logger.info("ARENA_CREATOR deck_info:\n" + info.toString());
     }
 }

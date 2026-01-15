@@ -248,10 +248,17 @@ public class NormalRunLoadoutSaver {
             long createdAt = System.currentTimeMillis();
             String name = generateLoadoutName(player, "Defeat");
 
-            // Copy the deck
+            // Copy the deck (preserving upgrades)
             List<AbstractCard> deck = new ArrayList<>();
             for (AbstractCard card : player.masterDeck.group) {
-                deck.add(card.makeCopy());
+                AbstractCard copy = card.makeCopy();
+                // makeCopy() doesn't preserve upgrades, so apply them manually
+                for (int i = 0; i < card.timesUpgraded; i++) {
+                    if (copy.canUpgrade()) {
+                        copy.upgrade();
+                    }
+                }
+                deck.add(copy);
             }
 
             // Copy the relics (preserving counters)
@@ -333,10 +340,17 @@ public class NormalRunLoadoutSaver {
             long createdAt = System.currentTimeMillis();
             String name = generateLoadoutName(player, "Victory");
 
-            // Copy the deck
+            // Copy the deck (preserving upgrades)
             List<AbstractCard> deck = new ArrayList<>();
             for (AbstractCard card : player.masterDeck.group) {
-                deck.add(card.makeCopy());
+                AbstractCard copy = card.makeCopy();
+                // makeCopy() doesn't preserve upgrades, so apply them manually
+                for (int i = 0; i < card.timesUpgraded; i++) {
+                    if (copy.canUpgrade()) {
+                        copy.upgrade();
+                    }
+                }
+                deck.add(copy);
             }
 
             // Copy the relics (preserving counters)
