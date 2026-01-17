@@ -3,7 +3,7 @@
     "name": "STS Arena",
     "author_list": ["drmaciver"],
     "description": "Play isolated single fights as practice runs. Select any enemy encounter, build a custom deck, and test your combat skills.",
-    "version": "0.7.0",
+    "version": "0.8.0",
     "sts_version": "01-18-2024",
     "mts_version": "3.30.0",
     "dependencies": ["basemod"]

@@ -6,7 +6,7 @@
 
     <groupId>stsarena</groupId>
     <artifactId>STSArena</artifactId>
-    <version>0.7.0</version>
+    <version>0.8.0</version>
     <packaging>jar</packaging>
 
     <name>STS Arena</name>
