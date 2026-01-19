@@ -1,6 +1,8 @@
 package stsarena.communication;
 
 import com.google.gson.JsonObject;
+import com.megacrit.cardcrawl.core.CardCrawlGame;
+import communicationmod.CommunicationMod;
 import communicationmod.CommandExecutor;
 import communicationmod.GameStateListener;
 import communicationmod.InvalidCommandException;
@@ -23,6 +25,7 @@ import stsarena.screens.ArenaResultsScreen;
  *     "arena_run_in_progress": true/false,
  *     "started_from_normal_run": true/false,
  *     "has_marker_file": true/false,
+ *     "any_save_file_exists": true/false,
  *     "results_screen_open": true/false,
  *     "current_encounter": "encounter name or null",
  *     "current_loadout_id": number or -1
@@ -64,6 +67,15 @@ public class ArenaStateCommand implements CommandExecutor.CommandExtension {
         // File-based state
         state.addProperty("has_marker_file", SaveFileManager.hasActiveArenaSession());
 
+        // Check if any save file exists (causes Continue button to appear)
+        boolean anySaveExists = false;
+        try {
+            anySaveExists = CardCrawlGame.characterManager.anySaveFileExists();
+        } catch (Exception e) {
+            STSArena.logger.warn("Failed to check anySaveFileExists: " + e.getMessage());
+        }
+        state.addProperty("any_save_file_exists", anySaveExists);
+
         // Results screen state
         ArenaResultsScreen resultsScreen = STSArena.getResultsScreen();
         state.addProperty("results_screen_open", resultsScreen != null && resultsScreen.isOpen);
@@ -78,11 +90,11 @@ public class ArenaStateCommand implements CommandExecutor.CommandExtension {
 
         state.addProperty("current_loadout_id", ArenaRunner.getCurrentLoadoutDbId());
 
-        // Store in a place the test can access
-        // The message will be available in the game state response
         STSArena.logger.info("arena_state: " + state.toString());
 
-        // Signal that we have a message to send
-        GameStateListener.registerStateChange();
+        // Return the JSON in the message field
+        GameStateListener.setMessage(state.toString());
+        GameStateListener.signalReadyForCommand();
+        CommunicationMod.publishOnGameStateChange();
     }
 }

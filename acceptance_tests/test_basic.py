@@ -7,12 +7,39 @@ These tests verify:
 - Runs can be abandoned
 """
 
+import json
 import pytest
 
 from spirecomm.communication.coordinator import Coordinator
 from spirecomm.spire.character import PlayerClass
 from spirecomm.spire.screen import ScreenType
 from conftest import wait_for_ready, GameTimeout, DEFAULT_TIMEOUT, wait_for_in_game, wait_for_main_menu, wait_for_combat
+
+
+def get_arena_state(coord: Coordinator) -> dict:
+    """Get current arena state from the game.
+
+    Returns a dict with:
+    - is_arena_run: bool
+    - arena_run_in_progress: bool
+    - started_from_normal_run: bool
+    - has_marker_file: bool
+    - any_save_file_exists: bool
+    - results_screen_open: bool
+    - current_encounter: str or None
+    - current_loadout_id: int
+    """
+    coord.last_message = None
+    coord.send_message("arena_state")
+    wait_for_ready(coord, timeout=5)
+
+    if coord.last_error:
+        raise RuntimeError(f"arena_state failed: {coord.last_error}")
+
+    if not coord.last_message:
+        raise RuntimeError("arena_state returned no message")
+
+    return json.loads(coord.last_message)
 
 # Screen types that should NEVER appear during or after arena fights
 FORBIDDEN_ARENA_SCREENS = {
@@ -325,3 +352,45 @@ class TestArenaMode:
         wait_for_in_game(coord)
         assert coord.in_game, "Should be in fresh normal run"
         assert coord.last_game_state.character.name == "THE_SILENT", "Should be playing Silent"
+
+    def test_no_save_file_after_arena_victory_without_arena_back(self, at_main_menu: Coordinator):
+        """Test that no save file exists after arena victory (without arena_back).
+
+        This is a regression test for a bug where the Continue button appeared
+        on the main menu after arena fights. The issue was that arena save cleanup
+        happened in a Postfix patch on MainMenuScreen constructor, which ran AFTER
+        the menu buttons were created based on save file existence.
+
+        The test verifies that after winning an arena fight and returning to main
+        menu (via the automatic transition), no save file should exist - the cleanup
+        should happen BEFORE the menu buttons are created.
+        """
+        coord = at_main_menu
+
+        # Start an arena fight
+        coord.send_message("arena IRONCLAD Cultist 99999")
+        wait_for_ready(coord)
+        wait_for_in_game(coord)
+        wait_for_combat(coord)
+        assert coord.in_game, "Should be in arena fight"
+
+        # Win the fight - this triggers automatic return to main menu
+        coord.send_message("win")
+        wait_for_ready(coord)
+        wait_for_main_menu(coord)
+        assert not coord.in_game, "Should be at main menu after arena victory"
+
+        # NOTE: We intentionally do NOT call arena_back here.
+        # The bug is that cleanup happens too late (in Postfix), so the save file
+        # still exists when the main menu checks for it.
+
+        # Check arena state - no save file should exist
+        state = get_arena_state(coord)
+
+        # These flags should all be false/clean after arena
+        assert not state.get("is_arena_run", True), \
+            "is_arena_run should be false after arena ends"
+        assert not state.get("has_marker_file", True), \
+            "has_marker_file should be false after arena cleanup"
+        assert not state.get("any_save_file_exists", True), \
+            "No save file should exist after arena victory - this causes the Continue button bug!"
