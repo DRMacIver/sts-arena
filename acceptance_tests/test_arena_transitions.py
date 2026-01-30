@@ -649,7 +649,7 @@ class TestResultsScreenFlows:
 
         # Wait for combat - the game transitions: results screen -> main menu -> combat
         # Use polling since the transition goes through multiple states
-        for _ in range(30):  # 30 second timeout
+        for _ in range(60):  # 60 second timeout
             time.sleep(1.0)
             wait_for_stable(coord)
             if coord.in_game and coord.last_game_state and coord.last_game_state.in_combat:

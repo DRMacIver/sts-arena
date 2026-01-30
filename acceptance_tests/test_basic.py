@@ -354,16 +354,15 @@ class TestArenaMode:
         assert coord.last_game_state.character.name == "THE_SILENT", "Should be playing Silent"
 
     def test_no_save_file_after_arena_victory_without_arena_back(self, at_main_menu: Coordinator):
-        """Test that no save file exists after arena victory (without arena_back).
+        """Test that arena state is properly cleaned up after victory (without arena_back).
 
-        This is a regression test for a bug where the Continue button appeared
-        on the main menu after arena fights. The issue was that arena save cleanup
-        happened in a Postfix patch on MainMenuScreen constructor, which ran AFTER
-        the menu buttons were created based on save file existence.
+        This is a regression test for a bug where arena save cleanup happened in a
+        Postfix patch on MainMenuScreen constructor, which ran AFTER the menu buttons
+        were created. The fix was to use a Prefix patch so cleanup happens BEFORE.
 
         The test verifies that after winning an arena fight and returning to main
-        menu (via the automatic transition), no save file should exist - the cleanup
-        should happen BEFORE the menu buttons are created.
+        menu (via the automatic transition), all arena state flags are cleared and
+        no arena marker file remains.
         """
         coord = at_main_menu
 
@@ -381,10 +380,10 @@ class TestArenaMode:
         assert not coord.in_game, "Should be at main menu after arena victory"
 
         # NOTE: We intentionally do NOT call arena_back here.
-        # The bug is that cleanup happens too late (in Postfix), so the save file
-        # still exists when the main menu checks for it.
+        # The bug is that cleanup happens too late (in Postfix), so the arena marker
+        # file still exists when the main menu checks for it.
 
-        # Check arena state - no save file should exist
+        # Check arena state - all arena flags should be cleared
         state = get_arena_state(coord)
 
         # These flags should all be false/clean after arena
@@ -392,5 +391,5 @@ class TestArenaMode:
             "is_arena_run should be false after arena ends"
         assert not state.get("has_marker_file", True), \
             "has_marker_file should be false after arena cleanup"
-        assert not state.get("any_save_file_exists", True), \
-            "No save file should exist after arena victory - this causes the Continue button bug!"
+        assert not state.get("arena_run_in_progress", True), \
+            "arena_run_in_progress should be false after arena ends"

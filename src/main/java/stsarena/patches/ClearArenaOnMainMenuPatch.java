@@ -1,6 +1,7 @@
 package stsarena.patches;
 
 import com.evacipated.cardcrawl.modthespire.lib.SpirePatch;
+import com.megacrit.cardcrawl.screens.mainMenu.MainMenuScreen;
 import stsarena.STSArena;
 import stsarena.arena.ArenaRunner;
 
@@ -27,7 +28,7 @@ public class ClearArenaOnMainMenuPatch {
     public static class ClearOnMainMenu {
         // Use Prefix (not Postfix) so cleanup happens BEFORE constructor runs.
         // The constructor calls setMainMenuButtons() which checks anySaveFileExists().
-        public static void Prefix(boolean playBgm) {
+        public static void Prefix(MainMenuScreen __instance, boolean playBgm) {
             STSArena.logger.info("ARENA: MainMenuScreen being created - isArenaRunInProgress=" +
                 ArenaRunner.isArenaRunInProgress() + ", isArenaRun=" + ArenaRunner.isArenaRun() +
                 ", isResumingNormalRun=" + ArenaRunner.isResumingNormalRun());

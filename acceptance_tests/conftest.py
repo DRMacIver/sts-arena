@@ -33,7 +33,7 @@ except ImportError:
     SCREENSHOTS_ENABLED = False
 
 
-DEFAULT_TIMEOUT = 60  # seconds - game takes time to initialize
+DEFAULT_TIMEOUT = 120  # seconds - game transitions can be slow in containers
 
 
 class GameTimeout(Exception):

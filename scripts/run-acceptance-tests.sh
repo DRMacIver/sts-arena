@@ -81,6 +81,25 @@ for jar in lib/desktop-1.0.jar lib/ModTheSpire.jar lib/BaseMod.jar lib/Communica
     fi
 done
 
+# Detect Java 8 for running the game (ModTheSpire requires Java 8)
+GAME_JAVA=""
+if [ -x "/usr/lib/jvm/java-8-openjdk-amd64/bin/java" ]; then
+    GAME_JAVA="/usr/lib/jvm/java-8-openjdk-amd64/bin/java"
+elif [ -n "$JAVA8_HOME" ] && [ -x "$JAVA8_HOME/bin/java" ]; then
+    GAME_JAVA="$JAVA8_HOME/bin/java"
+else
+    # Check if default java is version 8
+    JAVA_VER=$(java -version 2>&1 | head -1 | grep -oP '\"1\.8\.' || true)
+    if [ -n "$JAVA_VER" ]; then
+        GAME_JAVA="$(which java)"
+    else
+        echo "ERROR: Java 8 is required to run ModTheSpire but was not found."
+        echo "Install it with: sudo apt-get install openjdk-8-jdk"
+        exit 1
+    fi
+fi
+echo "Game Java: $GAME_JAVA ($($GAME_JAVA -version 2>&1 | head -1))"
+
 # Build CommunicationMod (if sources have changed)
 echo "Building CommunicationMod..."
 (cd external/CommunicationMod && mvn package -DskipTests -q)
@@ -112,7 +131,7 @@ MANIFEST
 
 # Link game files
 ln -sf "$PROJECT_DIR/lib/desktop-1.0.jar" "$STEAM_DIR/common/SlayTheSpire/"
-ln -sf "$(which java)" "$STEAM_DIR/common/SlayTheSpire/jre/bin/java"
+ln -sf "$GAME_JAVA" "$STEAM_DIR/common/SlayTheSpire/jre/bin/java"
 
 # Copy mods to game mods directory
 cp "$PROJECT_DIR/lib/BaseMod.jar" "$STEAM_DIR/common/SlayTheSpire/mods/"
@@ -221,17 +240,19 @@ echo
 # Clean up any previous marker
 rm -f "$MARKER_FILE" "$RESULT_FILE"
 
+# Limit JVM heap to avoid OOM kills in memory-constrained containers
+JAVA_OPTS="-Xmx1g"
+
 # Set up native library path for ARM64 if available
-JAVA_OPTS=""
 if [ -d "$PROJECT_DIR/lib/natives-arm64-complete" ]; then
     NATIVES="$PROJECT_DIR/lib/natives-arm64-complete"
     export LD_LIBRARY_PATH="$NATIVES:/usr/lib/aarch64-linux-gnu:/usr/lib/jni:$LD_LIBRARY_PATH"
-    JAVA_OPTS="-Djava.library.path=$NATIVES:/usr/lib/aarch64-linux-gnu:/usr/lib/jni"
+    JAVA_OPTS="$JAVA_OPTS -Djava.library.path=$NATIVES:/usr/lib/aarch64-linux-gnu:/usr/lib/jni"
 fi
 
 # Run from lib directory (where mods/ is relative to)
 cd "$PROJECT_DIR/lib"
-java $JAVA_OPTS -jar ModTheSpire.jar --mods basemod,CommunicationMod,stsarena 2>&1 &
+$GAME_JAVA $JAVA_OPTS -jar ModTheSpire.jar --mods basemod,CommunicationMod,stsarena 2>&1 &
 GAME_PID=$!
 cd "$PROJECT_DIR"
 

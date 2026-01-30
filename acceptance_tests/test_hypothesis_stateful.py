@@ -139,7 +139,20 @@ def assert_in_combat(coord: Coordinator):
 
 
 def wait_for_arena_end(coord: Coordinator, timeout: float = 60):
-    """Block until arena fight ends (return to main menu)."""
+    """Block until arena fight ends (return to main menu).
+
+    Handles the results screen that appears after defeat or imperfect victory
+    by clicking the 'continue' button to proceed to the main menu.
+    """
+    # Give the game time to process the win/loss transition
+    time.sleep(1.0)
+    wait_for_stable(coord, timeout=timeout)
+
+    # If still in game, the results screen is showing - click continue
+    if coord.in_game:
+        click_results_button(coord, "continue")
+
+    # Wait for main menu
     wait_for_main_menu(coord, timeout=timeout)
 
 

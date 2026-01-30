@@ -2,8 +2,6 @@ package stsarena.communication;
 
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.monsters.AbstractMonster;
-import com.megacrit.cardcrawl.screens.select.GridCardSelectScreen;
-import com.megacrit.cardcrawl.screens.select.HandCardSelectScreen;
 import communicationmod.CommunicationMod;
 import communicationmod.CommandExecutor;
 import communicationmod.GameStateListener;
@@ -80,37 +78,19 @@ public class WinCommand implements CommandExecutor.CommandExtension {
 
     /**
      * Dismiss any pending card selection screens (Gambling Chip, Watcher cards, etc.)
-     * that might block combat from proceeding.
+     * by confirming the current selection through the game's normal UI flow.
      */
     private static void dismissPendingCardSelections() {
         try {
-            // Check for hand card select screen (used by Gambling Chip, etc.)
-            if (AbstractDungeon.handCardSelectScreen != null &&
-                AbstractDungeon.handCardSelectScreen.wereCardsRetrieved == false) {
-                STSArena.logger.info("WIN command: Dismissing pending hand card selection");
-                // Clear the selection without choosing cards
-                AbstractDungeon.handCardSelectScreen.selectedCards.clear();
-                AbstractDungeon.handCardSelectScreen.wereCardsRetrieved = true;
-                AbstractDungeon.overlayMenu.cancelButton.hide();
-            }
-
-            // Check for grid card select screen
-            if (AbstractDungeon.gridSelectScreen != null &&
-                AbstractDungeon.gridSelectScreen.selectedCards != null &&
-                !AbstractDungeon.gridSelectScreen.selectedCards.isEmpty()) {
-                STSArena.logger.info("WIN command: Clearing pending grid selection");
-                AbstractDungeon.gridSelectScreen.selectedCards.clear();
-            }
-
-            // Close any currently open screen
-            if (AbstractDungeon.screen != null &&
-                AbstractDungeon.screen == AbstractDungeon.CurrentScreen.HAND_SELECT) {
-                STSArena.logger.info("WIN command: Closing hand select screen");
-                AbstractDungeon.closeCurrentScreen();
+            if (AbstractDungeon.screen == AbstractDungeon.CurrentScreen.HAND_SELECT
+                    && AbstractDungeon.handCardSelectScreen != null
+                    && !AbstractDungeon.handCardSelectScreen.wereCardsRetrieved) {
+                STSArena.logger.info("WIN command: Confirming hand card selection (Gambling Chip etc.)");
+                // Click the confirm button, same as CommunicationMod's ChoiceScreenUtils
+                AbstractDungeon.handCardSelectScreen.button.hb.clicked = true;
             }
         } catch (Exception e) {
             STSArena.logger.warn("WIN command: Error dismissing card selections: " + e.getMessage());
-            // Continue anyway - the win command should still work
         }
     }
 }
