@@ -70,3 +70,9 @@ __pycache__/
 test_screenshots/
 pytest_output.txt
 docs/__pycache__/
+
+# claude-reliability managed
+.claude/bin/
+.claude/*.local.md
+.claude/*.local.json
+.claude/*.local
