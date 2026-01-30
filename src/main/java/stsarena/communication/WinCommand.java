@@ -55,6 +55,13 @@ public class WinCommand implements CommandExecutor.CommandExtension {
         // These block combat from proceeding properly
         dismissPendingCardSelections();
 
+        // Clear the action queue to prevent queued actions (like Gambling Chip's
+        // GamblingChipAction) from firing after monsters are killed. Without this,
+        // there's a race condition where combat starts, win is sent before Gambling
+        // Chip's action executes, monsters die, then the action opens HAND_SELECT
+        // on a dead combat.
+        clearActionQueue();
+
         STSArena.logger.info("WIN command: Killing all monsters");
 
         // Kill all monsters
@@ -92,6 +99,21 @@ public class WinCommand implements CommandExecutor.CommandExtension {
             }
         } catch (Exception e) {
             STSArena.logger.warn("WIN command: Error dismissing card selections: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Clear the game's action queue to prevent queued actions from executing
+     * after combat is forcefully ended.
+     */
+    private static void clearActionQueue() {
+        if (AbstractDungeon.actionManager != null) {
+            int cleared = AbstractDungeon.actionManager.actions.size();
+            AbstractDungeon.actionManager.actions.clear();
+            AbstractDungeon.actionManager.currentAction = null;
+            if (cleared > 0) {
+                STSArena.logger.info("WIN command: Cleared " + cleared + " queued actions");
+            }
         }
     }
 }
