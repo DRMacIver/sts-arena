@@ -1,7 +1,5 @@
 package stsarena.communication;
 
-import com.megacrit.cardcrawl.core.CardCrawlGame;
-import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.powers.AbstractPower;
 import communicationmod.CommunicationMod;
@@ -9,7 +7,6 @@ import communicationmod.CommandExecutor;
 import communicationmod.GameStateListener;
 import communicationmod.InvalidCommandException;
 import stsarena.STSArena;
-import stsarena.arena.ArenaRunner;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -167,16 +164,17 @@ public class LoseCommand implements CommandExecutor.CommandExtension {
 
     /**
      * Dismiss any pending card selection screens (Gambling Chip, Watcher cards, etc.)
-     * that might block combat from proceeding.
+     * by closing the screen directly. This is synchronous - the screen is closed
+     * immediately in the current frame, unlike clicking the confirm button which
+     * would only be processed on the next frame's update() call.
      */
     private static void dismissPendingCardSelections() {
         try {
             if (AbstractDungeon.screen == AbstractDungeon.CurrentScreen.HAND_SELECT
                     && AbstractDungeon.handCardSelectScreen != null
                     && !AbstractDungeon.handCardSelectScreen.wereCardsRetrieved) {
-                STSArena.logger.info("LOSE command: Confirming hand card selection (Gambling Chip etc.)");
-                // Click the confirm button, same as CommunicationMod's ChoiceScreenUtils
-                AbstractDungeon.handCardSelectScreen.button.hb.clicked = true;
+                STSArena.logger.info("LOSE command: Force-closing hand card selection (Gambling Chip etc.)");
+                AbstractDungeon.closeCurrentScreen();
             }
         } catch (Exception e) {
             STSArena.logger.warn("LOSE command: Error dismissing card selections: " + e.getMessage());

@@ -78,16 +78,17 @@ public class WinCommand implements CommandExecutor.CommandExtension {
 
     /**
      * Dismiss any pending card selection screens (Gambling Chip, Watcher cards, etc.)
-     * by confirming the current selection through the game's normal UI flow.
+     * by closing the screen directly. This is synchronous - the screen is closed
+     * immediately in the current frame, unlike clicking the confirm button which
+     * would only be processed on the next frame's update() call.
      */
     private static void dismissPendingCardSelections() {
         try {
             if (AbstractDungeon.screen == AbstractDungeon.CurrentScreen.HAND_SELECT
                     && AbstractDungeon.handCardSelectScreen != null
                     && !AbstractDungeon.handCardSelectScreen.wereCardsRetrieved) {
-                STSArena.logger.info("WIN command: Confirming hand card selection (Gambling Chip etc.)");
-                // Click the confirm button, same as CommunicationMod's ChoiceScreenUtils
-                AbstractDungeon.handCardSelectScreen.button.hb.clicked = true;
+                STSArena.logger.info("WIN command: Force-closing hand card selection (Gambling Chip etc.)");
+                AbstractDungeon.closeCurrentScreen();
             }
         } catch (Exception e) {
             STSArena.logger.warn("WIN command: Error dismissing card selections: " + e.getMessage());
