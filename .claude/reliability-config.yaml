@@ -1,0 +1,4 @@
+git_repo: true
+check_command: just check
+require_push: true
+auto_work_on_tasks: true
