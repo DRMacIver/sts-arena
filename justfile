@@ -9,6 +9,10 @@ default:
 build:
     mvn package -DskipTests -q
 
+# Build and deploy to local STS install (macOS)
+deploy:
+    mvn package -Pdeploy -DskipTests -q
+
 # Build with verbose output
 build-verbose:
     mvn package -DskipTests
