@@ -118,12 +118,25 @@ public class ArenaSaveManager {
 
         // Cards
         List<Map<String, Object>> cards = new ArrayList<>();
+        boolean hasAscendersBane = false;
         for (AbstractCard card : loadout.deck) {
             Map<String, Object> cardData = new HashMap<>();
             cardData.put("id", card.cardID);
             cardData.put("upgrades", card.timesUpgraded);
             cardData.put("misc", card.misc);
             cards.add(cardData);
+            if ("AscendersBane".equals(card.cardID)) {
+                hasAscendersBane = true;
+            }
+        }
+        // Add Ascender's Bane at ascension 10+ if not already in deck
+        if (loadout.ascensionLevel >= 10 && !hasAscendersBane) {
+            Map<String, Object> ascendersBane = new HashMap<>();
+            ascendersBane.put("id", "AscendersBane");
+            ascendersBane.put("upgrades", 0);
+            ascendersBane.put("misc", 0);
+            cards.add(ascendersBane);
+            STSArena.logger.info("ARENA: Added Ascender's Bane to save (ascension " + loadout.ascensionLevel + ")");
         }
         save.put("cards", cards);
 
