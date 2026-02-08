@@ -597,6 +597,11 @@ public class LoadoutBuilder {
             removeWorstCard();
         }
 
+        // Add Ascender's Bane at ascension 10+ (cannot be upgraded)
+        if (ascension >= 10) {
+            deck.add(new CardEntry("AscendersBane", false));
+        }
+
         // Apply some damage if ascension > 0
         if (ascension > 0) {
             int damagePercent = 5 + random.nextInt(25);
